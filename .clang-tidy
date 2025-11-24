@@ -1,0 +1,23 @@
+Checks: '*, -altera*, -fuchsia*, -llvm-*, -llvmlibc-*, -cert-*,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-owning-memory,
+  -modernize-use-trailing-return-type,
+  -readability-identifier-length,
+  -readability-const-return-type,
+  -readability-named-parameter,
+  -hicpp-named-parameter,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -misc-include-cleaner'
+CheckOptions:
+    - key: readability-magic-numbers.IgnorePowersOf2IntegerValues
+      value: true
+    - key: cppcoreguidelines-avoid-magic-numbers.IgnorePowersOf2IntegerValues
+      value: true
+    - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+      value : true
+    - key: readability-braces-around-statements.ShortStatementLines
+      value: 2
+    - key: google-readability-braces-around-statements.ShortStatementLines
+      value: 2
+
+FormatStyle: 'file'
