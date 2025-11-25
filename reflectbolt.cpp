@@ -9,6 +9,7 @@
 #include <memory>
 #include <meta>
 #include <ranges>
+#include <set>
 #include <utility>
 
 using i8  = int8_t;
@@ -27,30 +28,47 @@ using f64      = double;
 namespace stdr = std::ranges;
 namespace stdv = std::views;
 
-enum class e0 {
-};
-enum class e1 {
-};
-enum class e2 {
-};
-enum class e3 {
-};
+// clang-format off
+enum class e0 {};
+enum class e1 {};
+enum class e2 {};
+enum class e3 {};
 
-void mock(e0) {
-    std::println("e0");
-}
-void mock(e1) {
-    std::println("e1");
-}
-void mock(e2) {
-    std::println("e2");
-}
-void mock(e3) {
-    std::println("e3");
-}
-// void mock(f32) {
-//     std::println("f32");
-// }
+enum class e00 {};
+enum class e01 {};
+enum class e02 {};
+enum class e03 {};
+enum class e04 {};
+enum class e05 {};
+enum class e06 {};
+enum class e07 {};
+enum class e08 {};
+enum class e09 {};
+enum class e10 {};
+enum class e11 {};
+enum class e12 {};
+enum class e13 {};
+enum class e14 {};
+enum class e15 {};
+enum class e16 {};
+enum class e17 {};
+enum class e18 {};
+enum class e19 {};
+enum class e20 {};
+enum class e21 {};
+enum class e22 {};
+enum class e23 {};
+enum class e24 {};
+enum class e25 {};
+enum class e26 {};
+enum class e27 {};
+enum class e28 {};
+enum class e29 {};
+enum class e30 {};
+enum class e31 {};
+enum class e32 {};
+
+// clang-format on
 
 template<auto V>
 struct nontype {};
@@ -140,7 +158,59 @@ struct alignas(sizeof(void*) * 2) shared_manager {
     }
 };
 template<typename T>
-struct trait_impl;
+struct trait_traits {
+    static constexpr auto methods = [] {
+        using namespace std;
+        using namespace std::meta;
+        constexpr auto ctx = access_context::current();
+        constexpr auto n   = [] {
+            constexpr auto ctx           = access_context::current();
+            auto           trait_members = members_of(^^T, ctx)                        //
+                                 | stdv::filter(not_fn(is_special_member_function))    //
+                                 | stdr::to<vector<info>>();
+            return trait_members.size();
+        }();
+        auto methods = array<info, n>{};
+        stdr::copy(members_of(^^T, ctx)    //
+                       | stdv::filter(not_fn(is_special_member_function)),
+                   methods.begin());
+        stdr::sort(methods, {}, identifier_of);
+        return methods;
+    }();
+
+    static constexpr auto method_names = [] {
+        using namespace std;
+        using namespace std::meta;
+
+        constexpr auto n = [] {
+            auto v = methods                             //
+                     | stdv::transform(identifier_of)    //
+                     | stdr::to<vector>();
+            stdr::sort(v);
+            return v.size() - stdr::unique(v).size();
+        }();
+        auto names = std::array<std::string_view, n>{};
+        auto v     = methods                         //
+                 | stdv::transform(identifier_of)    //
+                 | stdr::to<vector>();
+        stdr::sort(v);
+        std::copy(v.begin(), stdr::unique(v).begin(), names.begin());
+        return names;
+    }();
+};
+template<typename Trait, uZ I>
+struct pseudo_method;
+
+template<typename Trait, typename ISeq>
+struct inheritor {};
+
+template<typename Trait, uZ I, uZ... Is>
+struct inheritor<Trait, std::index_sequence<I, Is...>>
+: inheritor<Trait, std::index_sequence<Is...>>
+, pseudo_method<Trait, I> {};
+
+template<typename Trait>
+struct trait_impl : inheritor<Trait, std::make_index_sequence<trait_traits<Trait>::method_names.size()>> {};
 }    // namespace detail
 
 template<typename T>
@@ -205,6 +275,7 @@ struct method_invoker<method_spec_t<Index, Ret, Args...>, Specs...> : public met
         }
     }
     auto invoke(Args&&... args) const -> Ret {
+        auto ethis           = reinterpret_cast<const void*>(this);
         auto aligned_ptr     = reinterpret_cast<uZ>(this);
         aligned_ptr          = aligned_ptr - aligned_ptr % (sizeof(void*) * 2);
         const auto& mngr     = *reinterpret_cast<const detail::shared_manager*>(aligned_ptr);
@@ -229,23 +300,15 @@ auto fill_vtable() {
     using namespace std::meta;
     // check input trait prototype
     //
-    constexpr auto n = [] {
-        constexpr auto ctx = access_context::current();
-
-        auto trait_members = members_of(^^TraitProto, ctx)                         //
-                             | stdv::filter(not_fn(is_special_member_function))    //
-                             | stdr::to<vector<info>>();
-        return trait_members.size();
-    }();
+    constexpr auto t_methods     = ::detail::trait_traits<TraitProto>::methods;
     constexpr auto wrapper_types = [] {
-        constexpr auto ctx = access_context::current();
+        constexpr auto t_methods = ::detail::trait_traits<TraitProto>::methods;
+        constexpr auto ctx       = access_context::current();
 
-        auto trait_members = members_of(^^TraitProto, ctx)    //
-                             | stdv::filter(not_fn(is_special_member_function));
         auto impl_members = members_of(^^Impl, ctx)    //
                             | stdv::filter(not_fn(is_special_member_function));
         auto new_members = vector<info>{};
-        for (auto mem: trait_members) {
+        for (auto mem: t_methods) {
             auto trait_name         = identifier_of(mem);
             auto trait_ret          = return_type_of(mem);
             auto trait_params_types = parameters_of(mem) | stdv::transform(type_of);
@@ -261,7 +324,7 @@ auto fill_vtable() {
                 }
             }
         }
-        auto wrappers        = std::array<info, n>{};
+        auto wrappers        = std::array<info, t_methods.size()>{};
         auto wrapper_tparams = vector<info>{};
         for (auto [wr, member]: stdv::zip(wrappers, new_members)) {
             wrapper_tparams.clear();
@@ -286,6 +349,7 @@ struct trait_vtable {
 };
 }    // namespace detail
 
+constexpr void comptime_error();
 template<typename TraitProto>
 consteval void define_trait() {
     using namespace std;
@@ -293,14 +357,12 @@ consteval void define_trait() {
     using namespace ::detail;
     // check input trait prototype
     //
-    constexpr auto ctx     = access_context::current();
-    auto           members = members_of(^^TraitProto, ctx)    //
-                   | stdv::filter(not_fn(is_special_member_function));
+    constexpr auto ctx = access_context::current();
+
     auto new_members_raw    = vector<pair<string_view, vector<info>>>{};
-    auto new_members        = vector<info>{};
     auto method_spec_params = vector<info>{};
     uZ   i                  = 0;
-    for (auto mem: members) {
+    for (auto mem: trait_traits<TraitProto>::methods) {
         method_spec_params.clear();
         method_spec_params.push_back(reflect_constant(i));
         method_spec_params.push_back(return_type_of(mem));
@@ -314,12 +376,16 @@ consteval void define_trait() {
         }
         ++i;
     }
+    i      = 0;
+    auto x = std::array<std::string_view, trait_traits<TraitProto>::methods.size()>{};
     for (auto& [name, specs_vec]: new_members_raw) {
         const auto options      = data_member_options{.name = name, .no_unique_address = true};
         const auto invoker_type = substitute(^^method_invoker, specs_vec);
-        new_members.push_back(data_member_spec(invoker_type, options));
+
+        auto pseudo_method_info = substitute(^^pseudo_method, {^^TraitProto, reflect_constant(i)});
+        define_aggregate(pseudo_method_info, {data_member_spec(invoker_type, options)});
+        ++i;
     }
-    define_aggregate(^^trait_impl<TraitProto>, new_members);
 };
 
 template<typename TraitProto, typename Impl, typename Alloc, typename... Args>
@@ -355,44 +421,81 @@ auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... a
     }
 }
 
+// clang-format off
 struct trait_proto {
     void baz(e2);
 
     void bar(e1);
     void bar(e0);
 
-    void bar0(e0);
-    void bar1(e0);
-    void bar2(e0);
-    void bar3(e0);
-    void bar4(e0);
-    void bar5(e0);
-    void bar6(e0);
-    void bar7(e0);
-    void bar8(e0);
-    void bar9(e0);
+    void bar00(e0){std::println("bar00(e0)");};
+    void bar01(e0){std::println("bar01(e0)");};
+    void bar02(e0){std::println("bar02(e0)");};
+    void bar03(e0){std::println("bar03(e0)");};
+    void bar04(e0){std::println("bar04(e0)");};
+    void bar05(e0){std::println("bar05(e0)");};
+    void bar06(e0){std::println("bar06(e0)");};
+    void bar07(e0){std::println("bar07(e0)");};
+    void bar08(e0){std::println("bar08(e0)");};
+    void bar09(e0){std::println("bar09(e0)");};
+    void bar10(e0){std::println("bar10(e0)");};
+    void bar11(e0){std::println("bar11(e0)");};
+    void bar12(e0){std::println("bar12(e0)");};
+    void bar13(e0){std::println("bar13(e0)");};
+    void bar14(e0){std::println("bar14(e0)");};
+    void bar15(e0){std::println("bar15(e0)");};
+    void bar16(e0){std::println("bar16(e0)");};
+    void bar17(e0){std::println("bar17(e0)");};
+    void bar18(e0){std::println("bar18(e0)");};
+    void bar19(e0){std::println("bar19(e0)");};
+    void bar20(e0){std::println("bar20(e0)");};
+    void bar21(e0){std::println("bar21(e0)");};
+    void bar22(e0){std::println("bar22(e0)");};
+    void bar23(e0){std::println("bar23(e0)");};
+    void bar24(e0){std::println("bar24(e0)");};
+    void bar25(e0){std::println("bar25(e0)");};
+    void bar26(e0){std::println("bar26(e0)");};
+    void bar27(e0){std::println("bar27(e0)");};
+    void bar28(e0){std::println("bar28(e0)");};
+    void bar29(e0){std::println("bar29(e0)");};
+    void bar30(e0){std::println("bar30(e0)");};
+    void bar31(e0){std::println("bar31(e0)");};
+    void bar32(e0){std::println("bar32(e0)");};
 
-    void bar0(e1);
-    void bar1(e1);
-    void bar2(e1);
-    void bar3(e1);
-    void bar4(e1);
-    void bar5(e1);
-    void bar6(e1);
-    void bar7(e1);
-    void bar8(e1);
-    void bar9(e1);
+    void bar(e00){std::println("bar(e00)");};
+    void bar(e01){std::println("bar(e01)");};
+    void bar(e02){std::println("bar(e02)");};
+    void bar(e03){std::println("bar(e03)");};
+    void bar(e04){std::println("bar(e04)");};
+    void bar(e05){std::println("bar(e05)");};
+    void bar(e06){std::println("bar(e06)");};
+    void bar(e07){std::println("bar(e07)");};
+    void bar(e08){std::println("bar(e08)");};
+    void bar(e09){std::println("bar(e09)");};
+    void bar(e10){std::println("bar(e10)");};
+    void bar(e11){std::println("bar(e11)");};
+    void bar(e12){std::println("bar(e12)");};
+    void bar(e13){std::println("bar(e13)");};
+    void bar(e14){std::println("bar(e14)");};
+    void bar(e15){std::println("bar(e15)");};
+    // void bar(e16){std::println("bar(e16)");};
+    // void bar(e17){std::println("bar(e17)");};
+    // void bar(e18){std::println("bar(e18)");};
+    // void bar(e19){std::println("bar(e19)");};
+    // void bar(e20){std::println("bar(e20)");};
+    // void bar(e21){std::println("bar(e21)");};
+    // void bar(e22){std::println("bar(e22)");};
+    // void bar(e23){std::println("bar(e23)");};
+    // void bar(e24){std::println("bar(e24)");};
+    // void bar(e25){std::println("bar(e25)");};
+    // void bar(e26){std::println("bar(e26)");};
+    // void bar(e27){std::println("bar(e27)");};
+    // void bar(e28){std::println("bar(e28)");};
+    // void bar(e29){std::println("bar(e29)");};
+    // void bar(e30){std::println("bar(e30)");};
+    // void bar(e31){std::println("bar(e31)");};
+    // void bar(e32){std::println("bar(e32)");};
 
-    void bar0(e2){};
-    void bar1(e2){};
-    void bar2(e2){};
-    void bar3(e2){};
-    void bar4(e2){};
-    void bar5(e2){};
-    void bar6(e2){};
-    void bar7(e2){};
-    void bar8(e2){};
-    void bar9(e2){};
 };
 consteval {
     define_trait<trait_proto>();
@@ -407,38 +510,73 @@ struct some_trait_impl {
     void baz(e2 x) {
         std::println("some impl baz e2");
     }
-    void bar0(e0){};
-    void bar1(e0){};
-    void bar2(e0){};
-    void bar3(e0){};
-    void bar4(e0){};
-    void bar5(e0){};
-    void bar6(e0){};
-    void bar7(e0){};
-    void bar8(e0){};
-    void bar9(e0){};
+    void bar00(e0){std::println("bar00(e0)");};
+    void bar01(e0){std::println("bar01(e0)");};
+    void bar02(e0){std::println("bar02(e0)");};
+    void bar03(e0){std::println("bar03(e0)");};
+    void bar04(e0){std::println("bar04(e0)");};
+    void bar05(e0){std::println("bar05(e0)");};
+    void bar06(e0){std::println("bar06(e0)");};
+    void bar07(e0){std::println("bar07(e0)");};
+    void bar08(e0){std::println("bar08(e0)");};
+    void bar09(e0){std::println("bar09(e0)");};
+    void bar10(e0){std::println("bar10(e0)");};
+    void bar11(e0){std::println("bar11(e0)");};
+    void bar12(e0){std::println("bar12(e0)");};
+    void bar13(e0){std::println("bar13(e0)");};
+    void bar14(e0){std::println("bar14(e0)");};
+    void bar15(e0){std::println("bar15(e0)");};
+    void bar16(e0){std::println("bar16(e0)");};
+    void bar17(e0){std::println("bar17(e0)");};
+    void bar18(e0){std::println("bar18(e0)");};
+    void bar19(e0){std::println("bar19(e0)");};
+    void bar20(e0){std::println("bar20(e0)");};
+    void bar21(e0){std::println("bar21(e0)");};
+    void bar22(e0){std::println("bar22(e0)");};
+    void bar23(e0){std::println("bar23(e0)");};
+    void bar24(e0){std::println("bar24(e0)");};
+    void bar25(e0){std::println("bar25(e0)");};
+    void bar26(e0){std::println("bar26(e0)");};
+    void bar27(e0){std::println("bar27(e0)");};
+    void bar28(e0){std::println("bar28(e0)");};
+    void bar29(e0){std::println("bar29(e0)");};
+    void bar30(e0){std::println("bar30(e0)");};
+    void bar31(e0){std::println("bar31(e0)");};
+    void bar32(e0){std::println("bar32(e0)");};
 
-    void bar0(e1){};
-    void bar1(e1){};
-    void bar2(e1){};
-    void bar3(e1){};
-    void bar4(e1){};
-    void bar5(e1){};
-    void bar6(e1){};
-    void bar7(e1){};
-    void bar8(e1){};
-    void bar9(e1){};
-    
-    void bar0(e2){};
-    void bar1(e2){};
-    void bar2(e2){};
-    void bar3(e2){};
-    void bar4(e2){};
-    void bar5(e2){};
-    void bar6(e2){};
-    void bar7(e2){};
-    void bar8(e2){};
-    void bar9(e2){};
+    void bar(e00){std::println("bar(e00)");};
+    void bar(e01){std::println("bar(e01)");};
+    void bar(e02){std::println("bar(e02)");};
+    void bar(e03){std::println("bar(e03)");};
+    void bar(e04){std::println("bar(e04)");};
+    void bar(e05){std::println("bar(e05)");};
+    void bar(e06){std::println("bar(e06)");};
+    void bar(e07){std::println("bar(e07)");};
+    void bar(e08){std::println("bar(e08)");};
+    void bar(e09){std::println("bar(e09)");};
+    void bar(e10){std::println("bar(e10)");};
+    void bar(e11){std::println("bar(e11)");};
+    void bar(e12){std::println("bar(e12)");};
+    void bar(e13){std::println("bar(e13)");};
+    void bar(e14){std::println("bar(e14)");};
+    void bar(e15){std::println("bar(e15)");};
+    void bar(e16){std::println("bar(e16)");};
+    void bar(e17){std::println("bar(e17)");};
+    void bar(e18){std::println("bar(e18)");};
+    void bar(e19){std::println("bar(e19)");};
+    void bar(e20){std::println("bar(e20)");};
+    void bar(e21){std::println("bar(e21)");};
+    void bar(e22){std::println("bar(e22)");};
+    void bar(e23){std::println("bar(e23)");};
+    void bar(e24){std::println("bar(e24)");};
+    void bar(e25){std::println("bar(e25)");};
+    void bar(e26){std::println("bar(e26)");};
+    void bar(e27){std::println("bar(e27)");};
+    void bar(e28){std::println("bar(e28)");};
+    void bar(e29){std::println("bar(e29)");};
+    void bar(e30){std::println("bar(e30)");};
+    void bar(e31){std::println("bar(e31)");};
+    void bar(e32){std::println("bar(e32)");};
 };
 struct other_trait_impl {
     void bar(e0 x) {
@@ -450,83 +588,143 @@ struct other_trait_impl {
     void baz(e2 x) {
         std::println("other impl baz e2");
     }
-    void bar0(e0){};
-    void bar1(e0){};
-    void bar2(e0){};
-    void bar3(e0){};
-    void bar4(e0){};
-    void bar5(e0){};
-    void bar6(e0){};
-    void bar7(e0){};
-    void bar8(e0){};
-    void bar9(e0){};
+    void bar00(e0){std::println("bar00(e0)");};
+    void bar01(e0){std::println("bar01(e0)");};
+    void bar02(e0){std::println("bar02(e0)");};
+    void bar03(e0){std::println("bar03(e0)");};
+    void bar04(e0){std::println("bar04(e0)");};
+    void bar05(e0){std::println("bar05(e0)");};
+    void bar06(e0){std::println("bar06(e0)");};
+    void bar07(e0){std::println("bar07(e0)");};
+    void bar08(e0){std::println("bar08(e0)");};
+    void bar09(e0){std::println("bar09(e0)");};
+    void bar10(e0){std::println("bar10(e0)");};
+    void bar11(e0){std::println("bar11(e0)");};
+    void bar12(e0){std::println("bar12(e0)");};
+    void bar13(e0){std::println("bar13(e0)");};
+    void bar14(e0){std::println("bar14(e0)");};
+    void bar15(e0){std::println("bar15(e0)");};
+    void bar16(e0){std::println("bar16(e0)");};
+    void bar17(e0){std::println("bar17(e0)");};
+    void bar18(e0){std::println("bar18(e0)");};
+    void bar19(e0){std::println("bar19(e0)");};
+    void bar20(e0){std::println("bar20(e0)");};
+    void bar21(e0){std::println("bar21(e0)");};
+    void bar22(e0){std::println("bar22(e0)");};
+    void bar23(e0){std::println("bar23(e0)");};
+    void bar24(e0){std::println("bar24(e0)");};
+    void bar25(e0){std::println("bar25(e0)");};
+    void bar26(e0){std::println("bar26(e0)");};
+    void bar27(e0){std::println("bar27(e0)");};
+    void bar28(e0){std::println("bar28(e0)");};
+    void bar29(e0){std::println("bar29(e0)");};
+    void bar30(e0){std::println("bar30(e0)");};
+    void bar31(e0){std::println("bar31(e0)");};
+    void bar32(e0){std::println("bar32(e0)");};
 
-    void bar0(e1){};
-    void bar1(e1){};
-    void bar2(e1){};
-    void bar3(e1){};
-    void bar4(e1){};
-    void bar5(e1){};
-    void bar6(e1){};
-    void bar7(e1){};
-    void bar8(e1){};
-    void bar9(e1){};
-
-    void bar0(e2){};
-    void bar1(e2){};
-    void bar2(e2){};
-    void bar3(e2){};
-    void bar4(e2){};
-    void bar5(e2){};
-    void bar6(e2){};
-    void bar7(e2){};
-    void bar8(e2){};
-    void bar9(e2){};
+    void bar(e00){std::println("bar(e00)");};
+    void bar(e01){std::println("bar(e01)");};
+    void bar(e02){std::println("bar(e02)");};
+    void bar(e03){std::println("bar(e03)");};
+    void bar(e04){std::println("bar(e04)");};
+    void bar(e05){std::println("bar(e05)");};
+    void bar(e06){std::println("bar(e06)");};
+    void bar(e07){std::println("bar(e07)");};
+    void bar(e08){std::println("bar(e08)");};
+    void bar(e09){std::println("bar(e09)");};
+    void bar(e10){std::println("bar(e10)");};
+    void bar(e11){std::println("bar(e11)");};
+    void bar(e12){std::println("bar(e12)");};
+    void bar(e13){std::println("bar(e13)");};
+    void bar(e14){std::println("bar(e14)");};
+    void bar(e15){std::println("bar(e15)");};
+    void bar(e16){std::println("bar(e16)");};
+    void bar(e17){std::println("bar(e17)");};
+    void bar(e18){std::println("bar(e18)");};
+    void bar(e19){std::println("bar(e19)");};
+    void bar(e20){std::println("bar(e20)");};
+    void bar(e21){std::println("bar(e21)");};
+    void bar(e22){std::println("bar(e22)");};
+    void bar(e23){std::println("bar(e23)");};
+    void bar(e24){std::println("bar(e24)");};
+    void bar(e25){std::println("bar(e25)");};
+    void bar(e26){std::println("bar(e26)");};
+    void bar(e27){std::println("bar(e27)");};
+    void bar(e28){std::println("bar(e28)");};
+    void bar(e29){std::println("bar(e29)");};
+    void bar(e30){std::println("bar(e30)");};
+    void bar(e31){std::println("bar(e31)");};
+    void bar(e32){std::println("bar(e32)");};
 };
 
-void foo(shared_trait<trait_proto> tr) {
-    tr.bar(e0{});
-};
+// clang-format on
 
+// void foo(shared_trait<trait_proto> tr) {
+//     // tr.bar(e0{});
+// };
+//
+//
 int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
     std::println("sizeof to {}", sizeof(to));
-    auto toptr = &to;
-    to.bar(e0{});
-    to.bar0(e0{});
-    to.bar1(e0{});
-    to.bar2(e0{});
-    to.bar3(e0{});
-    to.bar4(e0{});
-    to.bar5(e0{});
-    to.bar6(e0{});
-    to.bar7(e0{});
-    to.bar8(e0{});
-    to.bar9(e0{});
-
-    to.bar0(e1{});
-    to.bar1(e1{});
-    to.bar2(e1{});
-    to.bar3(e1{});
-    to.bar4(e1{});
-    to.bar5(e1{});
-    to.bar6(e1{});
-    to.bar7(e1{});
-    to.bar8(e1{});
-    to.bar9(e1{});
-
-    to.bar0(e2{});
-    to.bar1(e2{});
-    to.bar2(e2{});
-    to.bar3(e2{});
-    to.bar4(e2{});
-    to.bar5(e2{});
-    to.bar6(e2{});
-    to.bar7(e2{});
-    to.bar8(e2{});
-    to.bar9(e2{});
-    to = make_shared_trait<trait_proto, other_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
-    to.bar(e0{});
-    to.bar(e1{});
+    // auto toptr = &to;
+    to.bar00(e0{});
+    to.bar01(e0{});
+    to.bar02(e0{});
+    to.bar03(e0{});
+    to.bar04(e0{});
+    to.bar05(e0{});
+    to.bar06(e0{});
+    to.bar07(e0{});
+    to.bar08(e0{});
+    to.bar09(e0{});
+    to.bar10(e0{});
+    to.bar11(e0{});
+    to.bar12(e0{});
+    to.bar13(e0{});
+    to.bar14(e0{});
+    to.bar15(e0{});
+    to.bar16(e0{});
+    to.bar17(e0{});
+    to.bar18(e0{});
+    to.bar19(e0{});
+    to.bar20(e0{});
+    to.bar21(e0{});
+    to.bar22(e0{});
+    to.bar23(e0{});
+    to.bar24(e0{});
+    to.bar25(e0{});
+    to.bar26(e0{});
+    to.bar27(e0{});
+    to.bar28(e0{});
+    to.bar29(e0{});
+    to.bar30(e0{});
+    to.bar31(e0{});
+    to.bar32(e0{});
+    //
+    // to.bar0(e1{});
+    // to.bar1(e1{});
+    // to.bar2(e1{});
+    // to.bar3(e1{});
+    // to.bar4(e1{});
+    // to.bar5(e1{});
+    // to.bar6(e1{});
+    // to.bar7(e1{});
+    // to.bar8(e1{});
+    // to.bar9(e1{});
+    //
+    // to.bar0(e2{});
+    // to.bar1(e2{});
+    // to.bar2(e2{});
+    // to.bar3(e2{});
+    // to.bar4(e2{});
+    // to.bar5(e2{});
+    // to.bar6(e2{});
+    // to.bar7(e2{});
+    // to.bar8(e2{});
+    // to.bar9(e2{});
+    // to = make_shared_trait<trait_proto, other_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
+    // to.bar(e0{});
+    // to.bar(e1{});
 }
