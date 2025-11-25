@@ -75,7 +75,7 @@ struct signed_offsets {
     static constexpr iZ ctrl_block = memstart;
 };
 
-struct shared_manager {
+struct alignas(sizeof(void*) * 2) shared_manager {
     using efptr = void*;
     const efptr* vtable_begin{};
     void*        obj_ptr{};
@@ -206,7 +206,7 @@ struct method_invoker<method_spec_t<Index, Ret, Args...>, Specs...> : public met
     }
     auto invoke(Args&&... args) const -> Ret {
         auto aligned_ptr     = reinterpret_cast<uZ>(this);
-        aligned_ptr          = aligned_ptr - aligned_ptr % sizeof(void*);
+        aligned_ptr          = aligned_ptr - aligned_ptr % (sizeof(void*) * 2);
         const auto& mngr     = *reinterpret_cast<const detail::shared_manager*>(aligned_ptr);
         using func_t         = auto(void*, Args&&...)->Ret;
         using wrapper_fptr_t = func_t*;
@@ -360,6 +360,39 @@ struct trait_proto {
 
     void bar(e1);
     void bar(e0);
+
+    void bar0(e0);
+    void bar1(e0);
+    void bar2(e0);
+    void bar3(e0);
+    void bar4(e0);
+    void bar5(e0);
+    void bar6(e0);
+    void bar7(e0);
+    void bar8(e0);
+    void bar9(e0);
+
+    void bar0(e1);
+    void bar1(e1);
+    void bar2(e1);
+    void bar3(e1);
+    void bar4(e1);
+    void bar5(e1);
+    void bar6(e1);
+    void bar7(e1);
+    void bar8(e1);
+    void bar9(e1);
+
+    void bar0(e2){};
+    void bar1(e2){};
+    void bar2(e2){};
+    void bar3(e2){};
+    void bar4(e2){};
+    void bar5(e2){};
+    void bar6(e2){};
+    void bar7(e2){};
+    void bar8(e2){};
+    void bar9(e2){};
 };
 consteval {
     define_trait<trait_proto>();
@@ -374,6 +407,38 @@ struct some_trait_impl {
     void baz(e2 x) {
         std::println("some impl baz e2");
     }
+    void bar0(e0){};
+    void bar1(e0){};
+    void bar2(e0){};
+    void bar3(e0){};
+    void bar4(e0){};
+    void bar5(e0){};
+    void bar6(e0){};
+    void bar7(e0){};
+    void bar8(e0){};
+    void bar9(e0){};
+
+    void bar0(e1){};
+    void bar1(e1){};
+    void bar2(e1){};
+    void bar3(e1){};
+    void bar4(e1){};
+    void bar5(e1){};
+    void bar6(e1){};
+    void bar7(e1){};
+    void bar8(e1){};
+    void bar9(e1){};
+    
+    void bar0(e2){};
+    void bar1(e2){};
+    void bar2(e2){};
+    void bar3(e2){};
+    void bar4(e2){};
+    void bar5(e2){};
+    void bar6(e2){};
+    void bar7(e2){};
+    void bar8(e2){};
+    void bar9(e2){};
 };
 struct other_trait_impl {
     void bar(e0 x) {
@@ -385,6 +450,38 @@ struct other_trait_impl {
     void baz(e2 x) {
         std::println("other impl baz e2");
     }
+    void bar0(e0){};
+    void bar1(e0){};
+    void bar2(e0){};
+    void bar3(e0){};
+    void bar4(e0){};
+    void bar5(e0){};
+    void bar6(e0){};
+    void bar7(e0){};
+    void bar8(e0){};
+    void bar9(e0){};
+
+    void bar0(e1){};
+    void bar1(e1){};
+    void bar2(e1){};
+    void bar3(e1){};
+    void bar4(e1){};
+    void bar5(e1){};
+    void bar6(e1){};
+    void bar7(e1){};
+    void bar8(e1){};
+    void bar9(e1){};
+
+    void bar0(e2){};
+    void bar1(e2){};
+    void bar2(e2){};
+    void bar3(e2){};
+    void bar4(e2){};
+    void bar5(e2){};
+    void bar6(e2){};
+    void bar7(e2){};
+    void bar8(e2){};
+    void bar9(e2){};
 };
 
 void foo(shared_trait<trait_proto> tr) {
@@ -394,8 +491,41 @@ void foo(shared_trait<trait_proto> tr) {
 int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
+    std::println("sizeof to {}", sizeof(to));
+    auto toptr = &to;
     to.bar(e0{});
-    to.bar(e1{});
+    to.bar0(e0{});
+    to.bar1(e0{});
+    to.bar2(e0{});
+    to.bar3(e0{});
+    to.bar4(e0{});
+    to.bar5(e0{});
+    to.bar6(e0{});
+    to.bar7(e0{});
+    to.bar8(e0{});
+    to.bar9(e0{});
+
+    to.bar0(e1{});
+    to.bar1(e1{});
+    to.bar2(e1{});
+    to.bar3(e1{});
+    to.bar4(e1{});
+    to.bar5(e1{});
+    to.bar6(e1{});
+    to.bar7(e1{});
+    to.bar8(e1{});
+    to.bar9(e1{});
+
+    to.bar0(e2{});
+    to.bar1(e2{});
+    to.bar2(e2{});
+    to.bar3(e2{});
+    to.bar4(e2{});
+    to.bar5(e2{});
+    to.bar6(e2{});
+    to.bar7(e2{});
+    to.bar8(e2{});
+    to.bar9(e2{});
     to = make_shared_trait<trait_proto, other_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
     to.bar(e0{});
     to.bar(e1{});
