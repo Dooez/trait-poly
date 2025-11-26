@@ -185,4 +185,40 @@ struct other_trait_impl {
     void bar(e32){std::println("other bar(e32)");};
 };
 
+void test_16bars(auto& to){
+    to.bar00(e0{});
+    to.bar01(e0{});
+    to.bar02(e0{});
+    to.bar03(e0{});
+    to.bar04(e0{});
+    to.bar05(e0{});
+    to.bar06(e0{});
+    to.bar07(e0{});
+    to.bar08(e0{});
+    to.bar09(e0{});
+    to.bar10(e0{});
+    to.bar11(e0{});
+    to.bar12(e0{});
+    to.bar13(e0{});
+    to.bar14(e0{});
+    to.bar15(e0{});
+
+    to.bar(e00{});
+    to.bar(e01{});
+    to.bar(e02{});
+    to.bar(e03{});
+    to.bar(e04{});
+    to.bar(e05{});
+    to.bar(e06{});
+    to.bar(e07{});
+    to.bar(e08{});
+    to.bar(e09{});
+    to.bar(e10{});
+    to.bar(e11{});
+    to.bar(e12{});
+    to.bar(e13{});
+    to.bar(e14{});
+    to.bar(e15{});
+}
+
 // clang-format on

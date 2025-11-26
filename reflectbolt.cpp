@@ -208,19 +208,10 @@ template<typename T>
 concept method_spec =
     std::meta::has_template_arguments(^^T) && std::meta::template_of(^^T) == ^^method_spec_t;
 
-template<uZ I, method_spec... Specs>
-struct method_invoker {};
-template<uZ I, uZ Index, typename Ret, typename... Args, method_spec... Specs>
-struct method_invoker<I, method_spec_t<Index, Ret, Args...>, Specs...> : public method_invoker<I, Specs...> {
-    template<typename... CallArgs>
-    auto operator()(CallArgs&&... args) {
-        using current_t = method_invoker<I, method_spec_t<Index, Ret, Args...>, Specs...>;
-        if constexpr (requires(CallArgs&&... args) { current_t{}.invoke(std::forward<CallArgs>(args)...); }) {
-            return invoke(std::forward<CallArgs>(args)...);
-        } else {
-            return method_invoker<I, Specs...>::operator()(std::forward<CallArgs>(args)...);
-        }
-    }
+template<method_spec Spec>
+struct overload_invoker;
+template<uZ Index, typename Ret, typename... Args>
+struct overload_invoker<method_spec_t<Index, Ret, Args...>> {
     auto invoke(Args&&... args) const -> Ret {
         const auto& mngr     = *reinterpret_cast<const detail::shared_manager*>(this);
         using func_t         = auto(void*, Args&&...)->Ret;
@@ -228,6 +219,27 @@ struct method_invoker<I, method_spec_t<Index, Ret, Args...>, Specs...> : public 
         auto       eptr      = mngr.vtable_begin + Index;
         const auto wrapper   = *reinterpret_cast<const wrapper_fptr_t*>(eptr);
         return wrapper(mngr.obj_ptr, std::forward<Args>(args)...);
+    }
+};
+
+template<uZ I, method_spec... Specs>
+struct method_invoker : overload_invoker<Specs>... {
+    template<typename... CallArgs>
+    auto operator()(CallArgs&&... args) {
+        return try_invoke<0>(std::forward<CallArgs>(args)...);
+    }
+    template<uZ OverloadIdx, typename... CallArgs>
+    auto try_invoke(CallArgs&&... args) {
+        using overload_t = overload_invoker<Specs...[OverloadIdx]>;
+        if constexpr (OverloadIdx >= sizeof...(Specs)) {
+            static_assert(false, "No overload found");
+        } else if constexpr (requires(CallArgs&&... args) {
+                                 overload_t{}.invoke(std::forward<CallArgs>(args)...);
+                             }) {
+            return overload_t::invoke(std::forward<CallArgs>(args)...);
+        } else {
+            return try_invoke<OverloadIdx + 1>(std::forward<CallArgs>(args)...);
+        }
     }
 };
 
@@ -417,11 +429,11 @@ struct trait_proto {
     void bar(e08){std::println("bar(e08)");};
     void bar(e09){std::println("bar(e09)");};
     void bar(e10){std::println("bar(e10)");};
-    // void bar(e11){std::println("bar(e11)");};
-    // void bar(e12){std::println("bar(e12)");};
-    // void bar(e13){std::println("bar(e13)");};
-    // void bar(e14){std::println("bar(e14)");};
-    // void bar(e15){std::println("bar(e15)");};
+    void bar(e11){std::println("bar(e11)");};
+    void bar(e12){std::println("bar(e12)");};
+    void bar(e13){std::println("bar(e13)");};
+    void bar(e14){std::println("bar(e14)");};
+    void bar(e15){std::println("bar(e15)");};
     // void bar(e16){std::println("bar(e16)");};
     // void bar(e17){std::println("bar(e17)");};
     // void bar(e18){std::println("bar(e18)");};
@@ -452,41 +464,8 @@ int main() {
     std::println("sizeof to {}", sizeof(to));
     std::println("sizeof timpl {}", sizeof(detail::trait_impl<trait_proto>));
     auto toptr = &to;
-    to.bar00(e0{});
-    to.bar01(e0{});
-    to.bar02(e0{});
-    to.bar03(e0{});
-    to.bar04(e0{});
-    to.bar05(e0{});
-    to.bar06(e0{});
-    to.bar07(e0{});
-    to.bar08(e0{});
-    to.bar09(e0{});
-    to.bar10(e0{});
-    to.bar11(e0{});
-    to.bar12(e0{});
-    to.bar13(e0{});
-    to.bar14(e0{});
-    to.bar15(e0{});
-    to.bar16(e0{});
-    to.bar17(e0{});
-    to.bar18(e0{});
-    to.bar19(e0{});
-    to.bar20(e0{});
-    to.bar21(e0{});
-    to.bar22(e0{});
-    to.bar23(e0{});
-    to.bar24(e0{});
-    to.bar25(e0{});
-    to.bar26(e0{});
-    to.bar27(e0{});
-    to.bar28(e0{});
-    to.bar29(e0{});
-    to.bar30(e0{});
-    to.bar31(e0{});
-    to.bar32(e0{});
 
+    test_16bars(to);
     to = make_shared_trait<trait_proto, other_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
-    to.bar00(e0{});
-    to.bar01(e0{});
+    test_16bars(to);
 }
