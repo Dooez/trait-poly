@@ -1,15 +1,15 @@
+#include "testing.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <meta>
 #include <ranges>
-#include <set>
 #include <utility>
 
 using i8  = int8_t;
@@ -27,48 +27,6 @@ using f32      = float;
 using f64      = double;
 namespace stdr = std::ranges;
 namespace stdv = std::views;
-
-// clang-format off
-enum class e0 {};
-enum class e1 {};
-enum class e2 {};
-enum class e3 {};
-
-enum class e00 {};
-enum class e01 {};
-enum class e02 {};
-enum class e03 {};
-enum class e04 {};
-enum class e05 {};
-enum class e06 {};
-enum class e07 {};
-enum class e08 {};
-enum class e09 {};
-enum class e10 {};
-enum class e11 {};
-enum class e12 {};
-enum class e13 {};
-enum class e14 {};
-enum class e15 {};
-enum class e16 {};
-enum class e17 {};
-enum class e18 {};
-enum class e19 {};
-enum class e20 {};
-enum class e21 {};
-enum class e22 {};
-enum class e23 {};
-enum class e24 {};
-enum class e25 {};
-enum class e26 {};
-enum class e27 {};
-enum class e28 {};
-enum class e29 {};
-enum class e30 {};
-enum class e31 {};
-enum class e32 {};
-
-// clang-format on
 
 template<auto V>
 struct nontype {};
@@ -198,20 +156,6 @@ struct trait_traits {
         return names;
     }();
 };
-// template<typename Trait, uZ I>
-// struct pseudo_method;
-//
-// template<typename Trait, typename ISeq>
-// struct inheritor {};
-//
-// template<typename Trait, uZ I, uZ... Is>
-// struct inheritor<Trait, std::index_sequence<I, Is...>>
-// : inheritor<Trait, std::index_sequence<Is...>>
-// , pseudo_method<Trait, I> {};
-//
-// template<typename Trait>
-// struct trait_impl : inheritor<Trait, std::make_index_sequence<trait_traits<Trait>::method_names.size()>> {};
-
 template<typename Trait>
 struct trait_impl;
 }    // namespace detail
@@ -497,173 +441,11 @@ struct trait_proto {
     // void bar(e32){std::println("bar(e32)");};
 
 };
+
 consteval {
     define_trait<trait_proto>();
 }
-struct some_trait_impl {
-    void bar(e0 x) {
-        std::println("some impl bar e0");
-    }
-    void bar(e1 x) {
-        std::println("some impl bar e1");
-    };
-    void baz(e2 x) {
-        std::println("some impl baz e2");
-    }
-    void bar00(e0){std::println("bar00(e0)");};
-    void bar01(e0){std::println("bar01(e0)");};
-    void bar02(e0){std::println("bar02(e0)");};
-    void bar03(e0){std::println("bar03(e0)");};
-    void bar04(e0){std::println("bar04(e0)");};
-    void bar05(e0){std::println("bar05(e0)");};
-    void bar06(e0){std::println("bar06(e0)");};
-    void bar07(e0){std::println("bar07(e0)");};
-    void bar08(e0){std::println("bar08(e0)");};
-    void bar09(e0){std::println("bar09(e0)");};
-    void bar10(e0){std::println("bar10(e0)");};
-    void bar11(e0){std::println("bar11(e0)");};
-    void bar12(e0){std::println("bar12(e0)");};
-    void bar13(e0){std::println("bar13(e0)");};
-    void bar14(e0){std::println("bar14(e0)");};
-    void bar15(e0){std::println("bar15(e0)");};
-    void bar16(e0){std::println("bar16(e0)");};
-    void bar17(e0){std::println("bar17(e0)");};
-    void bar18(e0){std::println("bar18(e0)");};
-    void bar19(e0){std::println("bar19(e0)");};
-    void bar20(e0){std::println("bar20(e0)");};
-    void bar21(e0){std::println("bar21(e0)");};
-    void bar22(e0){std::println("bar22(e0)");};
-    void bar23(e0){std::println("bar23(e0)");};
-    void bar24(e0){std::println("bar24(e0)");};
-    void bar25(e0){std::println("bar25(e0)");};
-    void bar26(e0){std::println("bar26(e0)");};
-    void bar27(e0){std::println("bar27(e0)");};
-    void bar28(e0){std::println("bar28(e0)");};
-    void bar29(e0){std::println("bar29(e0)");};
-    void bar30(e0){std::println("bar30(e0)");};
-    void bar31(e0){std::println("bar31(e0)");};
-    void bar32(e0){std::println("bar32(e0)");};
 
-    void bar(e00){std::println("bar(e00)");};
-    void bar(e01){std::println("bar(e01)");};
-    void bar(e02){std::println("bar(e02)");};
-    void bar(e03){std::println("bar(e03)");};
-    void bar(e04){std::println("bar(e04)");};
-    void bar(e05){std::println("bar(e05)");};
-    void bar(e06){std::println("bar(e06)");};
-    void bar(e07){std::println("bar(e07)");};
-    void bar(e08){std::println("bar(e08)");};
-    void bar(e09){std::println("bar(e09)");};
-    void bar(e10){std::println("bar(e10)");};
-    void bar(e11){std::println("bar(e11)");};
-    void bar(e12){std::println("bar(e12)");};
-    void bar(e13){std::println("bar(e13)");};
-    void bar(e14){std::println("bar(e14)");};
-    void bar(e15){std::println("bar(e15)");};
-    void bar(e16){std::println("bar(e16)");};
-    void bar(e17){std::println("bar(e17)");};
-    void bar(e18){std::println("bar(e18)");};
-    void bar(e19){std::println("bar(e19)");};
-    void bar(e20){std::println("bar(e20)");};
-    void bar(e21){std::println("bar(e21)");};
-    void bar(e22){std::println("bar(e22)");};
-    void bar(e23){std::println("bar(e23)");};
-    void bar(e24){std::println("bar(e24)");};
-    void bar(e25){std::println("bar(e25)");};
-    void bar(e26){std::println("bar(e26)");};
-    void bar(e27){std::println("bar(e27)");};
-    void bar(e28){std::println("bar(e28)");};
-    void bar(e29){std::println("bar(e29)");};
-    void bar(e30){std::println("bar(e30)");};
-    void bar(e31){std::println("bar(e31)");};
-    void bar(e32){std::println("bar(e32)");};
-};
-struct other_trait_impl {
-    void bar(e0 x) {
-        std::println("other impl bar e0");
-    }
-    void bar(e1 x) {
-        std::println("other impl bar e1");
-    };
-    void baz(e2 x) {
-        std::println("other impl baz e2");
-    }
-    void bar00(e0){std::println("bar00(e0)");};
-    void bar01(e0){std::println("bar01(e0)");};
-    void bar02(e0){std::println("bar02(e0)");};
-    void bar03(e0){std::println("bar03(e0)");};
-    void bar04(e0){std::println("bar04(e0)");};
-    void bar05(e0){std::println("bar05(e0)");};
-    void bar06(e0){std::println("bar06(e0)");};
-    void bar07(e0){std::println("bar07(e0)");};
-    void bar08(e0){std::println("bar08(e0)");};
-    void bar09(e0){std::println("bar09(e0)");};
-    void bar10(e0){std::println("bar10(e0)");};
-    void bar11(e0){std::println("bar11(e0)");};
-    void bar12(e0){std::println("bar12(e0)");};
-    void bar13(e0){std::println("bar13(e0)");};
-    void bar14(e0){std::println("bar14(e0)");};
-    void bar15(e0){std::println("bar15(e0)");};
-    void bar16(e0){std::println("bar16(e0)");};
-    void bar17(e0){std::println("bar17(e0)");};
-    void bar18(e0){std::println("bar18(e0)");};
-    void bar19(e0){std::println("bar19(e0)");};
-    void bar20(e0){std::println("bar20(e0)");};
-    void bar21(e0){std::println("bar21(e0)");};
-    void bar22(e0){std::println("bar22(e0)");};
-    void bar23(e0){std::println("bar23(e0)");};
-    void bar24(e0){std::println("bar24(e0)");};
-    void bar25(e0){std::println("bar25(e0)");};
-    void bar26(e0){std::println("bar26(e0)");};
-    void bar27(e0){std::println("bar27(e0)");};
-    void bar28(e0){std::println("bar28(e0)");};
-    void bar29(e0){std::println("bar29(e0)");};
-    void bar30(e0){std::println("bar30(e0)");};
-    void bar31(e0){std::println("bar31(e0)");};
-    void bar32(e0){std::println("bar32(e0)");};
-
-    void bar(e00){std::println("bar(e00)");};
-    void bar(e01){std::println("bar(e01)");};
-    void bar(e02){std::println("bar(e02)");};
-    void bar(e03){std::println("bar(e03)");};
-    void bar(e04){std::println("bar(e04)");};
-    void bar(e05){std::println("bar(e05)");};
-    void bar(e06){std::println("bar(e06)");};
-    void bar(e07){std::println("bar(e07)");};
-    void bar(e08){std::println("bar(e08)");};
-    void bar(e09){std::println("bar(e09)");};
-    void bar(e10){std::println("bar(e10)");};
-    void bar(e11){std::println("bar(e11)");};
-    void bar(e12){std::println("bar(e12)");};
-    void bar(e13){std::println("bar(e13)");};
-    void bar(e14){std::println("bar(e14)");};
-    void bar(e15){std::println("bar(e15)");};
-    void bar(e16){std::println("bar(e16)");};
-    void bar(e17){std::println("bar(e17)");};
-    void bar(e18){std::println("bar(e18)");};
-    void bar(e19){std::println("bar(e19)");};
-    void bar(e20){std::println("bar(e20)");};
-    void bar(e21){std::println("bar(e21)");};
-    void bar(e22){std::println("bar(e22)");};
-    void bar(e23){std::println("bar(e23)");};
-    void bar(e24){std::println("bar(e24)");};
-    void bar(e25){std::println("bar(e25)");};
-    void bar(e26){std::println("bar(e26)");};
-    void bar(e27){std::println("bar(e27)");};
-    void bar(e28){std::println("bar(e28)");};
-    void bar(e29){std::println("bar(e29)");};
-    void bar(e30){std::println("bar(e30)");};
-    void bar(e31){std::println("bar(e31)");};
-    void bar(e32){std::println("bar(e32)");};
-};
-
-// clang-format on
-
-// void foo(shared_trait<trait_proto> tr) {
-//     // tr.bar(e0{});
-// };
-//
-//
 int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
