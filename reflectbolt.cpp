@@ -433,39 +433,44 @@ consteval {
     define_trait<trait_proto>();
 }
 
-template <typename Trait>
+// clang-format on
+template<typename Trait>
 concept any_trait =
-    std::meta::is_type(^^Trait) //
-    && std::meta::nonstatic_data_members_of(
-           ^^Trait, std::meta::access_context::unchecked())
-               .size() == 0 //
-    && std::meta::static_data_members_of(^^Trait,
-                                         std::meta::access_context::unchecked())
-               .size() == 0 //
-    &&
-    not std::ranges::empty(
-        std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-        std::views::filter(
-            std::not_fn(std::meta::is_special_member_function))) //
+    std::meta::is_type(^^Trait)    //
+    and
+    std::meta::nonstatic_data_members_of(^^Trait, std::meta::access_context::unchecked()).size() == 0    //
+    and std::meta::static_data_members_of(^^Trait,
+                                          std::meta::access_context::unchecked())
+                .size() == 0    //
+    and not std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+                               std::views::filter(std::not_fn(std::meta::is_special_member_function)))    //
+    and std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+                           std::views::filter(std::not_fn(std::meta::is_special_member_function)) |
+                           std::views::filter(std::meta::is_virtual))    //
     ;
 
 struct my_trait {
-  void foo();
+    void foo();
 };
 struct not_trait_data {
-  int v;
-  void foo();
+    int  v;
+    void foo();
 };
 struct not_trait_stdata {
-  static int v;
-  void foo();
+    static int v;
+    void       foo();
 };
-struct not_trait_empty {};
+struct not_trait_empty_fn {};
+struct not_trait_virt_fn {
+    virtual int foo();
+    void        bar();
+};
 
 static_assert(any_trait<my_trait>);
 static_assert(not any_trait<not_trait_data>);
 static_assert(not any_trait<not_trait_stdata>);
-static_assert(not any_trait<not_trait_empty>);
+static_assert(not any_trait<not_trait_empty_fn>);
+static_assert(not any_trait<not_trait_virt_fn>);
 
 int main() {
     auto to =
