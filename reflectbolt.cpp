@@ -207,22 +207,21 @@ struct method_spec_t {};
 template<typename T>
 concept method_spec =
     std::meta::has_template_arguments(^^T) && std::meta::template_of(^^T) == ^^method_spec_t;
-
 template<method_spec Spec>
 struct overload_invoker;
 template<uZ Index, typename Ret, typename... Args>
 struct overload_invoker<method_spec_t<Index, Ret, Args...>> {
     auto invoke(Args&&... args) const -> Ret {
-        const auto& mngr     = *reinterpret_cast<const detail::shared_manager*>(this);
-        using func_t         = auto(void*, Args&&...)->Ret;
-        using wrapper_fptr_t = func_t*;
-        auto       eptr      = mngr.vtable_begin + Index;
-        const auto wrapper   = *reinterpret_cast<const wrapper_fptr_t*>(eptr);
-        return wrapper(mngr.obj_ptr, std::forward<Args>(args)...);
+        const auto& mngr       = *reinterpret_cast<const detail::shared_manager*>(this);
+        using func_t           = auto(void*, Args&&...)->Ret;
+        using wrapper_fptr_t   = func_t*;
+        const auto erased_ptr  = mngr.vtable_begin + Index;
+        const auto wrapper_ptr = *reinterpret_cast<const wrapper_fptr_t*>(erased_ptr);
+        return wrapper_ptr(mngr.obj_ptr, std::forward<Args>(args)...);
     }
 };
 
-template<uZ I, method_spec... Specs>
+template<method_spec... Specs>
 struct method_invoker : overload_invoker<Specs>... {
     template<typename... CallArgs>
     auto operator()(CallArgs&&... args) {
@@ -327,9 +326,7 @@ consteval void define_trait() {
         const auto spec = substitute(^^method_spec_t, method_spec_params);
         auto it = stdr::find_if(new_members_raw, [=](auto& p) { return p.first == identifier_of(mem); });
         if (it == new_members_raw.end()) {
-            new_members_raw.push_back({
-                identifier_of(mem), {reflect_constant(i), spec}
-            });
+            new_members_raw.push_back({identifier_of(mem), {spec}});
         } else {
             it->second.push_back(spec);
         }
@@ -380,9 +377,6 @@ auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... a
 // clang-format off
 struct trait_proto {
     void baz(e2);
-
-    // void bar(e1);
-    // void bar(e0);
 
     void bar00(e0){std::println("bar00(e0)");};
     void bar01(e0){std::println("bar01(e0)");};
