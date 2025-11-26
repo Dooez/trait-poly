@@ -117,43 +117,24 @@ struct alignas(sizeof(void*) * 2) shared_manager {
 };
 template<typename T>
 struct trait_traits {
+    static constexpr auto is_type = std::meta::is_type(^^T);
+    static constexpr auto no_data_members =
+        std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()).empty();
     static constexpr auto methods = [] {
         using namespace std;
         using namespace std::meta;
-        constexpr auto ctx = access_context::current();
-        constexpr auto n   = [] {
-            constexpr auto ctx           = access_context::current();
-            auto           trait_members = members_of(^^T, ctx)                        //
+        constexpr auto n = [] {
+            auto trait_members = members_of(^^T, access_context::current())            //
                                  | stdv::filter(not_fn(is_special_member_function))    //
                                  | stdr::to<vector<info>>();
             return trait_members.size();
         }();
         auto methods = array<info, n>{};
-        stdr::copy(members_of(^^T, ctx)    //
+        stdr::copy(members_of(^^T, access_context::current())    //
                        | stdv::filter(not_fn(is_special_member_function)),
                    methods.begin());
         stdr::sort(methods, {}, identifier_of);
         return methods;
-    }();
-
-    static constexpr auto method_names = [] {
-        using namespace std;
-        using namespace std::meta;
-
-        constexpr auto n = [] {
-            auto v = methods                             //
-                     | stdv::transform(identifier_of)    //
-                     | stdr::to<vector>();
-            stdr::sort(v);
-            return v.size() - stdr::unique(v).size();
-        }();
-        auto names = std::array<std::string_view, n>{};
-        auto v     = methods                         //
-                 | stdv::transform(identifier_of)    //
-                 | stdr::to<vector>();
-        stdr::sort(v);
-        std::copy(v.begin(), stdr::unique(v).begin(), names.begin());
-        return names;
     }();
 };
 template<typename Trait>
@@ -255,9 +236,9 @@ auto fill_vtable() {
     using namespace std::meta;
     // check input trait prototype
     //
-    constexpr auto t_methods     = ::detail::trait_traits<TraitProto>::methods;
-    constexpr auto wrapper_types = [] {
-        constexpr auto t_methods = ::detail::trait_traits<TraitProto>::methods;
+    using ttt                    = trait_traits<TraitProto>;
+    constexpr auto wrapper_infos = [] {
+        constexpr auto t_methods = ttt::methods;
         constexpr auto ctx       = access_context::current();
 
         auto impl_members = members_of(^^Impl, ctx)    //
@@ -279,7 +260,7 @@ auto fill_vtable() {
                 }
             }
         }
-        auto wrappers        = std::array<info, t_methods.size()>{};
+        auto wrappers        = array<info, t_methods.size()>{};
         auto wrapper_tparams = vector<info>{};
         for (auto [wr, member]: stdv::zip(wrappers, new_members)) {
             wrapper_tparams.clear();
@@ -292,10 +273,10 @@ auto fill_vtable() {
         return wrappers;
     }();
 
-    auto vtable = []<uZ... Is, auto WTypes>(index_sequence<Is...>, nontype<WTypes>) {
-        return array{reinterpret_cast<void*>(&([:WTypes[Is]:]))...};
-    }(make_index_sequence<wrapper_types.size()>{}, nontype<wrapper_types>{});
-    return vtable;
+    auto [... Is] = []<uZ... Is>(index_sequence<Is...>) {
+        return make_tuple(integral_constant<uZ, Is>{}...);
+    }(make_index_sequence<wrapper_infos.size()>{});
+    return array{reinterpret_cast<void*>(&([:wrapper_infos[Is]:]))...};
 }
 
 template<typename TraitProto, typename Impl>
@@ -452,11 +433,45 @@ consteval {
     define_trait<trait_proto>();
 }
 
+template <typename Trait>
+concept any_trait =
+    std::meta::is_type(^^Trait) //
+    && std::meta::nonstatic_data_members_of(
+           ^^Trait, std::meta::access_context::unchecked())
+               .size() == 0 //
+    && std::meta::static_data_members_of(^^Trait,
+                                         std::meta::access_context::unchecked())
+               .size() == 0 //
+    &&
+    not std::ranges::empty(
+        std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+        std::views::filter(
+            std::not_fn(std::meta::is_special_member_function))) //
+    ;
+
+struct my_trait {
+  void foo();
+};
+struct not_trait_data {
+  int v;
+  void foo();
+};
+struct not_trait_stdata {
+  static int v;
+  void foo();
+};
+struct not_trait_empty {};
+
+static_assert(any_trait<my_trait>);
+static_assert(not any_trait<not_trait_data>);
+static_assert(not any_trait<not_trait_stdata>);
+static_assert(not any_trait<not_trait_empty>);
+
 int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
-    std::println("sizeof to {}", sizeof(to));
-    std::println("sizeof timpl {}", sizeof(detail::trait_impl<trait_proto>));
+    std::println("sizeof shared trait object {}", sizeof(to));
+    std::println("sizeof trait impl {}", sizeof(detail::trait_impl<trait_proto>));
     auto toptr = &to;
 
     test_16bars(to);
