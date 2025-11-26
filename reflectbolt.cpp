@@ -198,19 +198,22 @@ struct trait_traits {
         return names;
     }();
 };
-template<typename Trait, uZ I>
-struct pseudo_method;
-
-template<typename Trait, typename ISeq>
-struct inheritor {};
-
-template<typename Trait, uZ I, uZ... Is>
-struct inheritor<Trait, std::index_sequence<I, Is...>>
-: inheritor<Trait, std::index_sequence<Is...>>
-, pseudo_method<Trait, I> {};
+// template<typename Trait, uZ I>
+// struct pseudo_method;
+//
+// template<typename Trait, typename ISeq>
+// struct inheritor {};
+//
+// template<typename Trait, uZ I, uZ... Is>
+// struct inheritor<Trait, std::index_sequence<I, Is...>>
+// : inheritor<Trait, std::index_sequence<Is...>>
+// , pseudo_method<Trait, I> {};
+//
+// template<typename Trait>
+// struct trait_impl : inheritor<Trait, std::make_index_sequence<trait_traits<Trait>::method_names.size()>> {};
 
 template<typename Trait>
-struct trait_impl : inheritor<Trait, std::make_index_sequence<trait_traits<Trait>::method_names.size()>> {};
+struct trait_impl;
 }    // namespace detail
 
 template<typename T>
@@ -261,24 +264,21 @@ template<typename T>
 concept method_spec =
     std::meta::has_template_arguments(^^T) && std::meta::template_of(^^T) == ^^method_spec_t;
 
-template<method_spec... Specs>
+template<uZ I, method_spec... Specs>
 struct method_invoker {};
-template<uZ Index, typename Ret, typename... Args, method_spec... Specs>
-struct method_invoker<method_spec_t<Index, Ret, Args...>, Specs...> : public method_invoker<Specs...> {
+template<uZ I, uZ Index, typename Ret, typename... Args, method_spec... Specs>
+struct method_invoker<I, method_spec_t<Index, Ret, Args...>, Specs...> : public method_invoker<I, Specs...> {
     template<typename... CallArgs>
     auto operator()(CallArgs&&... args) {
-        using current_t = method_invoker<method_spec_t<Index, Ret, Args...>, Specs...>;
+        using current_t = method_invoker<I, method_spec_t<Index, Ret, Args...>, Specs...>;
         if constexpr (requires(CallArgs&&... args) { current_t{}.invoke(std::forward<CallArgs>(args)...); }) {
             return invoke(std::forward<CallArgs>(args)...);
         } else {
-            return method_invoker<Specs...>::operator()(std::forward<CallArgs>(args)...);
+            return method_invoker<I, Specs...>::operator()(std::forward<CallArgs>(args)...);
         }
     }
     auto invoke(Args&&... args) const -> Ret {
-        auto ethis           = reinterpret_cast<const void*>(this);
-        auto aligned_ptr     = reinterpret_cast<uZ>(this);
-        aligned_ptr          = aligned_ptr - aligned_ptr % (sizeof(void*) * 2);
-        const auto& mngr     = *reinterpret_cast<const detail::shared_manager*>(aligned_ptr);
+        const auto& mngr     = *reinterpret_cast<const detail::shared_manager*>(this);
         using func_t         = auto(void*, Args&&...)->Ret;
         using wrapper_fptr_t = func_t*;
         auto       eptr      = mngr.vtable_begin + Index;
@@ -357,12 +357,13 @@ consteval void define_trait() {
     using namespace ::detail;
     // check input trait prototype
     //
-    constexpr auto ctx = access_context::current();
-
+    constexpr auto ctx      = access_context::current();
+    using ttt               = trait_traits<TraitProto>;
     auto new_members_raw    = vector<pair<string_view, vector<info>>>{};
+    auto methods            = vector<info>{};
     auto method_spec_params = vector<info>{};
     uZ   i                  = 0;
-    for (auto mem: trait_traits<TraitProto>::methods) {
+    for (auto mem: ttt::methods) {
         method_spec_params.clear();
         method_spec_params.push_back(reflect_constant(i));
         method_spec_params.push_back(return_type_of(mem));
@@ -370,22 +371,21 @@ consteval void define_trait() {
         const auto spec = substitute(^^method_spec_t, method_spec_params);
         auto it = stdr::find_if(new_members_raw, [=](auto& p) { return p.first == identifier_of(mem); });
         if (it == new_members_raw.end()) {
-            new_members_raw.push_back({identifier_of(mem), {spec}});
+            new_members_raw.push_back({
+                identifier_of(mem), {reflect_constant(i), spec}
+            });
         } else {
             it->second.push_back(spec);
         }
         ++i;
     }
-    i      = 0;
-    auto x = std::array<std::string_view, trait_traits<TraitProto>::methods.size()>{};
     for (auto& [name, specs_vec]: new_members_raw) {
         const auto options      = data_member_options{.name = name, .no_unique_address = true};
         const auto invoker_type = substitute(^^method_invoker, specs_vec);
 
-        auto pseudo_method_info = substitute(^^pseudo_method, {^^TraitProto, reflect_constant(i)});
-        define_aggregate(pseudo_method_info, {data_member_spec(invoker_type, options)});
-        ++i;
+        methods.push_back(data_member_spec(invoker_type, options));
     }
+    define_aggregate(^^trait_impl<TraitProto>, methods);
 };
 
 template<typename TraitProto, typename Impl, typename Alloc, typename... Args>
@@ -425,8 +425,8 @@ auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... a
 struct trait_proto {
     void baz(e2);
 
-    void bar(e1);
-    void bar(e0);
+    // void bar(e1);
+    // void bar(e0);
 
     void bar00(e0){std::println("bar00(e0)");};
     void bar01(e0){std::println("bar01(e0)");};
@@ -473,11 +473,11 @@ struct trait_proto {
     void bar(e08){std::println("bar(e08)");};
     void bar(e09){std::println("bar(e09)");};
     void bar(e10){std::println("bar(e10)");};
-    void bar(e11){std::println("bar(e11)");};
-    void bar(e12){std::println("bar(e12)");};
-    void bar(e13){std::println("bar(e13)");};
-    void bar(e14){std::println("bar(e14)");};
-    void bar(e15){std::println("bar(e15)");};
+    // void bar(e11){std::println("bar(e11)");};
+    // void bar(e12){std::println("bar(e12)");};
+    // void bar(e13){std::println("bar(e13)");};
+    // void bar(e14){std::println("bar(e14)");};
+    // void bar(e15){std::println("bar(e15)");};
     // void bar(e16){std::println("bar(e16)");};
     // void bar(e17){std::println("bar(e17)");};
     // void bar(e18){std::println("bar(e18)");};
@@ -668,7 +668,8 @@ int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
     std::println("sizeof to {}", sizeof(to));
-    // auto toptr = &to;
+    std::println("sizeof timpl {}", sizeof(detail::trait_impl<trait_proto>));
+    auto toptr = &to;
     to.bar00(e0{});
     to.bar01(e0{});
     to.bar02(e0{});
@@ -702,29 +703,8 @@ int main() {
     to.bar30(e0{});
     to.bar31(e0{});
     to.bar32(e0{});
-    //
-    // to.bar0(e1{});
-    // to.bar1(e1{});
-    // to.bar2(e1{});
-    // to.bar3(e1{});
-    // to.bar4(e1{});
-    // to.bar5(e1{});
-    // to.bar6(e1{});
-    // to.bar7(e1{});
-    // to.bar8(e1{});
-    // to.bar9(e1{});
-    //
-    // to.bar0(e2{});
-    // to.bar1(e2{});
-    // to.bar2(e2{});
-    // to.bar3(e2{});
-    // to.bar4(e2{});
-    // to.bar5(e2{});
-    // to.bar6(e2{});
-    // to.bar7(e2{});
-    // to.bar8(e2{});
-    // to.bar9(e2{});
-    // to = make_shared_trait<trait_proto, other_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
-    // to.bar(e0{});
-    // to.bar(e1{});
+
+    to = make_shared_trait<trait_proto, other_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
+    to.bar00(e0{});
+    to.bar01(e0{});
 }
