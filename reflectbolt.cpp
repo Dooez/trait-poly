@@ -31,6 +31,24 @@ namespace stdv = std::views;
 template<auto V>
 struct nontype {};
 
+template<typename Trait>
+concept any_trait =
+    std::meta::is_type(^^Trait)    //
+    and
+    std::meta::nonstatic_data_members_of(^^Trait, std::meta::access_context::unchecked()).size() == 0    //
+    and std::meta::static_data_members_of(^^Trait,
+                                          std::meta::access_context::unchecked())
+                .size() == 0    //
+    and not std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+                               std::views::filter(std::not_fn(std::meta::is_special_member_function)))    //
+    and std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+                           std::views::filter(std::not_fn(std::meta::is_special_member_function)) |
+                           std::views::filter(std::meta::is_virtual))    //
+    and std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+                           std::views::filter(std::not_fn(std::meta::is_special_member_function)) |
+                           std::views::filter(std::meta::is_template))    //
+    ;
+
 namespace detail {
 
 using arc_t = std::atomic<uint64_t>;
@@ -115,49 +133,29 @@ struct alignas(sizeof(void*) * 2) shared_manager {
         decrement();
     }
 };
-template<typename T>
+template<any_trait T>
 struct trait_traits {
-    static constexpr auto is_type = std::meta::is_type(^^T);
-    static constexpr auto no_data_members =
-        std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()).empty();
     static constexpr auto methods = [] {
         using namespace std;
         using namespace std::meta;
         constexpr auto n = [] {
-            auto trait_members = members_of(^^T, access_context::current())            //
+            auto trait_members = members_of(^^T, access_context::unchecked())          //
                                  | stdv::filter(not_fn(is_special_member_function))    //
                                  | stdr::to<vector<info>>();
             return trait_members.size();
         }();
         auto methods = array<info, n>{};
-        stdr::copy(members_of(^^T, access_context::current())    //
+        stdr::copy(members_of(^^T, access_context::unchecked())    //
                        | stdv::filter(not_fn(is_special_member_function)),
                    methods.begin());
         stdr::sort(methods, {}, identifier_of);
         return methods;
     }();
 };
-template<typename Trait>
+template<any_trait Trait>
 struct trait_impl;
-}    // namespace detail
 
-template<typename T>
-class shared_trait : public detail::trait_impl<T> {
-    [[no_unique_address]] detail::shared_manager manager_;
-
-public:
-    shared_trait() = default;
-    shared_trait(detail::shared_manager manager)
-    : manager_(std::move(manager)) {};
-
-    operator bool() {
-        return manager_.obj_ptr != nullptr;
-    }
-};
-
-namespace detail {
-
-template<typename TraitProto, typename Impl, typename Allocator>
+template<any_trait TraitProto, typename Impl, typename Allocator>
 struct alignas(get_align<Impl>()) ctrl_block {
     static constexpr auto ialign   = get_align<Impl>();
     static constexpr auto hdr_size = sizeof(void*) * 2 + sizeof(uZ) + sizeof(arc_t);
@@ -230,16 +228,14 @@ auto invoke_wrapper(void* impl_ptr, Args&&... args) -> Ret {
 }
 
 
-template<typename TraitProto, typename Impl>
+template<any_trait TraitProto, typename Impl>
 auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
-    // check input trait prototype
-    //
     using ttt                    = trait_traits<TraitProto>;
     constexpr auto wrapper_infos = [] {
         constexpr auto t_methods = ttt::methods;
-        constexpr auto ctx       = access_context::current();
+        constexpr auto ctx       = access_context::unchecked();
 
         auto impl_members = members_of(^^Impl, ctx)    //
                             | stdv::filter(not_fn(is_special_member_function));
@@ -274,26 +270,30 @@ auto fill_vtable() {
     }();
 
     auto [... Is] = []<uZ... Is>(index_sequence<Is...>) {
-        return make_tuple(integral_constant<uZ, Is>{}...);
+        return make_tuple(integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
     }(make_index_sequence<wrapper_infos.size()>{});
     return array{reinterpret_cast<void*>(&([:wrapper_infos[Is]:]))...};
 }
 
-template<typename TraitProto, typename Impl>
+template<any_trait TraitProto, typename Impl>
 struct trait_vtable {
     static inline const auto value = fill_vtable<TraitProto, Impl>();
 };
-}    // namespace detail
 
-constexpr void comptime_error();
-template<typename TraitProto>
+template<typename TraitImpl>
+consteval auto validate_method_offsets() {
+    using namespace std::meta;
+    return stdr::empty(nonstatic_data_members_of(^^TraitImpl, access_context::unchecked()) |
+                       stdv::filter([](auto info) { return offset_of(info).bytes != 0; }));
+}
+}    // namespace detail
+template<any_trait TraitProto>
 consteval void define_trait() {
     using namespace std;
     using namespace std::meta;
     using namespace ::detail;
-    // check input trait prototype
-    //
-    constexpr auto ctx      = access_context::current();
+
+    constexpr auto ctx      = access_context::unchecked();
     using ttt               = trait_traits<TraitProto>;
     auto new_members_raw    = vector<pair<string_view, vector<info>>>{};
     auto methods            = vector<info>{};
@@ -322,7 +322,22 @@ consteval void define_trait() {
     define_aggregate(^^trait_impl<TraitProto>, methods);
 };
 
-template<typename TraitProto, typename Impl, typename Alloc, typename... Args>
+template<any_trait T>
+class shared_trait
+: public detail::trait_impl<T>
+, private detail::shared_manager {
+    static_assert(detail::validate_method_offsets<detail::trait_impl<T>>());
+
+public:
+    shared_trait() = default;
+    shared_trait(detail::shared_manager manager)
+    : detail::shared_manager(std::move(manager)) {};
+
+    operator bool() {
+        return obj_ptr != nullptr;
+    }
+};
+template<any_trait TraitProto, typename Impl, typename Alloc, typename... Args>
 auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... args) {
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
     using ctrl_block   = detail::ctrl_block<TraitProto, Impl, alloc>;
@@ -434,20 +449,6 @@ consteval {
 }
 
 // clang-format on
-template<typename Trait>
-concept any_trait =
-    std::meta::is_type(^^Trait)    //
-    and
-    std::meta::nonstatic_data_members_of(^^Trait, std::meta::access_context::unchecked()).size() == 0    //
-    and std::meta::static_data_members_of(^^Trait,
-                                          std::meta::access_context::unchecked())
-                .size() == 0    //
-    and not std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                               std::views::filter(std::not_fn(std::meta::is_special_member_function)))    //
-    and std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                           std::views::filter(std::not_fn(std::meta::is_special_member_function)) |
-                           std::views::filter(std::meta::is_virtual))    //
-    ;
 
 struct my_trait {
     void foo();
@@ -465,12 +466,17 @@ struct not_trait_virt_fn {
     virtual int foo();
     void        bar();
 };
+struct not_trait_template {
+    template<typename X>
+    void foo(X);
+};
 
 static_assert(any_trait<my_trait>);
 static_assert(not any_trait<not_trait_data>);
 static_assert(not any_trait<not_trait_stdata>);
 static_assert(not any_trait<not_trait_empty_fn>);
 static_assert(not any_trait<not_trait_virt_fn>);
+static_assert(not any_trait<not_trait_template>);
 
 int main() {
     auto to =
