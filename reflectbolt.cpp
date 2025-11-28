@@ -1,18 +1,7 @@
 #include "shared_trait.hpp"
 #include "testing.hpp"
 
-#include <algorithm>
-#include <atomic>
-#include <cstddef>
-#include <cstdint>
-#include <format>
-#include <functional>
-#include <map>
-#include <memory>
-#include <meta>
-#include <ranges>
-#include <utility>
-namespace trp {
+#include <print>
 
 // clang-format off
 struct trait_proto {
@@ -89,7 +78,7 @@ struct trait_proto {
 };
 
 consteval {
-    define_trait<trait_proto>();
+    trp::define_trait<trait_proto>();
 }
 
 // clang-format on
@@ -116,6 +105,7 @@ struct not_trait_template {
     void foo(X);
 };
 
+using namespace trp;
 static_assert(any_trait<my_trait>);
 static_assert(not any_trait<not_trait_data>);
 static_assert(not any_trait<not_trait_stdata>);
@@ -123,8 +113,6 @@ static_assert(not any_trait<not_trait_empty_fn>);
 static_assert(not any_trait<not_trait_virt_fn>);
 static_assert(not any_trait<not_trait_template>);
 
-}    // namespace trp
-using namespace trp;
 int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});

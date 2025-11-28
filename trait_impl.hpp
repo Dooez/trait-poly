@@ -1,10 +1,12 @@
 #include "trp_concepts.hpp"
 
 namespace trp {
-template<auto V>
-struct nontype {};
-
 namespace detail {
+template<auto V>
+struct nontype {
+    static constexpr auto value = V;
+};
+
 
 template<any_trait Trait>
 struct trait_impl;
@@ -58,54 +60,57 @@ struct method_invoker : overload_invoker<Specs>... {
 template<typename Impl, std::meta::info Method, typename Ret, typename... Args>
 auto invoke_wrapper(void* impl_ptr, Args&&... args) -> Ret {
     auto& impl = *static_cast<Impl*>(impl_ptr);
-    return impl.[:Method:](std::forward<Args>(args)...);
+    if constexpr (std::meta::is_template(Method)) {
+        return impl.template[:Method:](std::forward<Args>(args)...);
+    } else {
+        return impl.[:Method:](std::forward<Args>(args)...);
+    }
 }
 
-template<any_trait TraitProto, typename Impl>
+template<any_trait Trait, implements_trait<Trait> Impl>
 auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
-    using ttt                    = trait_traits<TraitProto>;
-    constexpr auto wrapper_infos = [] {
-        constexpr auto t_methods = ttt::methods;
-        constexpr auto ctx       = access_context::unchecked();
+    using ttt                      = trait_traits<Trait>;
+    constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) consteval {
+        constexpr auto matcher = []<info ImplMethod>(nontype<ImplMethod>) {
+            constexpr auto matcher_impl = [] {
+                auto [... args] = [] {
+                    constexpr auto n         = (parameters_of(TraitMethod) | stdv::transform(type_of)).size();
+                    auto           arg_array = std::array<info, n>{};
+                    stdr::copy(parameters_of(TraitMethod) | stdv::transform(type_of), arg_array.begin());
+                    return arg_array;
+                }();
+                return substitute(
+                    ^^match_method,
+                    {^^Impl, reflect_constant(ImplMethod), return_type_of(TraitMethod), args...});
+            }();
+            return [:matcher_impl:]();
+        };
 
-        auto impl_members = members_of(^^Impl, ctx)    //
-                            | stdv::filter(not_fn(is_special_member_function));
-        auto new_members = vector<info>{};
-        for (auto mem: t_methods) {
-            auto trait_name         = identifier_of(mem);
-            auto trait_ret          = return_type_of(mem);
-            auto trait_params_types = parameters_of(mem) | stdv::transform(type_of);
-            for (auto imem: impl_members) {
-                auto impl_name         = identifier_of(imem);
-                auto impl_ret          = return_type_of(imem);
-                auto impl_params_types = parameters_of(imem) | stdv::transform(type_of);
-                if (impl_name == trait_name     //
-                    && impl_ret == trait_ret    //
-                    && stdr::equal(trait_params_types, impl_params_types)) {
-                    new_members.push_back(imem);
-                    break;
-                }
-            }
-        }
-        auto wrappers        = array<info, t_methods.size()>{};
+        constexpr auto impl_mems = get_callable_members<Impl, TraitMethod>();
+        auto [... Is]            = []<uZ... Is>(index_sequence<Is...>) {
+            return make_tuple(
+                integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
+        }(make_index_sequence<impl_mems.size()>{});
+        auto matched_method = info{};
+        (void)((matcher(nontype<impl_mems[Is]>{}) && (matched_method = impl_mems[Is], true)) || ...);
+        return matched_method;
+    };
+    constexpr auto make_wrapper = [](info trait_method, info impl_method) {
         auto wrapper_tparams = vector<info>{};
-        for (auto [wr, member]: stdv::zip(wrappers, new_members)) {
-            wrapper_tparams.clear();
-            wrapper_tparams.push_back(^^Impl);
-            wrapper_tparams.push_back(reflect_constant(member));
-            wrapper_tparams.push_back(return_type_of(member));
-            wrapper_tparams.append_range(parameters_of(member) | stdv::transform(type_of));
-            wr = substitute(^^invoke_wrapper, wrapper_tparams);
-        }
-        return wrappers;
-    }();
-
+        wrapper_tparams.push_back(^^Impl);
+        wrapper_tparams.push_back(reflect_constant(impl_method));
+        wrapper_tparams.push_back(return_type_of(trait_method));
+        wrapper_tparams.append_range(parameters_of(trait_method) | stdv::transform(type_of));
+        return substitute(^^invoke_wrapper, wrapper_tparams);
+    };
     auto [... Is] = []<uZ... Is>(index_sequence<Is...>) {
         return make_tuple(integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
-    }(make_index_sequence<wrapper_infos.size()>{});
-    return array{reinterpret_cast<void*>(&([:wrapper_infos[Is]:]))...};
+    }(make_index_sequence<ttt::methods.size()>{});
+
+    return array{reinterpret_cast<void*>(
+        &([:make_wrapper(ttt::methods[Is], get_impl_method(nontype<ttt::methods[Is]>{})):]))...};
 }
 template<any_trait TraitProto, typename Impl>
 struct trait_vtable {
