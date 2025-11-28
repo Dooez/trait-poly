@@ -150,39 +150,12 @@ struct other_trait_impl {
     void bar31(e0){std::println("other bar31(e0)");};
     void bar32(e0){std::println("other bar32(e0)");};
 
-    void bar(e00){std::println("other bar(e00)");};
-    void bar(e01){std::println("other bar(e01)");};
-    void bar(e02){std::println("other bar(e02)");};
-    void bar(e03){std::println("other bar(e03)");};
-    void bar(e04){std::println("other bar(e04)");};
-    void bar(e05){std::println("other bar(e05)");};
-    void bar(e06){std::println("other bar(e06)");};
-    void bar(e07){std::println("other bar(e07)");};
-    void bar(e08){std::println("other bar(e08)");};
-    void bar(e09){std::println("other bar(e09)");};
-    void bar(e10){std::println("other bar(e10)");};
-    void bar(e11){std::println("other bar(e11)");};
-    void bar(e12){std::println("other bar(e12)");};
-    void bar(e13){std::println("other bar(e13)");};
-    void bar(e14){std::println("other bar(e14)");};
-    void bar(e15){std::println("other bar(e15)");};
-    void bar(e16){std::println("other bar(e16)");};
-    void bar(e17){std::println("other bar(e17)");};
-    void bar(e18){std::println("other bar(e18)");};
-    void bar(e19){std::println("other bar(e19)");};
-    void bar(e20){std::println("other bar(e20)");};
-    void bar(e21){std::println("other bar(e21)");};
-    void bar(e22){std::println("other bar(e22)");};
-    void bar(e23){std::println("other bar(e23)");};
-    void bar(e24){std::println("other bar(e24)");};
-    void bar(e25){std::println("other bar(e25)");};
-    void bar(e26){std::println("other bar(e26)");};
-    void bar(e27){std::println("other bar(e27)");};
-    void bar(e28){std::println("other bar(e28)");};
-    void bar(e29){std::println("other bar(e29)");};
-    void bar(e30){std::println("other bar(e30)");};
-    void bar(e31){std::println("other bar(e31)");};
-    void bar(e32){std::println("other bar(e32)");};
+    template<typename T>
+    void bar(T){
+        constexpr auto name = std::meta::identifier_of(^^T);
+        std::println("other bar({})", name);
+    }
+
 };
 
 void test_16bars(auto& to){
