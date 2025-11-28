@@ -1,5 +1,7 @@
 #pragma once
+#ifndef TRP_GODBOLT
 #include "trait_impl.hpp"
+#endif
 
 #include <atomic>
 #include <memory>

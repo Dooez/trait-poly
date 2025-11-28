@@ -1,4 +1,7 @@
+#pragma once
+#ifndef TRP_GODBOLT
 #include "trp_concepts.hpp"
+#endif
 
 namespace trp {
 namespace detail {
