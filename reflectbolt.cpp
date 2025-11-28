@@ -1,4 +1,5 @@
 #include "testing.hpp"
+#include "trp_concepts.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -11,46 +12,11 @@
 #include <meta>
 #include <ranges>
 #include <utility>
-
-using i8  = int8_t;
-using i16 = int16_t;
-using i32 = int32_t;
-using i64 = std::int64_t;
-
-using u8       = uint8_t;
-using u32      = uint32_t;
-using u64      = std::uint64_t;
-using uZ       = std::size_t;
-using i64      = std::int64_t;
-using iZ       = ssize_t;
-using f32      = float;
-using f64      = double;
-namespace stdr = std::ranges;
-namespace stdv = std::views;
-
+namespace trp {
 template<auto V>
 struct nontype {};
 
-template<typename Trait>
-concept any_trait =
-    std::meta::is_type(^^Trait)    //
-    and
-    std::meta::nonstatic_data_members_of(^^Trait, std::meta::access_context::unchecked()).size() == 0    //
-    and std::meta::static_data_members_of(^^Trait,
-                                          std::meta::access_context::unchecked())
-                .size() == 0    //
-    and not std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                               std::views::filter(std::not_fn(std::meta::is_special_member_function)))    //
-    and std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                           std::views::filter(std::not_fn(std::meta::is_special_member_function)) |
-                           std::views::filter(std::meta::is_virtual))    //
-    and std::ranges::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                           std::views::filter(std::not_fn(std::meta::is_special_member_function)) |
-                           std::views::filter(std::meta::is_template))    //
-    ;
-
 namespace detail {
-
 using arc_t = std::atomic<uint64_t>;
 
 template<typename Impl>
@@ -133,25 +99,7 @@ struct alignas(sizeof(void*) * 2) shared_manager {
         decrement();
     }
 };
-template<any_trait T>
-struct trait_traits {
-    static constexpr auto methods = [] {
-        using namespace std;
-        using namespace std::meta;
-        constexpr auto n = [] {
-            auto trait_members = members_of(^^T, access_context::unchecked())          //
-                                 | stdv::filter(not_fn(is_special_member_function))    //
-                                 | stdr::to<vector<info>>();
-            return trait_members.size();
-        }();
-        auto methods = array<info, n>{};
-        stdr::copy(members_of(^^T, access_context::unchecked())    //
-                       | stdv::filter(not_fn(is_special_member_function)),
-                   methods.begin());
-        stdr::sort(methods, {}, identifier_of);
-        return methods;
-    }();
-};
+
 template<any_trait Trait>
 struct trait_impl;
 
@@ -186,6 +134,7 @@ struct method_spec_t {};
 template<typename T>
 concept method_spec =
     std::meta::has_template_arguments(^^T) && std::meta::template_of(^^T) == ^^method_spec_t;
+
 template<method_spec Spec>
 struct overload_invoker;
 template<uZ Index, typename Ret, typename... Args>
@@ -199,7 +148,6 @@ struct overload_invoker<method_spec_t<Index, Ret, Args...>> {
         return wrapper_ptr(mngr.obj_ptr, std::forward<Args>(args)...);
     }
 };
-
 template<method_spec... Specs>
 struct method_invoker : overload_invoker<Specs>... {
     template<typename... CallArgs>
@@ -226,8 +174,6 @@ auto invoke_wrapper(void* impl_ptr, Args&&... args) -> Ret {
     auto& impl = *static_cast<Impl*>(impl_ptr);
     return impl.[:Method:](std::forward<Args>(args)...);
 }
-
-
 template<any_trait TraitProto, typename Impl>
 auto fill_vtable() {
     using namespace std;
@@ -274,7 +220,6 @@ auto fill_vtable() {
     }(make_index_sequence<wrapper_infos.size()>{});
     return array{reinterpret_cast<void*>(&([:wrapper_infos[Is]:]))...};
 }
-
 template<any_trait TraitProto, typename Impl>
 struct trait_vtable {
     static inline const auto value = fill_vtable<TraitProto, Impl>();
@@ -291,7 +236,7 @@ template<any_trait TraitProto>
 consteval void define_trait() {
     using namespace std;
     using namespace std::meta;
-    using namespace ::detail;
+    using namespace trp::detail;
 
     constexpr auto ctx      = access_context::unchecked();
     using ttt               = trait_traits<TraitProto>;
@@ -339,6 +284,7 @@ public:
 };
 template<any_trait TraitProto, typename Impl, typename Alloc, typename... Args>
 auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... args) {
+    static_assert(sizeof(shared_trait<TraitProto>) == sizeof(detail::shared_manager));
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
     using ctrl_block   = detail::ctrl_block<TraitProto, Impl, alloc>;
     using alloc_traits = std::allocator_traits<alloc>;
@@ -462,6 +408,7 @@ struct not_trait_stdata {
     void       foo();
 };
 struct not_trait_empty_fn {};
+
 struct not_trait_virt_fn {
     virtual int foo();
     void        bar();
@@ -478,6 +425,8 @@ static_assert(not any_trait<not_trait_empty_fn>);
 static_assert(not any_trait<not_trait_virt_fn>);
 static_assert(not any_trait<not_trait_template>);
 
+}    // namespace trp
+using namespace trp;
 int main() {
     auto to =
         make_shared_trait<trait_proto, some_trait_impl>(std::allocator_arg, std::allocator<std::byte>{});
