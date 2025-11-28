@@ -24,7 +24,7 @@ struct signed_offsets {
     static constexpr iZ ctrl_block = memstart;
 };
 
-template<any_trait Trait, typename Impl, typename Allocator>
+template<typename Trait, typename Impl, typename Allocator>
 struct alignas(get_align<Impl>()) ctrl_block {
     static constexpr auto ialign   = get_align<Impl>();
     static constexpr auto hdr_size = sizeof(void*) * 2 + sizeof(uZ) + sizeof(arc_t);
@@ -127,9 +127,8 @@ public:
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
 auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     static_assert(sizeof(shared_trait<Trait>) == sizeof(detail::shared_manager));
-    static_assert(
-        stdr::all_of(std::meta::bases_of(^^shared_trait<Trait>, std::meta::access_context::unchecked()),
-                     [](auto info) { return std::meta::offset_of(info).bytes == 0; }));
+    static_assert(stdr::all_of(std::meta::bases_of(^^shared_trait<Trait>, ctx_unchecked),
+                               [](auto info) { return std::meta::offset_of(info).bytes == 0; }));
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
     using ctrl_block   = detail::ctrl_block<Trait, Impl, alloc>;
     using alloc_traits = std::allocator_traits<alloc>;

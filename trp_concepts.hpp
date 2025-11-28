@@ -23,37 +23,35 @@ using f64      = double;
 namespace stdr = std::ranges;
 namespace stdv = std::views;
 
+inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
+
 template<typename Trait>
 concept any_trait =
-    std::meta::is_type(^^Trait)    //
-    and
-    std::meta::nonstatic_data_members_of(^^Trait, std::meta::access_context::unchecked()).size() == 0    //
-    and std::meta::static_data_members_of(^^Trait,
-                                          std::meta::access_context::unchecked())
-                .size() == 0    //
-    and not stdr::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
+    stdr::empty(std::meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))     //
+    and stdr::empty(std::meta::static_data_members_of(^^Trait, ctx_unchecked))    //
+    and not stdr::empty(std::meta::members_of(^^Trait, ctx_unchecked) |
                         stdv::filter(std::not_fn(std::meta::is_special_member_function)))    //
-    and stdr::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                    stdv::filter(std::not_fn(std::meta::is_special_member_function)) |
-                    stdv::filter(std::meta::is_virtual))    //
-    and stdr::empty(std::meta::members_of(^^Trait, std::meta::access_context::unchecked()) |
-                    stdv::filter(std::not_fn(std::meta::is_special_member_function)) |
-                    stdv::filter(std::meta::is_template))    //
+    and stdr::none_of(std::meta::members_of(^^Trait, ctx_unchecked) |
+                          stdv::filter(std::not_fn(std::meta::is_special_member_function)),
+                      std::meta::is_virtual)    //
+    and stdr::none_of(std::meta::members_of(^^Trait, ctx_unchecked) |
+                          stdv::filter(std::not_fn(std::meta::is_special_member_function)),
+                      std::meta::is_template)    //
     ;
 
-template<any_trait T>
+template<typename T>
 struct trait_traits {
     static constexpr auto methods = [] {
         using namespace std;
         using namespace std::meta;
         constexpr auto n = [] {
-            auto trait_members = members_of(^^T, access_context::unchecked())          //
+            auto trait_members = members_of(^^T, ctx_unchecked)                        //
                                  | stdv::filter(not_fn(is_special_member_function))    //
                                  | stdr::to<vector<info>>();
             return trait_members.size();
         }();
         auto methods = array<info, n>{};
-        stdr::copy(members_of(^^T, access_context::unchecked())    //
+        stdr::copy(members_of(^^T, ctx_unchecked)    //
                        | stdv::filter(not_fn(is_special_member_function)),
                    methods.begin());
         stdr::sort(methods, {}, identifier_of);

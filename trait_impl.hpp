@@ -10,7 +10,7 @@ struct nontype {
     static constexpr auto value = V;
 };
 
-template<any_trait Trait>
+template<typename Trait>
 struct trait_impl;
 
 struct alignas(sizeof(void*) * 2) trait_impl_manager {
@@ -69,7 +69,7 @@ auto invoke_wrapper(void* impl_ptr, Args&&... args) -> Ret {
     }
 }
 
-template<any_trait Trait, implements_trait<Trait> Impl>
+template<typename Trait, implements_trait<Trait> Impl>
 auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
@@ -114,7 +114,7 @@ auto fill_vtable() {
     return array{reinterpret_cast<void*>(
         &([:make_wrapper(ttt::methods[Is], get_impl_method(nontype<ttt::methods[Is]>{})):]))...};
 }
-template<any_trait Trait, implements_trait<Trait> Impl>
+template<typename Trait, implements_trait<Trait> Impl>
 struct trait_vtable {
     static inline const auto value = fill_vtable<Trait, Impl>();
 };
@@ -122,18 +122,17 @@ struct trait_vtable {
 template<typename TraitImpl>
 consteval auto validate_method_offsets() {
     using namespace std::meta;
-    return stdr::empty(nonstatic_data_members_of(^^TraitImpl, access_context::unchecked()) |
+    return stdr::empty(nonstatic_data_members_of(^^TraitImpl, ctx_unchecked) |
                        stdv::filter([](auto info) { return offset_of(info).bytes != 0; }));
 }
 }    // namespace detail
 
-template<any_trait Trait>
+template<typename Trait>
 consteval void define_trait() {
     using namespace std;
     using namespace std::meta;
     using namespace trp::detail;
 
-    constexpr auto ctx      = access_context::unchecked();
     using ttt               = trait_traits<Trait>;
     auto new_members_raw    = vector<pair<string_view, vector<info>>>{};
     auto methods            = vector<info>{};
