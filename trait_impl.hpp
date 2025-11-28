@@ -7,7 +7,6 @@ struct nontype {
     static constexpr auto value = V;
 };
 
-
 template<any_trait Trait>
 struct trait_impl;
 
@@ -112,9 +111,9 @@ auto fill_vtable() {
     return array{reinterpret_cast<void*>(
         &([:make_wrapper(ttt::methods[Is], get_impl_method(nontype<ttt::methods[Is]>{})):]))...};
 }
-template<any_trait TraitProto, typename Impl>
+template<any_trait Trait, implements_trait<Trait> Impl>
 struct trait_vtable {
-    static inline const auto value = fill_vtable<TraitProto, Impl>();
+    static inline const auto value = fill_vtable<Trait, Impl>();
 };
 
 template<typename TraitImpl>
@@ -125,14 +124,14 @@ consteval auto validate_method_offsets() {
 }
 }    // namespace detail
 
-template<any_trait TraitProto>
+template<any_trait Trait>
 consteval void define_trait() {
     using namespace std;
     using namespace std::meta;
     using namespace trp::detail;
 
     constexpr auto ctx      = access_context::unchecked();
-    using ttt               = trait_traits<TraitProto>;
+    using ttt               = trait_traits<Trait>;
     auto new_members_raw    = vector<pair<string_view, vector<info>>>{};
     auto methods            = vector<info>{};
     auto method_spec_params = vector<info>{};
@@ -157,6 +156,6 @@ consteval void define_trait() {
 
         methods.push_back(data_member_spec(invoker_type, options));
     }
-    define_aggregate(^^trait_impl<TraitProto>, methods);
+    define_aggregate(^^trait_impl<Trait>, methods);
 };
 }    // namespace trp

@@ -22,7 +22,7 @@ struct signed_offsets {
     static constexpr iZ ctrl_block = memstart;
 };
 
-template<any_trait TraitProto, typename Impl, typename Allocator>
+template<any_trait Trait, typename Impl, typename Allocator>
 struct alignas(get_align<Impl>()) ctrl_block {
     static constexpr auto ialign   = get_align<Impl>();
     static constexpr auto hdr_size = sizeof(void*) * 2 + sizeof(uZ) + sizeof(arc_t);
@@ -123,11 +123,14 @@ public:
         return obj_ptr != nullptr;
     }
 };
-template<any_trait TraitProto, typename Impl, typename Alloc, typename... Args>
+template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
 auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... args) {
-    static_assert(sizeof(shared_trait<TraitProto>) == sizeof(detail::shared_manager));
+    static_assert(sizeof(shared_trait<Trait>) == sizeof(detail::shared_manager));
+    static_assert(
+        stdr::all_of(std::meta::bases_of(^^shared_trait<Trait>, std::meta::access_context::unchecked()),
+                     [](auto info) { return std::meta::offset_of(info).bytes == 0; }));
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
-    using ctrl_block   = detail::ctrl_block<TraitProto, Impl, alloc>;
+    using ctrl_block   = detail::ctrl_block<Trait, Impl, alloc>;
     using alloc_traits = std::allocator_traits<alloc>;
     auto new_allocator = static_cast<alloc>(allocator);
     const auto [ptr, n] =
@@ -147,9 +150,9 @@ auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... a
                                                     .impl_{std::forward<Args>(args)...},
                                                     .allocator_{std::move(new_allocator)}};
         auto impl_ptr   = &(cptr->impl_);
-        auto vtable_ptr = detail::trait_vtable<TraitProto, Impl>::value.data();
+        auto vtable_ptr = detail::trait_vtable<Trait, Impl>::value.data();
         using efptr     = void*;
-        return shared_trait<TraitProto>(
+        return shared_trait<Trait>(
             detail::shared_manager(reinterpret_cast<const efptr*>(vtable_ptr), static_cast<void*>(impl_ptr)));
     } catch (...) {
         alloc_traits::deallocate(new_allocator, ptr, n);
