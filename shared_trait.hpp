@@ -51,10 +51,9 @@ struct alignas(get_align<Impl>()) ctrl_block {
 
 struct shared_manager : trait_impl_manager {
     shared_manager(const efptr* vtable_begin, void* obj_ptr)
-    : trait_impl_manager{.vtable_begin{vtable_begin}, .obj_ptr{obj_ptr}} {
+    : trait_impl_manager{.vtable_begin = vtable_begin, .obj_ptr = obj_ptr} {
         increment();
     };
-
 
     auto obj() const -> std::byte* {
         return static_cast<std::byte*>(obj_ptr);
