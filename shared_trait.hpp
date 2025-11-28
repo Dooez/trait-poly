@@ -124,7 +124,7 @@ public:
     }
 };
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
-auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... args) {
+auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     static_assert(sizeof(shared_trait<Trait>) == sizeof(detail::shared_manager));
     static_assert(
         stdr::all_of(std::meta::bases_of(^^shared_trait<Trait>, std::meta::access_context::unchecked()),
@@ -160,4 +160,8 @@ auto make_shared_trait(std::allocator_arg_t, const Alloc& allocator, Args&&... a
     }
 }
 
+template<any_trait Trait, implements_trait<Trait> Impl, typename... Args>
+auto make_shared_trait(Args&&... args) {
+    return allocate_shared_trait<Trait, Impl>(std::allocator<std::byte>{}, std::forward<Args>(args)...);
+}
 }    // namespace trp
