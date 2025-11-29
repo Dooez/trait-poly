@@ -112,7 +112,7 @@ struct some_trait_impl {
     void bar(e31){std::println("some bar(e31)");};
     void bar(e32){std::println("some bar(e32)");};
 };
-struct other_trait_impl {
+struct alignas(256) other_trait_impl {
     void bar(e0){std::println("other bar e0");}
     void bar(e1){std::println("other bar e1");}
     void baz(e2){std::println("other baz e2");}
