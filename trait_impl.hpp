@@ -49,8 +49,8 @@ struct method_invoker : overload_invoker<Specs>... {
         using overload_t = overload_invoker<Specs...[OverloadIdx]>;
         if constexpr (OverloadIdx >= sizeof...(Specs)) {
             static_assert(false, "No overload found");
-        } else if constexpr (requires(CallArgs&&... args) {
-                                 overload_t{}.invoke(std::forward<CallArgs>(args)...);
+        } else if constexpr (requires(overload_t f, CallArgs&&... args) {
+                                 f.invoke(std::forward<CallArgs>(args)...);
                              }) {
             return overload_t::invoke(std::forward<CallArgs>(args)...);
         } else {
@@ -69,34 +69,21 @@ auto invoke_wrapper(void* impl_ptr, Args&&... args) -> Ret {
     }
 }
 
-template<typename Trait, implements_trait<Trait> Impl>
+template<typename Trait, typename Impl>
 auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
-    constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) consteval {
-        constexpr auto matcher = []<info ImplMethod>(nontype<ImplMethod>) {
-            constexpr auto matcher_impl = [] {
-                auto [... args] = [] {
-                    constexpr auto n         = (parameters_of(TraitMethod) | stdv::transform(type_of)).size();
-                    auto           arg_array = std::array<info, n>{};
-                    stdr::copy(parameters_of(TraitMethod) | stdv::transform(type_of), arg_array.begin());
-                    return arg_array;
-                }();
-                return substitute(
-                    ^^match_method,
-                    {^^Impl, reflect_constant(ImplMethod), return_type_of(TraitMethod), args...});
-            }();
-            return [:matcher_impl:]();
+    constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) {
+        constexpr auto make_matcher = [](info impl_method) {
+            auto match_targs = vector{^^Impl, reflect_constant(impl_method), return_type_of(TraitMethod)};
+            match_targs.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
+            return substitute(^^match_method, match_targs);
         };
-
-        constexpr auto impl_mems = get_callable_members<Impl, TraitMethod>();
-        auto [... Is]            = []<uZ... Is>(index_sequence<Is...>) {
-            return make_tuple(
-                integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
-        }(make_index_sequence<impl_mems.size()>{});
-        auto matched_method = info{};
-        (void)((matcher(nontype<impl_mems[Is]>{}) && (matched_method = impl_mems[Is], true)) || ...);
+        constexpr auto impl_mems = matching_id_methods<Impl, TraitMethod>();
+        auto [... Is]            = make_Is<impl_mems.size()>();
+        auto matched_method      = info{};
+        (void)(([:make_matcher(impl_mems[Is]):]() && (matched_method = impl_mems[Is], true)) || ...);
         return matched_method;
     };
     constexpr auto make_wrapper = [](info trait_method, info impl_method) {
@@ -107,12 +94,9 @@ auto fill_vtable() {
         wrapper_tparams.append_range(parameters_of(trait_method) | stdv::transform(type_of));
         return substitute(^^invoke_wrapper, wrapper_tparams);
     };
-    auto [... Is] = []<uZ... Is>(index_sequence<Is...>) {
-        return make_tuple(integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
-    }(make_index_sequence<ttt::methods.size()>{});
-
+    auto [... Is] = make_Is<ttt::methods.size()>();
     return array{reinterpret_cast<void*>(
-        &([:make_wrapper(ttt::methods[Is], get_impl_method(nontype<ttt::methods[Is]>{})):]))...};
+        &([:make_wrapper(ttt::methods[Is], get_impl_method(nontype<ttt::methods[Is]>())):]))...};
 }
 template<typename Trait, implements_trait<Trait> Impl>
 struct trait_vtable {

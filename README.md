@@ -27,4 +27,14 @@ If it is UB, probably nothing can be done to "fix" it.
 seems unlikely or very labor intensive, considering all possible value categories and conversions.   
 - Compilation is rather slow.  
 
+Not implemented, but possible and might be interesting:
+- noexcept trait method qualification
+- const trait method qualification
+- `unique_trait<Trait>`
+- `reference_trait<Trait>`
+- `..._trait<const Trait>`
+- small object optimisation
+- constructing traits from pointers/references and pointer-like objects
+- non-type-erased reference wrapper to ensure restricted interface
+
 At this moment the repository is for experimenting and sharing. The CMakeLists.txt is extremely basic and not made to be used as a library.

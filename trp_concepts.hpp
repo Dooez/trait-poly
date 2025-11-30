@@ -38,46 +38,48 @@ concept any_trait =
                           stdv::filter(std::not_fn(std::meta::is_special_member_function)),
                       std::meta::is_template)    //
     ;
+namespace detail {
+
+template<uZ End>
+consteval auto make_Is() {
+    using namespace std;
+    return []<uZ... Is>(index_sequence<Is...>) {
+        return make_tuple(integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
+    }(make_index_sequence<End>{});
+};
 
 template<typename T>
 struct trait_traits {
     static constexpr auto methods = [] {
         using namespace std;
         using namespace std::meta;
-        constexpr auto n = [] {
-            auto trait_members = members_of(^^T, ctx_unchecked)                        //
-                                 | stdv::filter(not_fn(is_special_member_function))    //
-                                 | stdr::to<vector<info>>();
-            return trait_members.size();
-        }();
-        auto methods = array<info, n>{};
-        stdr::copy(members_of(^^T, ctx_unchecked)    //
-                       | stdv::filter(not_fn(is_special_member_function)),
-                   methods.begin());
+        constexpr auto get_nonspecial = [] {
+            return members_of(^^T, ctx_unchecked)                        //
+                   | stdv::filter(not_fn(is_special_member_function))    //
+                   | stdr::to<vector<info>>();
+        };
+        auto methods = array<info, get_nonspecial().size()>{};
+        stdr::copy(get_nonspecial(), methods.begin());
         stdr::sort(methods, {}, identifier_of);
         return methods;
     }();
 };
 
 
-namespace detail {
-template<typename T, std::meta::info TraitMethod>
-consteval auto get_callable_members() {
+template<typename Impl, std::meta::info TraitMethod>
+consteval auto matching_id_methods() {
     using namespace std;
     using namespace std::meta;
     constexpr auto get_vec = [] {
-        return members_of(^^T, access_context::current()) | stdv::filter([](auto info) {
+        return members_of(^^Impl, access_context::current()) | stdv::filter([](auto info) {
                    return not is_special_member_function(info)                          //
                           && (meta::is_function(info) or is_function_template(info))    //
                           && identifier_of(info) == identifier_of(TraitMethod);
                }) |
                stdr::to<vector<info>>();
     };
-    constexpr auto n = get_vec().size();
-
-    auto mems = get_vec();
-    auto ret  = array<info, n>();
-    stdr::copy(mems, ret.begin());
+    auto ret = array<info, get_vec().size()>();
+    stdr::copy(get_vec(), ret.begin());
     return ret;
 }
 
@@ -93,38 +95,22 @@ constexpr bool match_method() {
         };
     }
 };
-template<typename Impl, std::meta::info TraitMethod, typename Ret, typename... Args>
-constexpr bool has_method_() {
-    using namespace std;
-    constexpr auto impl_mems = get_callable_members<Impl, TraitMethod>();
-    auto [... Is]            = []<uZ... Is>(index_sequence<Is...>) {
-        return make_tuple(integral_constant<uZ, Is>{}...);    // TODO: modernize new integral constant iface
-    }(make_index_sequence<impl_mems.size()>{});
-    return (match_method<Impl, impl_mems[Is], Ret, Args...>() || ...);
-}
 
 template<typename Impl, std::meta::info TraitMethod>
 consteval bool has_method() {
     using namespace std;
     using namespace std::meta;
-    constexpr auto has_method_impl = [] {
-        auto [... args] = [] {
-            constexpr auto n         = (parameters_of(TraitMethod) | stdv::transform(type_of)).size();
-            auto           arg_array = std::array<info, n>{};
-            stdr::copy(parameters_of(TraitMethod) | stdv::transform(type_of), arg_array.begin());
-            return arg_array;
-        }();
-        return substitute(^^has_method_,
-                          {^^Impl,
-                           reflect_constant(TraitMethod),
-                           return_type_of(TraitMethod),
-                           args...});    // couldn't make splicing work
-    }();
-    return [:has_method_impl:]();
+    constexpr auto impl_mems    = matching_id_methods<Impl, TraitMethod>();
+    constexpr auto make_matcher = [](info impl_method) {
+        auto match_targs = vector{^^Impl, reflect_constant(impl_method), return_type_of(TraitMethod)};
+        match_targs.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
+        return substitute(^^match_method, match_targs);
+    };
+    auto [... Is] = make_Is<impl_mems.size()>();
+    return ([:make_matcher(impl_mems[Is]):]() || ...);
 };
 
-
-template<typename Impl, any_trait Trait, uZ I>
+template<typename Impl, typename Trait, uZ I>
 inline constexpr bool implements_methods =
     requires { requires I == trait_traits<Trait>::methods.size(); }    //
     || requires {
