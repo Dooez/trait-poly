@@ -13,6 +13,11 @@ struct nontype {
 template<typename Trait>
 struct trait_impl;
 
+union obj_or_ptr_t {
+    void*                              ptr;
+    std::array<std::byte, sizeof(ptr)> storage;
+};
+
 struct alignas(sizeof(void*) * 2) trait_impl_manager {
     using efptr = void*;
     const efptr* vtable_begin{};
@@ -29,7 +34,7 @@ template<method_spec Spec>
 struct overload_invoker;
 template<uZ Index, typename Ret, typename... Args>
 struct overload_invoker<method_spec_t<Index, Ret, Args...>> {
-    auto invoke(Args&&... args) const -> Ret {
+    auto operator()(Args&&... args) const -> Ret {
         const auto& mngr       = *reinterpret_cast<const trait_impl_manager*>(this);
         using func_t           = auto(void*, Args&&...)->Ret;
         using wrapper_fptr_t   = func_t*;
@@ -40,23 +45,7 @@ struct overload_invoker<method_spec_t<Index, Ret, Args...>> {
 };
 template<method_spec... Specs>
 struct method_invoker : overload_invoker<Specs>... {
-    template<typename... CallArgs>
-    auto operator()(CallArgs&&... args) {
-        return try_invoke<0>(std::forward<CallArgs>(args)...);
-    }
-    template<uZ OverloadIdx, typename... CallArgs>
-    auto try_invoke(CallArgs&&... args) {
-        using overload_t = overload_invoker<Specs...[OverloadIdx]>;
-        if constexpr (OverloadIdx >= sizeof...(Specs)) {
-            static_assert(false, "No overload found");
-        } else if constexpr (requires(overload_t f, CallArgs&&... args) {
-                                 f.invoke(std::forward<CallArgs>(args)...);
-                             }) {
-            return overload_t::invoke(std::forward<CallArgs>(args)...);
-        } else {
-            return try_invoke<OverloadIdx + 1>(std::forward<CallArgs>(args)...);
-        }
-    }
+    using overload_invoker<Specs>::operator()...;
 };
 
 template<typename Impl, std::meta::info Method, typename Ret, typename... Args>

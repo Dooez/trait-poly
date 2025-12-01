@@ -38,3 +38,12 @@ Not implemented, but possible and might be interesting:
 - non-type-erased reference wrapper to ensure restricted interface
 
 At this moment the repository is for experimenting and sharing. The CMakeLists.txt is extremely basic and not made to be used as a library.
+
+Possible design
+
+| name           | copy semantics            | move semantics | member access |
+| ---            | ---                       | ---            | ---           |
+| obj<>          | value, requires copy ctor | value          | a.b()         |
+| shared_trait_ptr<>   | pointer                   | pointer        | a->b()        |
+| unique_trait_ptr<>   | deleted                   | pointer        | a->b()        |
+
