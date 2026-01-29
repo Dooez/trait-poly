@@ -14,15 +14,17 @@ template<typename Trait>
 struct trait_impl;
 
 union obj_or_ptr_t {
-    void*                              ptr;
-    std::array<std::byte, sizeof(ptr)> storage;
+    void*                               _ptr;
+    std::array<std::byte, sizeof(_ptr)> _storage;
 };
 
 struct alignas(sizeof(void*) * 2) trait_impl_manager {
     using efptr = void*;
-    const efptr* vtable_begin{};
-    void*        obj_ptr{};
+    const efptr* _vtable_begin{};
+    void*        _obj_ptr{};
 };
+static_assert(offsetof(trait_impl_manager, _vtable_begin) == 0);
+static_assert(offsetof(trait_impl_manager, _obj_ptr) == sizeof(void*));
 
 template<uZ Index, typename Ret, typename... Args>
 struct method_spec_t {};
@@ -35,12 +37,14 @@ struct overload_invoker;
 template<uZ Index, typename Ret, typename... Args>
 struct overload_invoker<method_spec_t<Index, Ret, Args...>> {
     auto operator()(Args&&... args) const -> Ret {
-        const auto& mngr       = *reinterpret_cast<const trait_impl_manager*>(this);
+        constexpr uZ manager_offset = 0; // static_assert in construction
+        constexpr uZ this_offset = 0;    // static_assert in construction
+        const auto& mngr       = *reinterpret_cast<const trait_impl_manager*>(reinterpret_cast<const std::byte*>(this) - this_offset + manager_offset);
         using func_t           = auto(void*, Args&&...)->Ret;
         using wrapper_fptr_t   = func_t*;
-        const auto erased_ptr  = mngr.vtable_begin + Index;
+        const auto erased_ptr  = mngr._vtable_begin + Index;
         const auto wrapper_ptr = *reinterpret_cast<const wrapper_fptr_t*>(erased_ptr);
-        return wrapper_ptr(mngr.obj_ptr, std::forward<Args>(args)...);
+        return wrapper_ptr(mngr._obj_ptr, std::forward<Args>(args)...);
     }
 };
 template<method_spec... Specs>
@@ -110,6 +114,14 @@ consteval void define_trait() {
     auto new_members_raw    = vector<pair<string_view, vector<info>>>{};
     auto methods            = vector<info>{};
     auto method_spec_params = vector<info>{};
+    { 
+        const auto options      = data_member_options{.name = "_impl_manager", .no_unique_address = true};
+        methods.push_back(data_member_spec(^^detail::trait_impl_manager, options));
+        
+        // using efptr = void*;
+        // new_members_raw.push_back({"_impl_manager" , {^^detail::trait_impl_manager}});
+        // new_members_raw.push_back({"_obj_ptr", {^^ void*}});
+    }
     uZ   i                  = 0;
     for (auto mem: ttt::methods) {
         method_spec_params.clear();
@@ -125,6 +137,7 @@ consteval void define_trait() {
         }
         ++i;
     }
+
     for (auto& [name, specs_vec]: new_members_raw) {
         const auto options      = data_member_options{.name = name, .no_unique_address = true};
         const auto invoker_type = substitute(^^method_invoker, specs_vec);
