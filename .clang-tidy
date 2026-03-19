@@ -7,8 +7,7 @@ Checks: '*, -altera*, -fuchsia*, -llvm-*, -llvmlibc-*, -cert-*,
   -readability-named-parameter,
   -hicpp-named-parameter,
   -cppcoreguidelines-pro-type-reinterpret-cast,
-  -misc-include-cleaner,
-  -*using-namespace*'
+  -misc-include-cleaner'
 CheckOptions:
     - key: readability-magic-numbers.IgnorePowersOf2IntegerValues
       value: true

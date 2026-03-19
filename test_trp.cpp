@@ -2,7 +2,6 @@
 #include "testing.hpp"
 
 #include <print>
-namespace trp{
 
 // clang-format off
 struct trait_proto {
@@ -105,7 +104,7 @@ struct not_trait_template {
     template<typename X>
     void foo(X);
 };
-}
+
 using namespace trp;
 static_assert(any_trait<my_trait>);
 static_assert(not any_trait<not_trait_data>);
@@ -116,7 +115,6 @@ static_assert(not any_trait<not_trait_template>);
 
 int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();
-
     std::println("sizeof shared trait object {}", sizeof(to));
     std::println("sizeof trait impl {}", sizeof(detail::trait_impl<trait_proto>));
     auto toptr = &to;
@@ -124,5 +122,4 @@ int main() {
     test_16bars(to);
     to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
     test_16bars(to);
-    return 0;
 }
