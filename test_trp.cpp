@@ -1,4 +1,4 @@
-#include "shared_trait.hpp"
+#include "shared_trait_ptr.hpp"
 #include "testing.hpp"
 
 #include <print>
@@ -104,7 +104,6 @@ struct not_trait_template {
     template<typename X>
     void foo(X);
 };
-
 using namespace trp;
 static_assert(any_trait<my_trait>);
 static_assert(not any_trait<not_trait_data>);
@@ -122,4 +121,7 @@ int main() {
     test_16bars(to);
     to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
     test_16bars(to);
+
+    auto toptr2 = toptr;
+    return 0;
 }
