@@ -133,9 +133,9 @@ auto fill_vtable() {
         wrapper_tparams.append_range(parameters_of(trait_method) | stdv::transform(type_of));
         return substitute(^^invoke_wrapper, wrapper_tparams);
     };
-    auto [... Is] = make_Is<ttt::methods.size()>();
+    auto [... Is] = make_Is<ttt::direct_methods.size()>();
     return vtable<Trait>{
-        &([:make_wrapper(ttt::methods[Is], get_impl_method(nontype<ttt::methods[Is]>())):])...,
+        &([:make_wrapper(ttt::direct_methods[Is], get_impl_method(nontype<ttt::direct_methods[Is]>())):])...,
         &default_delete<Impl>};
 }
 
@@ -162,7 +162,7 @@ consteval void define_trait() {
     auto vtable_members      = vector<info>{};
 
     uZ i = 0;
-    for (auto mem: ttt::methods) {
+    for (auto mem: ttt::direct_methods) {
         auto overload_spec_args = vector<info>{};
         overload_spec_args.push_back(reflect_constant(i));
         overload_spec_args.push_back(return_type_of(mem));
