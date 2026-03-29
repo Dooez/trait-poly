@@ -1,4 +1,5 @@
 #pragma once
+#include <meta>
 #ifndef TRP_GODBOLT
 #include "trp_concepts.hpp"
 #endif
@@ -143,6 +144,50 @@ template<typename Trait, typename Impl>
 struct trait_vtable_for {
     static inline const auto value = fill_vtable<Trait, Impl>();
 };
+
+
+template<typename Trait, typename Supertrait>
+constexpr void get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) {
+    // if constexpr (is_direct_supertrait){
+    //      if constexpr (is_first_direct_supertraits)
+    //          return ptr;
+    //      else
+    //          constexpr auto member = ...;
+    //          return vtable->[:member:];
+    // } else {
+    // using first_base_t = [:bases_of(^^Trait, ctx_unchecked).front():]
+    // if conestexpr( is_explicit_supertrait<Supertrait, first_base_t>() ){
+    //      return get_explicit_supertrait_vtable_ptr<first_base_t, Supertrait>(reinterpret_cast<const vtable<first_base_t>*>(ptr));
+    // } else {
+    //      constexpr auto bases = ce_fn_to_array([] { return bases_of(^^Trait, ctx_unchecked) | stdv::drop(1) | stdv::transform(type_of); });
+    //      template for (constexpr auto bases: bases){
+    //           using base_t = [:base:];
+    //           if constexpr( is_explicit_supertrait<Supertrait, base>()){
+    //              constexpr auto member = ...;
+    //              auto base_vtable_ptr = return vtable->[:member:];
+    //              return get_explicit_supertrait_vtable_ptr<base_t, Supertrait>(base_vtable_ptr);
+    //           }
+    //      }
+    // }
+    //
+    // }
+};
+
+template<typename Trait>
+consteval void define_vtable() {
+    using namespace std;
+    using namespace meta;
+    constexpr auto bases =
+        ce_fn_to_array([] { return bases_of(^^Trait, ctx_unchecked) | stdv::transform(type_of); });
+    auto vtable_elements = vector<info>{};
+    template for (constexpr auto base: bases) {
+        using base_t = [:base:];
+        define_vtable<base_t>();
+        vtable_elements.push_back(
+            data_member_spec(^^vtable<base_t>, data_member_options{.name = identifier_of(base)}));
+    }
+}
+
 }    // namespace detail
 
 template<any_trait Trait>

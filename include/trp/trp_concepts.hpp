@@ -160,6 +160,15 @@ concept any_traits =
 template<typename Trait>
 concept any_trait = detail::any_traits<Trait>;
 
+template<typename Supertrait, typename Trait>
+concept supertrait_of = any_trait<Supertrait> && any_trait<Trait> && false;
+
+template<typename Supertrait, typename Trait>
+concept explicit_supertrait_of = any_trait<Supertrait> && any_trait<Trait> && false;
+
+template<typename Supertrait, typename Trait>
+concept direct_supertrait_of = any_trait<Supertrait> && any_trait<Trait> && false;
+
 namespace detail {
 
 template<std::invocable<> F>
@@ -206,7 +215,7 @@ struct trait_traits {
             //     }
             //     append_unique(nonspecial_members_of(inf));
             // }(^^T);
-            
+
             [&]<typename U = T>(this auto self, std::type_identity<U> = {}) {
                 constexpr auto bases_array =
                     ce_fn_to_array([] { return bases_of(^^U, ctx_unchecked) | stdv::transform(type_of); });
