@@ -31,6 +31,22 @@ inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
 template<typename T>
 concept non_cvref = std::same_as<T, std::remove_cvref_t<T>>;
 
+namespace detail {
+
+template<uZ End>
+consteval auto make_Is() {
+    using namespace std;
+    return []<uZ... Is>(index_sequence<Is...>) {
+        return make_tuple(integral_constant<uZ, Is>{}...);
+    }(make_index_sequence<End>{});
+};
+
+// template<uZ End>
+// consteval auto make_Is() {
+//     const auto [... Is] = std::make_index_sequence<End>{}; // not working in clang atm
+//     return std::make_tuple(std::integral_constant<uZ, Is>{}...);
+// };
+
 template<auto Identifier,
          bool Const,
          bool Volatile,
@@ -54,9 +70,10 @@ struct method_identity {
 };
 consteval auto get_method_identity(meta::info method_info) -> meta::info {
     using namespace meta;
-    auto is_nsmf = is_function(method_info)                //
-                   && not is_static_member(method_info)    //
-                   && has_identifier(method_info);
+    auto is_nsmf = is_function(method_info)                 //
+                   and not is_static_member(method_info)    //
+                   and not is_virtual(method_info)          //
+                   and has_identifier(method_info);
     if (not is_nsmf)
         throw "get_method_identity() can only be called on non-static non-template "
               "member functions with identifiers";
@@ -103,67 +120,68 @@ consteval auto get_method_identity(meta::info method_info) -> meta::info {
     return substitute(^^method_identity, arguments);
 }
 
-template<typename Trait>
-concept any_trait = non_cvref<Trait>                                                            //
-                    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
-                    and stdr::empty(meta::static_data_members_of(^^Trait, ctx_unchecked))       //
-                    and not stdr::empty(meta::members_of(^^Trait, ctx_unchecked) |
-                                        stdv::filter(std::not_fn(meta::is_special_member_function)))    //
-                    and stdr::none_of(meta::members_of(^^Trait, ctx_unchecked) |
-                                          stdv::filter(std::not_fn(meta::is_special_member_function)),
-                                      meta::is_virtual)    //
-                    and stdr::none_of(meta::members_of(^^Trait, ctx_unchecked) |
-                                          stdv::filter(std::not_fn(meta::is_special_member_function)),
-                                      meta::is_template)    //
-    ;
-namespace detail {
+consteval auto nonspecial_members_of(meta::info inf) {
+    return meta::members_of(inf, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function));
+}
 
-template<uZ End>
-consteval auto make_Is() {
-    using namespace std;
-    return []<uZ... Is>(index_sequence<Is...>) {
-        return make_tuple(integral_constant<uZ, Is>{}...);
-    }(make_index_sequence<End>{});
-};
-// template<uZ End>
-// consteval auto make_Is() {
-//     const auto [... Is] = std::make_index_sequence<End>{}; // not working in clang atm
-//     return std::make_tuple(std::integral_constant<uZ, Is>{}...);
-// };
+template<typename T, uZ I>
+consteval bool check_constexpr_data_member() {
+    constexpr auto x = [:meta::static_data_members_of(^^T, ctx_unchecked)[I]:];
+    return true;
+}
+
+template<typename T>
+consteval bool static_data_members_are_constexpr() {
+    auto [... Is] = make_Is<meta::static_data_members_of(^^T, ctx_unchecked).size()>();
+    return (check_constexpr_data_member<T, Is>() and ... and true);
+}
+
+template<typename Trait>
+concept any_immediate_trait =
+    std::same_as<Trait, std::remove_reference_t<Trait>>                                               //
+    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))                          //
+    and detail::static_data_members_are_constexpr<Trait>()                                            //
+    and not stdr::empty(detail::nonspecial_members_of(^^Trait))                                       //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)                       //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
+    ;
+
+template<typename... Traits>
+concept any_traits =
+    (... and
+     (any_immediate_trait<Traits> and [:meta::substitute(^^any_traits,
+                                                         meta::bases_of(^^Traits, ctx_unchecked)     //
+                                                             | stdv::transform(meta::type_of)):])    //
+    );
+}    // namespace detail
+
+template<typename Trait>
+concept any_trait = detail::any_traits<Trait>;
+
+namespace detail {
 
 template<std::invocable<> F>
     requires stdr::random_access_range<std::invoke_result_t<F>>
-consteval auto cefun_to_array(const F& f) {
+consteval auto ce_fn_to_array(const F& f) {
     auto [... Is] = make_Is<stdr::size(f())>();
     return std::array<meta::info, sizeof...(Is)>{f()[Is]...};
 }
 
-
-template<typename T>
-consteval auto nonspecial_direct_methods();
-template<typename T>
-consteval auto array_bases_of() {
-    auto [... Is] = make_Is<meta::bases_of(^^T, ctx_unchecked).size()>();
-    return std::array<meta::info, sizeof...(Is)>{meta::bases_of(^^T, ctx_unchecked)[Is]...};
-}
-
-constexpr inline struct equal_methods_t {
+constexpr inline struct {
     consteval static auto operator()(meta::info lhs, meta::info rhs) -> bool {
         return get_method_identity(lhs) == get_method_identity(rhs);
     }
     consteval static auto operator()(meta::info lhs) {
-        return [=](meta::info rhs) { return equal_methods_t{}(lhs, rhs); };
+        return [=](meta::info rhs) { return get_method_identity(lhs) == get_method_identity(rhs); };
     }
-
 } equal_methods;
 
 template<typename T>
 struct trait_traits {
-    static constexpr auto direct_methods = cefun_to_array([] {
-        return members_of(^^T, ctx_unchecked)                                   //
-               | stdv::filter(std::not_fn(meta::is_special_member_function))    //
-               | stdr::to<std::vector<meta::info>>();
-    });
+    static constexpr auto direct_methods =
+        ce_fn_to_array([] { return nonspecial_members_of(^^T) | stdr::to<std::vector<meta::info>>(); });
 
     static constexpr auto all_methods = [] {
         using namespace meta;
@@ -178,8 +196,20 @@ struct trait_traits {
             };
 
             // using normal loop with recursive lambda fails, use template for
+            // [&](this auto self, meta::info inf) -> void {
+            //     auto bases = bases_of(inf, ctx_unchecked) | stdv::transform(type_of);
+            //     for (auto base: bases) {
+            //         if (stdr::find(parsed_bases, base) == parsed_bases.end()) {
+            //             parsed_bases.push_back(base);
+            //             self(base);
+            //         }
+            //     }
+            //     append_unique(nonspecial_members_of(inf));
+            // }(^^T);
+            
             [&]<typename U = T>(this auto self, std::type_identity<U> = {}) {
-                constexpr auto bases_array = cefun_to_array([] { return bases_of(^^T, ctx_unchecked); });
+                constexpr auto bases_array =
+                    ce_fn_to_array([] { return bases_of(^^U, ctx_unchecked) | stdv::transform(type_of); });
                 template for (constexpr auto base: bases_array) {
                     if (stdr::find(parsed_bases, base) == parsed_bases.end()) {
                         parsed_bases.push_back(base);
@@ -187,12 +217,12 @@ struct trait_traits {
                         self(std::type_identity<base_t>{});
                     }
                 }
-                append_unique(members_of(^^U, ctx_unchecked) |
-                              stdv::filter(std::not_fn(is_special_member_function)));
+                append_unique(nonspecial_members_of(^^U));
             }();
+
             return result;
         };
-        return cefun_to_array(get_all_methods);
+        return ce_fn_to_array(get_all_methods);
     }();
 };
 

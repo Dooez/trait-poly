@@ -3,7 +3,11 @@
 
 #include <print>
 namespace testing {
-struct trait_proto {
+struct trait_proto_base {
+    void bar();
+};
+
+struct trait_proto : trait_proto_base {
     void foo();
 };
 }    // namespace testing
