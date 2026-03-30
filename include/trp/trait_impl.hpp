@@ -56,6 +56,31 @@ struct fptr<method_spec_t<Index, Ret, Args...>> {
 template<overload_spec Spec>
 using fptr_t = fptr<Spec>::type;
 
+template<bool Const, bool Volatile, bool Noexcept, typename Ret, typename... Params>
+struct wrapper_fptr {
+    using obj_ptr = [:[] {
+        auto ptr_info = ^^void;
+        if (Const)
+            ptr_info = meta::add_const(ptr_info);
+        if (Volatile)
+            ptr_info = meta::add_volatile(ptr_info);
+        return meta::add_pointer(ptr_info);
+    }():];
+    using type    = auto (*)(obj_ptr, Params...) noexcept(Noexcept) -> Ret;
+};
+
+template<meta::info Method>
+consteval auto wrapper_ptr_for_method() {
+    using id    = [:get_method_identity(Method):];
+    auto params = std::vector{meta::reflect_constant(id::is_const),    //
+                              meta::reflect_constant(id::is_volatile),
+                              meta::reflect_constant(id::is_noexcept),
+                              ^^id::return_identity::type};
+    params.append_range(id::param_identities    //
+                        | stdv::transform([]<typename T>(std::type_identity<T>) { return ^^T; }));
+    return meta::substitute(^^wrapper_fptr, params);
+}
+
 template<typename Impl>
 void default_delete(void* ptr) {
     delete static_cast<Impl*>(ptr);
@@ -116,11 +141,12 @@ auto fill_vtable() {
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) {
         constexpr auto make_matcher = [](info impl_method) {
-            auto match_targs = vector{^^Impl, reflect_constant(impl_method), return_type_of(TraitMethod)};
+            auto match_targs =
+                vector{^^Impl, reflect_constant(impl_method), get_method_identity(TraitMethod)};
             match_targs.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
             return substitute(^^match_method_strict, match_targs);
         };
-        constexpr auto impl_mems = matching_id_methods<Impl, TraitMethod>();
+        constexpr auto impl_mems = matching_id_public_members<Impl, TraitMethod>();
         auto [... Is]            = make_Is<impl_mems.size()>();
         auto matched_method      = info{};
         (void)(([:make_matcher(impl_mems[Is]):]() and (matched_method = impl_mems[Is], true)) or ...);
@@ -145,48 +171,97 @@ struct trait_vtable_for {
     static inline const auto value = fill_vtable<Trait, Impl>();
 };
 
-
-template<typename Trait, typename Supertrait>
+template<any_trait Trait, supertrait_of<Trait> Supertrait>
 constexpr void get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) {
-    // if constexpr (is_direct_supertrait){
-    //      if constexpr (is_first_direct_supertraits)
-    //          return ptr;
-    //      else
-    //          constexpr auto member = ...;
-    //          return vtable->[:member:];
-    // } else {
-    // using first_base_t = [:bases_of(^^Trait, ctx_unchecked).front():]
-    // if conestexpr( is_explicit_supertrait<Supertrait, first_base_t>() ){
-    //      return get_explicit_supertrait_vtable_ptr<first_base_t, Supertrait>(reinterpret_cast<const vtable<first_base_t>*>(ptr));
-    // } else {
-    //      constexpr auto bases = ce_fn_to_array([] { return bases_of(^^Trait, ctx_unchecked) | stdv::drop(1) | stdv::transform(type_of); });
-    //      template for (constexpr auto bases: bases){
-    //           using base_t = [:base:];
-    //           if constexpr( is_explicit_supertrait<Supertrait, base>()){
-    //              constexpr auto member = ...;
-    //              auto base_vtable_ptr = return vtable->[:member:];
-    //              return get_explicit_supertrait_vtable_ptr<base_t, Supertrait>(base_vtable_ptr);
-    //           }
-    //      }
-    // }
-    //
-    // }
+    using namespace meta;
+    using next_supertrait_t = [:[] {
+        if constexpr (direct_supertrait_of<Supertrait, Trait>) {
+            return ^^Supertrait;
+        } else {
+            template for (constexpr auto base: bases_of(^^Trait, ctx_unchecked)) {
+                using base_t = [:type_of(base):];
+                if constexpr (explicit_supertrait<Supertrait, base>())
+                    return type_of(base);
+            }
+        }
+    }():];
+
+    auto next_ptr = [=] {
+        template for (constexpr auto mem: members_of(^^vtable<Trait>, ctx_unchecked)) {
+            if constexpr (type_of(mem) == ^^vtable<next_supertrait_t>)
+                return &(ptr->[:mem:]);
+        }
+    }();
+    if constexpr (^^next_supertrait_t == ^^Supertrait) {
+        return next_ptr;
+    } else {
+        return get_explicit_supertrait_vtable_ptr<next_supertrait_t, Supertrait>(next_ptr);
+    }
+};
+template<non_cvref Impl, meta::info ImplMethod, typename MethodIdentity, typename... Params>
+struct invoke_wrapper_struct {
+    using return_type    = MethodIdentity::return_type;
+    using erased_obj_ptr = [:meta::add_pointer(MethodIdentity::add_obj_cv(^^void)):];
+    using obj_ptr        = [:meta::add_pointer(MethodIdentity::add_obj_cv(^^Impl)):];
+
+    static constexpr auto is_noexcept = MethodIdentity::is_noexcept;
+
+    auto invoke(erased_obj_ptr ptr, Params... params) noexcept(is_noexcept) -> return_type {
+        auto&& impl = *static_cast<obj_ptr>(ptr);
+        if constexpr (std::meta::is_template(ImplMethod)) {
+            return impl.template[:ImplMethod:](std::forward<Params>(params)...);
+        } else {
+            return impl.[:ImplMethod:](std::forward<Params>(params)...);
+        }
+    }
 };
 
-template<typename Trait>
+template<any_trait Trait>
 consteval void define_vtable() {
-    using namespace std;
-    using namespace meta;
-    constexpr auto bases =
-        ce_fn_to_array([] { return bases_of(^^Trait, ctx_unchecked) | stdv::transform(type_of); });
-    auto vtable_elements = vector<info>{};
-    template for (constexpr auto base: bases) {
-        using base_t = [:base:];
-        define_vtable<base_t>();
-        vtable_elements.push_back(
-            data_member_spec(^^vtable<base_t>, data_member_options{.name = identifier_of(base)}));
+    auto vtable_elements = std::vector<meta::info>{};
+    template for (constexpr auto method: trait_traits<Trait>::all_methods) {
+        using wrapper_fptr = [:wrapper_ptr_for_method<method>():];
+        vtable_elements.push_back(meta::data_member_spec(^^wrapper_fptr::type));
     }
+    template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
+        using supertrait_t = [:type_of(supertrait):];
+        define_vtable<supertrait_t>();
+        vtable_elements.push_back(meta::data_member_spec(^^vtable<supertrait_t>));
+    }
+    meta::define_aggregate(^^vtable<Trait>, vtable_elements);
 }
+
+template<any_trait Trait, typename Impl>
+consteval auto new_fill_vtable() {
+    using namespace std;
+    using namespace std::meta;
+    using ttt                      = trait_traits<Trait>;
+    constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) {
+        constexpr auto make_matcher = [](info impl_method) {
+            auto match_targs = vector{^^Impl, reflect_constant(impl_method), return_type_of(TraitMethod)};
+            match_targs.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
+            return substitute(^^match_method_strict, match_targs);
+        };
+        constexpr auto impl_mems = matching_id_public_members<Impl, TraitMethod>();
+        auto [... Is]            = make_Is<impl_mems.size()>();
+        auto matched_method      = info{};
+        (void)(([:make_matcher(impl_mems[Is]):]() and (matched_method = impl_mems[Is], true)) or ...);
+        return matched_method;
+    };
+    constexpr auto make_wrapper = [](info trait_method, info impl_method) {
+        auto wrapper_tparams = vector<info>{};
+        wrapper_tparams.push_back(^^Impl);
+        wrapper_tparams.push_back(reflect_constant(impl_method));
+        wrapper_tparams.push_back(return_type_of(trait_method));
+        wrapper_tparams.append_range(parameters_of(trait_method) | stdv::transform(type_of));
+        return substitute(^^invoke_wrapper, wrapper_tparams);
+    };
+    auto [... Is] = make_Is<ttt::direct_methods.size()>();
+    return vtable<Trait>{
+        &([:make_wrapper(ttt::direct_methods[Is], get_impl_method(nontype<ttt::direct_methods[Is]>())):])...,
+        &default_delete<Impl>};
+}
+
 
 }    // namespace detail
 

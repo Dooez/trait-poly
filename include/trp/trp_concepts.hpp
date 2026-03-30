@@ -57,16 +57,23 @@ template<auto Identifier,
          typename Ret,
          typename... Params>
 struct method_identity {
-    static constexpr auto identifier       = std::string_view([:Identifier:]);
+    static constexpr auto identifier       = std::string_view(Identifier);
     static constexpr bool is_const         = Const;
     static constexpr bool is_volatile      = Volatile;
     static constexpr bool is_lvalue        = LVRef;
     static constexpr bool is_rvalue        = RVRef;
     static constexpr bool is_value         = Value;
-    static constexpr bool is_noexcpet      = Noexcept;
-    static constexpr auto return_identity  = std::type_identity<Ret>{};
-    static constexpr auto param_identities = std::array{std::type_identity<Params>{}...};
-    //
+    static constexpr bool is_noexcept      = Noexcept;
+    using return_type                      = Ret;
+    static constexpr auto param_identities = std::array<meta::info, sizeof...(Params)>{^^Params...};
+
+    static consteval auto add_obj_cv(meta::info inf) {
+        if (is_volatile)
+            inf = meta::add_volatile(inf);
+        if (is_const)
+            inf = meta::add_const(inf);
+        return inf;
+    };
 };
 consteval auto get_method_identity(meta::info method_info) -> meta::info {
     using namespace meta;
@@ -74,9 +81,10 @@ consteval auto get_method_identity(meta::info method_info) -> meta::info {
                    and not is_static_member(method_info)    //
                    and not is_virtual(method_info)          //
                    and has_identifier(method_info);
-    if (not is_nsmf)
+    if (not is_nsmf) {
         throw "get_method_identity() can only be called on non-static non-template "
               "member functions with identifiers";
+    }
 
 
     const auto identifier   = reflect_constant_string(identifier_of(method_info));
@@ -189,6 +197,12 @@ constexpr inline struct {
 
 template<typename T>
 struct trait_traits {
+    static constexpr auto direct_supertraits = ce_fn_to_array([] {
+        return meta::bases_of(^^T, ctx_unchecked)    //
+               | stdv::transform(meta::type_of)      //
+               | stdr::to<std::vector<meta::info>>();
+    });
+
     static constexpr auto direct_methods =
         ce_fn_to_array([] { return nonspecial_members_of(^^T) | stdr::to<std::vector<meta::info>>(); });
 
@@ -217,9 +231,7 @@ struct trait_traits {
             // }(^^T);
 
             [&]<typename U = T>(this auto self, std::type_identity<U> = {}) {
-                constexpr auto bases_array =
-                    ce_fn_to_array([] { return bases_of(^^U, ctx_unchecked) | stdv::transform(type_of); });
-                template for (constexpr auto base: bases_array) {
+                template for (constexpr auto base: trait_traits<U>::direct_supertraits) {
                     if (stdr::find(parsed_bases, base) == parsed_bases.end()) {
                         parsed_bases.push_back(base);
                         using base_t = [:base:];
@@ -237,43 +249,43 @@ struct trait_traits {
 
 
 template<typename Impl, meta::info TraitMethod>
-consteval auto matching_id_methods() {
+consteval auto matching_id_public_members() {
     using namespace meta;
     constexpr auto get_vec = [] {
-        return members_of(^^Impl, access_context::current())    //
+        return members_of(^^Impl, access_context::unprivileged())    //
+               | stdv::filter(std::not_fn(is_static_member))         //
                | stdv::filter([](auto info) {
-                     return not is_special_member_function(info)    //
-                            and (is_function(info)                  //
-                                 or is_function_template(info))     //
+                     return has_identifier(info)    //
                             and identifier_of(info) == identifier_of(TraitMethod);
                  })    //
                | stdr::to<std::vector<info>>();
     };
-    auto ret = std::array<info, get_vec().size()>();
-    stdr::copy(get_vec(), ret.begin());
-    return ret;
+    return ce_fn_to_array(get_vec);
 }
 
-template<typename Impl, meta::info ImplMethod, typename Ret, typename... Args>
+template<non_cvref Impl, meta::info ImplMethod, typename MethodIdentity, typename... Args>
 constexpr bool match_method_strict() {
+    using return_type       = MethodIdentity::return_type;
+    using impl_invocation_t = [:MethodIdentity::add_obj_cv(^^Impl):];
+
     if constexpr (meta::is_template(ImplMethod)) {
-        return requires(Impl impl, Args... args) {
-            { impl.template[:ImplMethod:](std::forward<Args>(args)...) } -> std::same_as<Ret>;
+        return requires(impl_invocation_t impl, Args... args) {
+            { impl.template[:ImplMethod:](std::forward<Args>(args)...) } -> std::same_as<return_type>;
         };
     } else {
-        return requires(Impl impl, Args... args) {
-            { impl.[:ImplMethod:](std::forward<Args>(args)...) } -> std::same_as<Ret>;
+        return requires(impl_invocation_t impl, Args... args) {
+            { impl.[:ImplMethod:](std::forward<Args>(args)...) } -> std::same_as<return_type>;
         };
     }
 };
 
-template<typename Impl, meta::info TraitMethod>
+template<non_cvref Impl, meta::info TraitMethod>
 consteval bool implements_method() {
     using namespace std;
     using namespace meta;
-    constexpr auto impl_methods = matching_id_methods<Impl, TraitMethod>();
+    constexpr auto impl_methods = matching_id_public_members<Impl, TraitMethod>();
     constexpr auto get_matcher  = [](info impl_method) {
-        auto match_args = vector{^^Impl, reflect_constant(impl_method), return_type_of(TraitMethod)};
+        auto match_args = vector{^^Impl, reflect_constant(impl_method), get_method_identity(TraitMethod)};
         match_args.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
         return substitute(^^match_method_strict, match_args);
     };
@@ -281,15 +293,16 @@ consteval bool implements_method() {
     return ([:get_matcher(impl_methods[Is]):]() or ...);
 };
 
-template<typename Impl, typename Trait, uZ I>
-inline constexpr bool implements_methods =
+template<typename Impl, typename Trait, uZ I = 0>
+concept implements_methods =
     requires { requires I == trait_traits<Trait>::all_methods.size(); }    //
     or requires {
            implements_method<Impl, trait_traits<Trait>::all_methods[I]>()    //
-               and implements_methods<Impl, Trait, I + 1>;
+               and
+           [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):];
        };
 
 }    // namespace detail
 template<typename Impl, typename Trait>
-concept implements_trait = any_trait<Trait> and detail::implements_methods<Impl, Trait, 0>;
+concept implements_trait = any_trait<Trait> and detail::implements_methods<Impl, Trait>;
 }    // namespace trp
