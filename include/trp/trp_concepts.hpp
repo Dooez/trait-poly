@@ -255,8 +255,7 @@ consteval auto matching_id_public_members() {
         return members_of(^^Impl, access_context::unprivileged())    //
                | stdv::filter(std::not_fn(is_static_member))         //
                | stdv::filter([](auto info) {
-                     return has_identifier(info)    //
-                            and identifier_of(info) == identifier_of(TraitMethod);
+                     return has_identifier(info) and identifier_of(info) == identifier_of(TraitMethod);
                  })    //
                | stdr::to<std::vector<info>>();
     };

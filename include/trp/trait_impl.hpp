@@ -5,12 +5,29 @@
 #endif
 #include <algorithm>
 
+namespace std {
+template<auto V>
+struct constant_wrapper {
+    using type       = constant_wrapper;
+    using value_type = decltype(V);
+
+    static constexpr auto value = V;
+
+    constexpr operator decltype(auto)() const noexcept {
+        return value;
+    }
+};
+template<auto V>
+constinit auto cw = constant_wrapper<V>{};
+}    // namespace std
+
 namespace trp {
 namespace detail {
-template<auto V>
-struct nontype {
-    static constexpr auto value = V;
-};
+template<typename T>
+concept cw_info = meta::has_template_arguments(^^T)                          //
+                  and meta::template_of(^^T) == (^^std::constant_wrapper)    //
+                  and
+[:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
 
 template<typename Trait>
 struct indirect_impl;
@@ -139,14 +156,14 @@ auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
-    constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) {
-        constexpr auto make_matcher = [](info impl_method) {
+    constexpr auto get_impl_method = [](cw_info auto trait_method) {
+        constexpr auto make_matcher = [=](info impl_method) {
             auto match_targs =
-                vector{^^Impl, reflect_constant(impl_method), get_method_identity(TraitMethod)};
-            match_targs.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
+                vector{^^Impl, reflect_constant(impl_method), get_method_identity(trait_method)};
+            match_targs.append_range(parameters_of(trait_method) | stdv::transform(type_of));
             return substitute(^^match_method_strict, match_targs);
         };
-        constexpr auto impl_mems = matching_id_public_members<Impl, TraitMethod>();
+        constexpr auto impl_mems = matching_id_public_members<Impl, trait_method>();
         auto [... Is]            = make_Is<impl_mems.size()>();
         auto matched_method      = info{};
         (void)(([:make_matcher(impl_mems[Is]):]() and (matched_method = impl_mems[Is], true)) or ...);
@@ -162,7 +179,7 @@ auto fill_vtable() {
     };
     auto [... Is] = make_Is<ttt::direct_methods.size()>();
     return vtable<Trait>{
-        &([:make_wrapper(ttt::direct_methods[Is], get_impl_method(nontype<ttt::direct_methods[Is]>())):])...,
+        &([:make_wrapper(ttt::direct_methods[Is], get_impl_method(std::cw<ttt::direct_methods[Is]>)):])...,
         &default_delete<Impl>};
 }
 
@@ -206,7 +223,7 @@ struct invoke_wrapper_struct {
 
     static constexpr auto is_noexcept = MethodIdentity::is_noexcept;
 
-    auto invoke(erased_obj_ptr ptr, Params... params) noexcept(is_noexcept) -> return_type {
+    static auto invoke(erased_obj_ptr ptr, Params... params) noexcept(is_noexcept) -> return_type {
         auto&& impl = *static_cast<obj_ptr>(ptr);
         if constexpr (std::meta::is_template(ImplMethod)) {
             return impl.template[:ImplMethod:](std::forward<Params>(params)...);
@@ -230,37 +247,54 @@ consteval void define_vtable() {
     }
     meta::define_aggregate(^^vtable<Trait>, vtable_elements);
 }
+template<any_trait Trait, typename Impl>
+struct new_trait_vtable_for;
 
 template<any_trait Trait, typename Impl>
 consteval auto new_fill_vtable() {
     using namespace std;
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
-    constexpr auto get_impl_method = []<info TraitMethod>(nontype<TraitMethod>) {
-        constexpr auto make_matcher = [](info impl_method) {
-            auto match_targs = vector{^^Impl, reflect_constant(impl_method), return_type_of(TraitMethod)};
-            match_targs.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
-            return substitute(^^match_method_strict, match_targs);
+    constexpr auto get_wrapper_ptr = [](auto i) {
+        constexpr auto get_impl_method = [](cw_info auto trait_method) {
+            constexpr auto make_matcher = [=](info impl_method) {
+                auto match_targs =
+                    vector{^^Impl, reflect_constant(impl_method), return_type_of(trait_method)};
+                match_targs.append_range(parameters_of(trait_method) | stdv::transform(type_of));
+                return substitute(^^match_method_strict, match_targs);
+            };
+            constexpr auto impl_mems = matching_id_public_members<Impl, trait_method>();
+            auto [... Is]            = make_Is<impl_mems.size()>();
+            auto matched_method      = info{};
+            (void)(([:make_matcher(impl_mems[Is]):]() and (matched_method = impl_mems[Is], true)) or ...);
+            return matched_method;
         };
-        constexpr auto impl_mems = matching_id_public_members<Impl, TraitMethod>();
-        auto [... Is]            = make_Is<impl_mems.size()>();
-        auto matched_method      = info{};
-        (void)(([:make_matcher(impl_mems[Is]):]() and (matched_method = impl_mems[Is], true)) or ...);
-        return matched_method;
+
+        constexpr auto trait_method = std::cw<ttt::all_methods[i]>;
+        constexpr auto impl_method  = get_impl_method(trait_method);
+        using wrapper_struct        = [:[=] {
+            auto wrapper_tparams = vector<info>{};
+            wrapper_tparams.push_back(^^Impl);
+            wrapper_tparams.push_back(reflect_constant(impl_method));
+            wrapper_tparams.push_back(get_method_identity(trait_method));
+            wrapper_tparams.append_range(parameters_of(trait_method) | stdv::transform(type_of));
+            return substitute(^^invoke_wrapper_struct, wrapper_tparams);
+        }():];
+        return &wrapper_struct::invoke;
     };
-    constexpr auto make_wrapper = [](info trait_method, info impl_method) {
-        auto wrapper_tparams = vector<info>{};
-        wrapper_tparams.push_back(^^Impl);
-        wrapper_tparams.push_back(reflect_constant(impl_method));
-        wrapper_tparams.push_back(return_type_of(trait_method));
-        wrapper_tparams.append_range(parameters_of(trait_method) | stdv::transform(type_of));
-        return substitute(^^invoke_wrapper, wrapper_tparams);
+    constexpr auto get_supertrait_vtable = [](auto j) {
+        using supertrait_t = [:ttt::direct_supertraits[j]:];
+        return new_trait_vtable_for<supertrait_t, Impl>::value;
     };
-    auto [... Is] = make_Is<ttt::direct_methods.size()>();
-    return vtable<Trait>{
-        &([:make_wrapper(ttt::direct_methods[Is], get_impl_method(nontype<ttt::direct_methods[Is]>())):])...,
-        &default_delete<Impl>};
+    // cannot use direct binding since it cannot be declared constexpr
+    auto [... Is] = make_Is<ttt::all_methods.size()>();
+    auto [... Js] = make_Is<ttt::direct_supertraits.size()>();
+    return vtable<Trait>{get_wrapper_ptr(Is)..., get_supertrait_vtable(Js)...};
 }
+template<any_trait Trait, typename Impl>
+struct new_trait_vtable_for {
+    static constexpr auto value = new_fill_vtable<Trait, Impl>();
+};
 
 
 }    // namespace detail
@@ -310,16 +344,23 @@ consteval void define_trait() {
         auto invoker_args = vector{mgr_info, type_info};
         invoker_args.append_range(overloads);
         const auto invoker_type = substitute(^^method_invoker, invoker_args);
-        define_aggregate(
-            type_info,
-            {data_member_spec(invoker_type, {.name = name, .attributes = {^^[[no_unique_address]]}})});
+        define_aggregate(type_info,
+                         {data_member_spec(invoker_type,
+                                           data_member_options{
+                                               .name              = name,
+                                               .no_unique_address = true,
+                                               //  .attributes = {^^[[no_unique_address]] },
+                                           })});
     }
     {
         const auto type_v_info = substitute(^^type_identity, {mgr_info});
         define_aggregate(^^indirect_impl<Trait>,
                          {data_member_spec(type_v_info,
-                                           data_member_options{.name       = "type_v",
-                                                               .attributes = {^^[[no_unique_address]]}})});
+                                           data_member_options{
+                                               .name              = "type_v",
+                                               .no_unique_address = true,
+                                               //  .attributes = {^^[[no_unique_address]] },
+                                           })});
     }
 };
 }    // namespace trp
