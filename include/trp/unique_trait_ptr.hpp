@@ -8,8 +8,8 @@
 
 namespace trp {
 template<any_trait Trait>
-class unique_trait_ptr : public detail::trait_impl<Trait> {
-    using impl_t = detail::trait_impl<Trait>;
+class unique_trait_ptr : public detail::trait_obj<Trait> {
+    using impl_t = detail::trait_obj<Trait>;
     using vtable = impl_t::vtable_t;
 
     template<any_trait>
@@ -49,8 +49,8 @@ auto make_unique_trait(Args&&... args) -> unique_trait_ptr<Trait> {
 }
 
 template<any_trait Trait>
-class alloc_unique_trait_ptr : public detail::trait_impl<Trait> {
-    using impl_t      = detail::trait_impl<Trait>;
+class alloc_unique_trait_ptr : public detail::trait_obj<Trait> {
+    using impl_t      = detail::trait_obj<Trait>;
     using vtable      = impl_t::vtable_t;
     using ctrl_header = detail::ctrl_header<>;
     ctrl_header* ctrl_ptr_{};

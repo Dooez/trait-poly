@@ -18,6 +18,8 @@ consteval {
     trp::define_trait<testing::trait_proto>();
 }
 
+// NOLINTBEGIN(*-to-static*)
+
 struct some_impl {
     void foo() {
         std::println("some_impl");
@@ -31,12 +33,8 @@ struct some_impl {
     void bar() {
         std::println("bar some_impl");
     };
-    ;
 };
 struct other_impl_alt_base {
-    // void bar() {
-    //     std::println("bar other_impl_alt_base");
-    // };
     using bar_t = decltype([] { std::println("lambda bar other_impl_alt_base"); });
     bar_t bar;
 };
@@ -57,22 +55,19 @@ struct other_impl
     void foo() const volatile {
         std::println("foo const volatile other_impl");
     };
-    // void bar() {
-    //     std::println("bar other_impl");
-    // };
-    // void bar() {
-    //     std::println("other_impl");
-    // };
 };
 static_assert(trp::implements_trait<other_impl, testing::trait_proto>);
 static_assert(
     trp::detail::implements_method<other_impl,
                                    trp::detail::trait_traits<testing::trait_proto>::all_methods[0]>());
 //
+// NOLINTEND(*-to-static*)
+
 int main() {
     std::println("shared");
     const volatile auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
     to.foo();
+    // static_assert(trp::implements_trait<decltype(to), testing::trait_proto>); // nt working yet
 
     auto to2 = trp::make_shared_trait<testing::trait_proto, other_impl>();
 

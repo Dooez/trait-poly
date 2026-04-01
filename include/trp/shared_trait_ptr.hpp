@@ -11,8 +11,8 @@ namespace detail {
 using arc_t = std::atomic<uint64_t>;
 
 template<any_trait Trait>
-struct shared_trait_ptr_impl : public detail::trait_impl<Trait> {
-    using impl_t = detail::trait_impl<Trait>;
+struct shared_trait_ptr_impl : public detail::trait_obj<Trait> {
+    using impl_t = detail::trait_obj<Trait>;
     using vtable = impl_t::vtable_t;
     ctrl_header<arc_t>* ctrl_ptr_{};
 

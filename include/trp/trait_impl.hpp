@@ -10,10 +10,13 @@ namespace trp {
 namespace detail {
 
 template<typename Trait>
+    requires any_trait<std::remove_cvref_t<Trait>>
 struct indirect_impl;
 
+
 template<typename Trait>
-using trait_impl = decltype(indirect_impl<Trait>::type_v)::type;
+    requires any_trait<std::remove_cvref_t<Trait>>
+using trait_obj = decltype(indirect_impl<Trait>::type_v)::type;
 
 template<typename VTable, typename... MethodHolders>
 struct trait_impl_manager : public MethodHolders... {
@@ -31,8 +34,8 @@ protected:
     template<typename Manager,
              typename MethodHolder,
              typename MethodInvoker,
-             uZ            Index,
-             any_method_id MethodId>
+             uZ             Index,
+             any_method_idt MethodId>
     friend struct overload_invoker;
 };
 
@@ -69,7 +72,7 @@ void default_delete(void* ptr) {
 template<typename Trait, uZ StartIdx>
 struct method_holder;    // holds `mehod_invoker **method_name**;`
 
-template<typename Manager, typename MethodHolder, typename MethodInvoker, uZ Index, any_method_id MethodId>
+template<typename Manager, typename MethodHolder, typename MethodInvoker, uZ Index, any_method_idt MethodId>
 struct overload_invoker;
 
 template<typename Manager,
@@ -115,7 +118,7 @@ struct overload_invoker<
 
 private:
     template<typename VTable>
-    static auto get_method(VTable* vt){
+    static auto get_method(VTable* vt) {
         constexpr auto m =
             std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<VTable>, ctx_unchecked)[Index];
         return vt->[:m:];
@@ -138,7 +141,7 @@ private:
         return *static_cast<[:add_cvp(^^Manager):]>(mh_ptr);
     }
 };
-template<uZ I, any_method_id MethodId>
+template<uZ I, any_method_idt MethodId>
 struct overload_spec {
     using id                  = MethodId;
     static constexpr uZ index = I;
@@ -158,7 +161,7 @@ struct method_invoker
                            typename OvSpecs::id>::operator()...;
 };
 
-template<meta::info ImplMethod, any_method_id MethodId, typename... Params>
+template<meta::info ImplMethod, any_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
     using return_type    = MethodId::return_type;
     using erased_obj_ptr = [:meta::add_pointer(MethodId::add_obj_cv(^^void)):];
@@ -195,23 +198,22 @@ consteval void define_vtable() {
     meta::define_aggregate(^^vtable<Trait>, vtable_elements);
 }
 
-template<any_trait Trait, typename Impl>
+template<any_trait Trait, non_cvref Impl>
 struct trait_vtable_for;
 
-template<any_trait Trait, typename Impl>
+template<any_trait Trait, non_cvref Impl>
 consteval auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method) {
         // use constexpr binding when available
-
         constexpr auto matched_impl_method = [=] {
             constexpr auto trait_method_id = method_identity(trait_method);
             constexpr auto matches         = [=](cw_info auto impl_method) {
                 return [:substitute(^^strictly_matches, {reflect_constant(impl_method), trait_method_id}):];
             };
-            constexpr auto members = matching_id_public_members<Impl, trait_method>();
+            constexpr auto members = matching_id_public_members<Impl, typename[:trait_method_id:]>();
             template for (constexpr auto m: members) {
                 if (matches(std::cw<m>))
                     return m;
@@ -245,7 +247,7 @@ consteval auto fill_vtable() {
         get_supertrait_vtable(std::cw<ttt::direct_supertraits[Js]>)...,
     };
 }
-template<any_trait Trait, typename Impl>
+template<any_trait Trait, non_cvref Impl>
 struct trait_vtable_for {
     static constexpr auto value = fill_vtable<Trait, Impl>();
 };

@@ -150,7 +150,7 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     return substitute(^^method_identity_t, arguments);
 }
 template<typename T>
-concept any_method_id = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^method_identity_t;
+concept any_method_idt = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^method_identity_t;
 
 consteval auto nonspecial_members_of(meta::info inf) {
     return meta::members_of(inf, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function));
@@ -272,7 +272,7 @@ struct trait_traits {
 };
 
 
-template<typename Impl, meta::info TraitMethod>
+template<non_cvref Impl, any_method_idt TraitMethod>
 consteval auto matching_id_public_members() {
     using namespace meta;
     constexpr auto get_vec = [] {
@@ -282,7 +282,7 @@ consteval auto matching_id_public_members() {
                 members_of(type, access_context::unprivileged())    //
                 | stdv::filter(std::not_fn(is_static_member))       //
                 | stdv::filter([](auto info) {
-                      return has_identifier(info) and identifier_of(info) == identifier_of(TraitMethod);
+                      return has_identifier(info) and identifier_of(info) == TraitMethod::identifier;
                   });
             for (auto info: cur_members) {
                 if (stdr::find_if(result, equal_methods(info)) == result.end())
@@ -305,7 +305,7 @@ consteval auto matching_id_public_members() {
     return ce_fn_to_array(get_vec);
 }
 
-template<meta::info ImplMethod, any_method_id MethodId>
+template<meta::info ImplMethod, any_method_idt MethodId>
 constexpr bool match_method_strict() {
     using return_type       = MethodId::return_type;
     using impl_invocation_t = [:MethodId::add_obj_cv(meta::parent_of(ImplMethod)):];
@@ -326,7 +326,7 @@ constexpr bool match_method_strict() {
     }
 };
 
-template<meta::info ImplMethod, any_method_id MethodId>
+template<meta::info ImplMethod, any_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
     using return_type       = MethodId::return_type;
     using impl_invocation_t = [:MethodId::add_obj_cv(meta::parent_of(ImplMethod)):];
@@ -355,7 +355,7 @@ consteval bool implements_method() {
     constexpr auto matches         = [=](cw_info auto impl_method) {
         return [:substitute(^^strictly_matches, {reflect_constant(impl_method), trait_method_id}):];
     };
-    constexpr auto members = matching_id_public_members<Impl, TraitMethod>();
+    constexpr auto members = matching_id_public_members<Impl, typename[:trait_method_id:]>();
     template for (constexpr auto m: members) {
         if (matches(std::cw<m>))
             return true;
