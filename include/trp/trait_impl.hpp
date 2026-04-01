@@ -52,9 +52,9 @@ struct wrapper_fptr {
     using type    = auto (*)(obj_ptr, Params...) noexcept(Noexcept) -> Ret;
 };
 
-template<meta::info Method>
-consteval auto wrapper_ptr_for_method() {
-    using id          = [:method_identity(Method):];
+template<any_method_idt Method>
+constexpr auto wrapper_ptr_for_method = [] {
+    using id          = Method;
     using return_type = typename id::return_type;
     auto params       = std::vector{meta::reflect_constant(id::is_const),    //
                               meta::reflect_constant(id::is_volatile),
@@ -62,7 +62,7 @@ consteval auto wrapper_ptr_for_method() {
                               ^^return_type};
     params.append_range(id::param_infos);
     return meta::substitute(^^wrapper_fptr, params);
-}
+}();
 
 template<typename Impl>
 void default_delete(void* ptr) {
@@ -185,8 +185,8 @@ consteval void define_vtable() {
     using default_delete_fptr = void (*)(void*);
     auto vtable_elements      = std::vector<meta::info>{};
     template for (constexpr auto method: trait_traits<Trait>::all_methods) {
-        using wrapper_fptr = [:wrapper_ptr_for_method<method>():];
-        vtable_elements.push_back(meta::data_member_spec(^^typename wrapper_fptr::type));
+        using wrapper_fptr_inf = [:[:meta::substitute(^^wrapper_ptr_for_method, {method}):]:];
+        vtable_elements.push_back(meta::data_member_spec(^^typename wrapper_fptr_inf::type));
     }
     vtable_elements.push_back(meta::data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
@@ -206,14 +206,14 @@ consteval auto fill_vtable() {
     using namespace std;
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
-    constexpr auto get_wrapper_ptr = [](cw_info auto trait_method) {
-        // use constexpr binding when available
+    constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
+        // constexpr info trait_method_idt    = trait_method_idt_;
+        using trait_method_idt_t           = [:trait_method_idt:];
         constexpr auto matched_impl_method = [=] {
-            constexpr auto trait_method_id = method_identity(trait_method);
-            constexpr auto matches         = [=](cw_info auto impl_method) {
-                return [:substitute(^^strictly_matches, {reflect_constant(impl_method), trait_method_id}):];
+            constexpr auto matches = [=](cw_info auto impl_method) {
+                return [:substitute(^^strictly_matches, {reflect_constant(impl_method), trait_method_idt}):];
             };
-            constexpr auto members = matching_id_public_members<Impl, typename[:trait_method_id:]>();
+            constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t>();
             template for (constexpr auto m: members) {
                 if (matches(std::cw<m>))
                     return m;
@@ -221,15 +221,14 @@ consteval auto fill_vtable() {
             return info{};
         }();
 
-        constexpr auto method_params =
-            ce_fn_to_array([=] { return parameters_of(trait_method) | stdv::transform(type_of); });
-        auto [... trait_is] = make_Is<method_params.size()>();
+        // use constexpr binding when available
+        auto [... trait_is] = make_Is<trait_method_idt_t::param_infos.size()>();
 
         constexpr auto wrapper_struct_info = [=] {
             return substitute(^^invoke_wrapper_struct,
                               {reflect_constant(matched_impl_method),
-                               method_identity(trait_method),
-                               method_params[trait_is]...});
+                               trait_method_idt,
+                               trait_method_idt_t::param_infos[trait_is]...});
         }();
         using wrapper_struct = [:wrapper_struct_info:];
         return &wrapper_struct::invoke;
@@ -300,14 +299,15 @@ consteval void define_trait() {
     detail::define_vtable<Trait>();
 
     uZ i = 0;
-    for (auto mem: ttt::all_methods) {
-        const auto spec = substitute(^^overload_spec, {reflect_constant(i), method_identity(mem)});
+    template for (constexpr auto mem: ttt::all_methods) {
+        const auto spec  = substitute(^^overload_spec, {reflect_constant(i), mem});
+        using method_idt = [:mem:];
 
-        auto it = stdr::find_if(method_holder_specs, [=](auto& p) { return p.id == identifier_of(mem); });
+        auto it = stdr::find_if(method_holder_specs, [=](auto& p) { return p.id == method_idt::identifier; });
         if (it == method_holder_specs.end()) {
             const auto holder_info = substitute(^^method_holder, {^^Trait, reflect_constant(i)});
             method_holder_specs.push_back(
-                {.id = identifier_of(mem), .methods = {spec}, .type_info = holder_info});
+                {.id = method_idt::identifier, .methods = {spec}, .type_info = holder_info});
             manager_args.push_back(holder_info);
         } else {
             it->methods.push_back(spec);

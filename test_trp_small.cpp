@@ -57,10 +57,7 @@ struct other_impl
     };
 };
 static_assert(trp::implements_trait<other_impl, testing::trait_proto>);
-static_assert(
-    trp::detail::implements_method<other_impl,
-                                   trp::detail::trait_traits<testing::trait_proto>::all_methods[0]>());
-//
+
 // NOLINTEND(*-to-static*)
 
 int main() {

@@ -212,10 +212,10 @@ consteval auto ce_fn_to_array(const F& f) {
 
 constexpr inline struct {
     consteval static auto operator()(meta::info lhs, meta::info rhs) -> bool {
-        return method_identity(lhs) == method_identity(rhs);
+        return lhs == rhs;
     }
     consteval static auto operator()(meta::info lhs) {
-        return [=](meta::info rhs) { return method_identity(lhs) == method_identity(rhs); };
+        return [=](meta::info rhs) { return lhs == rhs; };
     }
 } equal_methods;
 
@@ -236,9 +236,9 @@ struct trait_traits {
             auto result = std::vector<info>{};
             // parsed_methods = std::set<info>{}; // maybe use set to additinally store method spec to avoid find_if
             auto parsed_bases  = std::vector<info>{};    // replace with set when constexpr set is added
-            auto append_unique = [&](auto&& methods) {
-                for (auto m: methods)
-                    if (stdr::find_if(result, equal_methods(m)) == result.end())
+            auto append_unique = [&](auto&& method_idts) {
+                for (auto m: method_idts)
+                    if (stdr::find(result, m) == result.end())
                         result.push_back(m);
             };
 
@@ -262,7 +262,7 @@ struct trait_traits {
                         self(std::type_identity<base_t>{});
                     }
                 }
-                append_unique(nonspecial_members_of(^^U));
+                append_unique(nonspecial_members_of(^^U) | stdv::transform(method_identity));
             }();
 
             return result;
@@ -347,28 +347,29 @@ inline constexpr bool strictly_matches = [] {
     }
 }();
 
-template<non_cvref Impl, meta::info TraitMethod>
-consteval bool implements_method() {
+template<typename Impl, typename MethodIdt>
+concept implements_method = non_cvref<Impl> and any_method_idt<MethodIdt>and[] {
     using namespace std;
     using namespace meta;
-    constexpr auto trait_method_id = method_identity(TraitMethod);
-    constexpr auto matches         = [=](cw_info auto impl_method) {
-        return [:substitute(^^strictly_matches, {reflect_constant(impl_method), trait_method_id}):];
+    constexpr auto matches = [=](cw_info auto impl_method) {
+        return [:substitute(^^strictly_matches, {reflect_constant(impl_method), ^^MethodIdt}):];
     };
-    constexpr auto members = matching_id_public_members<Impl, typename[:trait_method_id:]>();
+    constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
     template for (constexpr auto m: members) {
         if (matches(std::cw<m>))
             return true;
     }
     return false;
-};
+}
+();
 
 template<typename Impl, typename Trait, uZ I = 0>
 concept implements_methods =
-    requires { requires I == trait_traits<Trait>::all_methods.size(); }    //
-    or (implements_method<Impl, trait_traits<Trait>::all_methods[I]>()     //
+    requires {
+    requires I == trait_traits<Trait>::all_methods.size(); }         //
+    or [:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
         and
-        [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
+        [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):];
 ;
 
 }    // namespace detail
