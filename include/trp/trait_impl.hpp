@@ -53,15 +53,14 @@ struct wrapper_fptr {
 };
 
 template<any_method_idt Method>
-using wrapper_fptr_for_method = [:[] {
+using wrapper_fptr_for = [:[] {
     using wrapper_fptr = [:[] {
-        using id          = Method;
-        using return_type = typename id::return_type;
-        auto params       = std::vector{meta::reflect_constant(id::is_const),    //
-                                  meta::reflect_constant(id::is_volatile),
-                                  meta::reflect_constant(id::is_noexcept),
+        using return_type = typename Method::return_type;
+        auto params       = std::vector{meta::reflect_constant(Method::is_const),    //
+                                  meta::reflect_constant(Method::is_volatile),
+                                  meta::reflect_constant(Method::is_noexcept),
                                   ^^return_type};
-        params.append_range(id::param_infos);
+        params.append_range(Method::param_infos);
         return meta::substitute(^^wrapper_fptr, params);
     }():];
     return ^^typename wrapper_fptr::type;
@@ -185,20 +184,20 @@ struct vtable;
 
 template<any_trait Trait>
 consteval void define_vtable() {
+    using namespace meta;
     using default_delete_fptr = void (*)(void*);
-    auto vtable_elements      = std::vector<meta::info>{};
-    template for (constexpr auto method: trait_traits<Trait>::all_methods) {
-        vtable_elements.push_back(
-            meta::data_member_spec(meta::substitute(^^wrapper_fptr_for_method, {method})));
+    auto vtable_elements      = std::vector<info>{};
+    template for (constexpr auto method_idt: trait_traits<Trait>::all_methods) {
+        vtable_elements.push_back(data_member_spec(substitute(^^wrapper_fptr_for, {method_idt})));
     }
-    vtable_elements.push_back(meta::data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
+    vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
         using supertrait_t = [:supertrait:];
         define_vtable<supertrait_t>();
-        auto supertrait_vtable = meta::substitute(^^vtable, {^^supertrait_t});
-        vtable_elements.push_back(meta::data_member_spec(supertrait_vtable));
+        auto supertrait_vtable = substitute(^^vtable, {^^supertrait_t});
+        vtable_elements.push_back(data_member_spec(supertrait_vtable));
     }
-    meta::define_aggregate(^^vtable<Trait>, vtable_elements);
+    define_aggregate(^^vtable<Trait>, vtable_elements);
 }
 
 template<any_trait Trait, non_cvref Impl>
@@ -206,7 +205,6 @@ struct trait_vtable_for;
 
 template<any_trait Trait, non_cvref Impl>
 consteval auto fill_vtable() {
-    using namespace std;
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
