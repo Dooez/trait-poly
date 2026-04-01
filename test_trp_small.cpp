@@ -10,6 +10,7 @@ struct trait_proto_base {
 struct trait_proto : trait_proto_base {
     void foo();
     void foo() const;
+    void foo() const volatile;
 };
 }    // namespace testing
 
@@ -23,6 +24,9 @@ struct some_impl {
     };
     void foo() const {
         std::println("foo const some_impl");
+    };
+    void foo() const volatile {
+        std::println("foo const volatile some_impl");
     };
     void bar() {
         std::println("bar some_impl");
@@ -48,6 +52,9 @@ struct other_impl
     void foo() const {
         std::println("foo const other_impl");
     };
+    void foo() const volatile {
+        std::println("foo const volatile other_impl");
+    };
     // void bar() {
     //     std::println("bar other_impl");
     // };
@@ -62,12 +69,14 @@ static_assert(
 //
 int main() {
     std::println("shared");
-    const auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
+    const volatile auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
     to.foo();
+
     auto to2 = trp::make_shared_trait<testing::trait_proto, other_impl>();
 
     to2.bar();
     to2.foo();
+
     // other_impl{}.bar();
 
     // std::println("unique");
