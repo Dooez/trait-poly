@@ -53,16 +53,19 @@ struct wrapper_fptr {
 };
 
 template<any_method_idt Method>
-constexpr auto wrapper_ptr_for_method = [] {
-    using id          = Method;
-    using return_type = typename id::return_type;
-    auto params       = std::vector{meta::reflect_constant(id::is_const),    //
-                              meta::reflect_constant(id::is_volatile),
-                              meta::reflect_constant(id::is_noexcept),
-                              ^^return_type};
-    params.append_range(id::param_infos);
-    return meta::substitute(^^wrapper_fptr, params);
-}();
+using wrapper_fptr_for_method = [:[] {
+    using wrapper_fptr = [:[] {
+        using id          = Method;
+        using return_type = typename id::return_type;
+        auto params       = std::vector{meta::reflect_constant(id::is_const),    //
+                                  meta::reflect_constant(id::is_volatile),
+                                  meta::reflect_constant(id::is_noexcept),
+                                  ^^return_type};
+        params.append_range(id::param_infos);
+        return meta::substitute(^^wrapper_fptr, params);
+    }():];
+    return ^^typename wrapper_fptr::type;
+}():];
 
 template<typename Impl>
 void default_delete(void* ptr) {
@@ -185,8 +188,8 @@ consteval void define_vtable() {
     using default_delete_fptr = void (*)(void*);
     auto vtable_elements      = std::vector<meta::info>{};
     template for (constexpr auto method: trait_traits<Trait>::all_methods) {
-        using wrapper_fptr_inf = [:[:meta::substitute(^^wrapper_ptr_for_method, {method}):]:];
-        vtable_elements.push_back(meta::data_member_spec(^^typename wrapper_fptr_inf::type));
+        vtable_elements.push_back(
+            meta::data_member_spec(meta::substitute(^^wrapper_fptr_for_method, {method})));
     }
     vtable_elements.push_back(meta::data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
@@ -207,7 +210,6 @@ consteval auto fill_vtable() {
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
-        // constexpr info trait_method_idt    = trait_method_idt_;
         using trait_method_idt_t           = [:trait_method_idt:];
         constexpr auto matched_impl_method = [=] {
             constexpr auto matches = [=](cw_info auto impl_method) {
