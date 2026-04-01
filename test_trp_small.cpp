@@ -9,6 +9,7 @@ struct trait_proto_base {
 
 struct trait_proto : trait_proto_base {
     void foo();
+    void foo() const;
 };
 }    // namespace testing
 
@@ -19,6 +20,9 @@ consteval {
 struct some_impl {
     void foo() {
         std::println("some_impl");
+    };
+    void foo() const {
+        std::println("foo const some_impl");
     };
     void bar() {
         std::println("bar some_impl");
@@ -41,6 +45,9 @@ struct other_impl
     void foo() {
         std::println("other_impl");
     };
+    void foo() const {
+        std::println("foo const other_impl");
+    };
     // void bar() {
     //     std::println("bar other_impl");
     // };
@@ -55,12 +62,12 @@ static_assert(
 //
 int main() {
     std::println("shared");
-    auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
+    const auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
     to.foo();
-    to = trp::make_shared_trait<testing::trait_proto, other_impl>();
+    auto to2 = trp::make_shared_trait<testing::trait_proto, other_impl>();
 
-    to.bar();
-    to.foo();
+    to2.bar();
+    to2.foo();
     // other_impl{}.bar();
 
     // std::println("unique");

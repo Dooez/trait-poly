@@ -92,16 +92,18 @@ struct overload_invoker<
     MethodInvoker,
     Index,
     method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
-    auto operator()(Args... args) noexcept(Noexcept) -> Ret {
+    auto operator()(Args... args) noexcept(Noexcept) -> Ret
+        requires(not Const and not Volatile)
+    {
         return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
     }
     auto operator()(Args... args) const noexcept(Noexcept) -> Ret
-        requires(Const)
+        requires(Const and not Volatile)
     {
         return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
     }
     auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
-        requires(Volatile)
+        requires(not Const and Volatile)
     {
         return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
     }
@@ -113,7 +115,7 @@ struct overload_invoker<
 
 private:
     template<typename VTable>
-    auto get_method(VTable* vt) {
+    static auto get_method(VTable* vt){
         constexpr auto m =
             std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<VTable>, ctx_unchecked)[Index];
         return vt->[:m:];
