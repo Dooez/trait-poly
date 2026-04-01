@@ -34,14 +34,16 @@ struct some_impl {
     ;
 };
 struct other_impl_alt_base {
-    void bar() {
-        std::println("bar other_impl_alt_base");
-    };
+    // void bar() {
+    //     std::println("bar other_impl_alt_base");
+    // };
+    using bar_t = decltype([] { std::println("lambda bar other_impl_alt_base"); });
+    bar_t bar;
 };
 struct other_impl_base {
-    void bar(void*) const {
-        std::println("bar other_impl_base");
-    };
+    // void bar(void*) const {
+    //     std::println("bar other_impl_base");
+    // };
 };
 struct other_impl
 : other_impl_base
