@@ -56,7 +56,7 @@ template<auto Identifier,
          bool Noexcept,
          typename Ret,
          typename... Params>
-struct method_identity {
+struct method_identity_t {
     static constexpr auto identifier       = std::string_view(Identifier);
     static constexpr bool is_const         = Const;
     static constexpr bool is_volatile      = Volatile;
@@ -65,7 +65,8 @@ struct method_identity {
     static constexpr bool is_value         = Value;
     static constexpr bool is_noexcept      = Noexcept;
     using return_type                      = Ret;
-    static constexpr auto param_identities = std::array<meta::info, sizeof...(Params)>{^^Params...};
+    static constexpr auto param_infos      = std::array<meta::info, sizeof...(Params)>{^^Params...};
+    static constexpr auto param_identities = std::make_tuple(std::type_identity<Params>{}...);
 
     static consteval auto add_obj_cv(meta::info inf) {
         if (is_volatile)
@@ -75,7 +76,7 @@ struct method_identity {
         return inf;
     };
 };
-consteval auto get_method_identity(meta::info method_info) -> meta::info {
+consteval auto method_identity(meta::info method_info) -> meta::info {
     using namespace meta;
     auto is_nsmf = is_function(method_info)                 //
                    and not is_static_member(method_info)    //
@@ -109,7 +110,7 @@ consteval auto get_method_identity(meta::info method_info) -> meta::info {
                                      is_noexcept_,
                                      ret};
         arguments.append_range(params | stdv::drop(1));
-        return substitute(^^method_identity, arguments);
+        return substitute(^^method_identity_t, arguments);
     }
     const auto is_const_    = reflect_constant(is_const(method_info));
     const auto is_volatile_ = reflect_constant(is_volatile(method_info));
@@ -125,8 +126,10 @@ consteval auto get_method_identity(meta::info method_info) -> meta::info {
                                  is_noexcept_,
                                  ret};
     arguments.append_range(params);
-    return substitute(^^method_identity, arguments);
+    return substitute(^^method_identity_t, arguments);
 }
+template<typename T>
+concept any_method_id = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^method_identity_t;
 
 consteval auto nonspecial_members_of(meta::info inf) {
     return meta::members_of(inf, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function));
@@ -188,10 +191,10 @@ consteval auto ce_fn_to_array(const F& f) {
 
 constexpr inline struct {
     consteval static auto operator()(meta::info lhs, meta::info rhs) -> bool {
-        return get_method_identity(lhs) == get_method_identity(rhs);
+        return method_identity(lhs) == method_identity(rhs);
     }
     consteval static auto operator()(meta::info lhs) {
-        return [=](meta::info rhs) { return get_method_identity(lhs) == get_method_identity(rhs); };
+        return [=](meta::info rhs) { return method_identity(lhs) == method_identity(rhs); };
     }
 } equal_methods;
 
@@ -262,21 +265,47 @@ consteval auto matching_id_public_members() {
     return ce_fn_to_array(get_vec);
 }
 
-template<non_cvref Impl, meta::info ImplMethod, typename MethodIdentity, typename... Args>
+template<meta::info ImplMethod, any_method_id MethodId>
 constexpr bool match_method_strict() {
-    using return_type       = MethodIdentity::return_type;
-    using impl_invocation_t = [:MethodIdentity::add_obj_cv(^^Impl):];
+    using return_type       = MethodId::return_type;
+    using impl_invocation_t = [:MethodId::add_obj_cv(meta::parent_of(ImplMethod)):];
+    auto [... arg_ids]      = MethodId::param_identities;
 
     if constexpr (meta::is_template(ImplMethod)) {
-        return requires(impl_invocation_t impl, Args... args) {
-            { impl.template[:ImplMethod:](std::forward<Args>(args)...) } -> std::same_as<return_type>;
+        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
+            {
+                impl.template[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
+            } -> std::same_as<return_type>;
         };
     } else {
-        return requires(impl_invocation_t impl, Args... args) {
-            { impl.[:ImplMethod:](std::forward<Args>(args)...) } -> std::same_as<return_type>;
+        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
+            {
+                impl.[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
+            } -> std::same_as<return_type>;
         };
     }
 };
+
+template<meta::info ImplMethod, any_method_id MethodId>
+inline constexpr bool strictly_matches = [] {
+    using return_type       = MethodId::return_type;
+    using impl_invocation_t = [:MethodId::add_obj_cv(meta::parent_of(ImplMethod)):];
+    auto [... arg_ids]      = MethodId::param_identities;
+
+    if constexpr (meta::is_template(ImplMethod)) {
+        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
+            {
+                impl.template[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
+            } -> std::same_as<return_type>;
+        };
+    } else {
+        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
+            {
+                impl.[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
+            } -> std::same_as<return_type>;
+        };
+    }
+}();
 
 template<non_cvref Impl, meta::info TraitMethod>
 consteval bool implements_method() {
@@ -284,7 +313,7 @@ consteval bool implements_method() {
     using namespace meta;
     constexpr auto impl_methods = matching_id_public_members<Impl, TraitMethod>();
     constexpr auto get_matcher  = [](info impl_method) {
-        auto match_args = vector{^^Impl, reflect_constant(impl_method), get_method_identity(TraitMethod)};
+        auto match_args = vector{^^Impl, reflect_constant(impl_method), method_identity(TraitMethod)};
         match_args.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
         return substitute(^^match_method_strict, match_args);
     };

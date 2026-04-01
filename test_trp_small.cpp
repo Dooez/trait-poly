@@ -20,30 +20,37 @@ struct some_impl {
     void foo() {
         std::println("some_impl");
     };
-};
-struct other_impl {
-    void foo() {
-        std::println("other_impl");
+    void bar(){
+        std::println("bar some_impl");
     };
+;
 };
-
+// struct other_impl {
+//     void foo() {
+//         std::println("other_impl");
+//     };
+// };
+//
 int main() {
     std::println("shared");
-    auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
-    to.foo();
-    to = trp::make_shared_trait<testing::trait_proto, other_impl>();
-
-    std::println("unique");
+    // auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
+    // to.foo();
+    // to = trp::make_shared_trait<testing::trait_proto, other_impl>();
+    //
+    // std::println("unique");
     auto uptr = trp::make_unique_trait<testing::trait_proto, some_impl>();
+    // auto x = trp::detail::v2::trait_vtable_for<testing::trait_proto, some_impl>::value;
+    // constexpr auto x = trp::detail::v2::fill_vtable<testing::trait_proto_base, some_impl>();
     uptr.foo();
-    uptr = trp::make_unique_trait<testing::trait_proto, other_impl>();
-    uptr.foo();
-
-    std::println("alloc_unique");
-    auto auptr = trp::allocate_unique_trait<testing::trait_proto, some_impl>(std::allocator<some_impl>{});
-    auptr.foo();
-    auptr = trp::allocate_unique_trait<testing::trait_proto, other_impl>(std::allocator<other_impl>{});
-    auptr.foo();
+    uptr.bar();
+    // uptr = trp::make_unique_trait<testing::trait_proto, other_impl>();
+    // uptr.foo();
+    //
+    // std::println("alloc_unique");
+    // auto auptr = trp::allocate_unique_trait<testing::trait_proto, some_impl>(std::allocator<some_impl>{});
+    // auptr.foo();
+    // auptr = trp::allocate_unique_trait<testing::trait_proto, other_impl>(std::allocator<other_impl>{});
+    // auptr.foo();
 
     return 0;
 }
