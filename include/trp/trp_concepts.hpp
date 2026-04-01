@@ -8,6 +8,21 @@
 #include <ranges>
 #include <set>
 
+namespace std {
+template<auto V>
+struct constant_wrapper {
+    using type       = constant_wrapper;
+    using value_type = decltype(V);
+
+    static constexpr auto value = V;
+
+    constexpr operator decltype(auto)() const noexcept {
+        return value;
+    }
+};
+template<auto V>
+constinit auto cw = constant_wrapper<V>{};
+}    // namespace std
 namespace trp {
 using i8  = int8_t;
 using i16 = int16_t;
@@ -32,6 +47,12 @@ template<typename T>
 concept non_cvref = std::same_as<T, std::remove_cvref_t<T>>;
 
 namespace detail {
+
+template<typename T>
+concept cw_info = meta::has_template_arguments(^^T)                          //
+                  and meta::template_of(^^T) == (^^std::constant_wrapper)    //
+                  and
+[:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
 
 template<uZ End>
 consteval auto make_Is() {
@@ -109,7 +130,7 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
                                      is_value_,
                                      is_noexcept_,
                                      ret};
-        arguments.append_range(params | stdv::drop(1));
+        arguments.append_range(params | stdv::drop(1) | stdv::transform(type_of));
         return substitute(^^method_identity_t, arguments);
     }
     const auto is_const_    = reflect_constant(is_const(method_info));
@@ -125,7 +146,7 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
                                  is_value_,
                                  is_noexcept_,
                                  ret};
-    arguments.append_range(params);
+    arguments.append_range(params | stdv::transform(type_of));
     return substitute(^^method_identity_t, arguments);
 }
 template<typename T>
@@ -255,12 +276,31 @@ template<typename Impl, meta::info TraitMethod>
 consteval auto matching_id_public_members() {
     using namespace meta;
     constexpr auto get_vec = [] {
-        return members_of(^^Impl, access_context::unprivileged())    //
-               | stdv::filter(std::not_fn(is_static_member))         //
-               | stdv::filter([](auto info) {
-                     return has_identifier(info) and identifier_of(info) == identifier_of(TraitMethod);
-                 })    //
-               | stdr::to<std::vector<info>>();
+        auto result = std::vector<info>{};
+        [&](this auto self, cw_info auto type) {
+            auto cur_members =
+                members_of(type, access_context::unprivileged())    //
+                | stdv::filter(std::not_fn(is_static_member))       //
+                | stdv::filter([](auto info) {
+                      return has_identifier(info) and identifier_of(info) == identifier_of(TraitMethod);
+                  });
+            for (auto info: cur_members) {
+                if (stdr::find_if(result, equal_methods(info)) == result.end())
+                    result.push_back(info);
+            }
+            constexpr auto has_bases = not stdr::empty(bases_of(type, access_context::unprivileged()));
+            if constexpr (has_bases) {
+                // separate overload resolution check should be performed, to ensure that bases on the same level do not contain identical methods
+
+                constexpr auto bases = ce_fn_to_array([=] {
+                    return bases_of(type, access_context::unprivileged()) | stdv::transform(type_of);
+                });
+                template for (constexpr auto base: bases) {
+                    self(std::cw<base>);
+                }
+            }
+        }(std::cw<^^Impl>);
+        return result;
     };
     return ce_fn_to_array(get_vec);
 }
@@ -311,24 +351,25 @@ template<non_cvref Impl, meta::info TraitMethod>
 consteval bool implements_method() {
     using namespace std;
     using namespace meta;
-    constexpr auto impl_methods = matching_id_public_members<Impl, TraitMethod>();
-    constexpr auto get_matcher  = [](info impl_method) {
-        auto match_args = vector{^^Impl, reflect_constant(impl_method), method_identity(TraitMethod)};
-        match_args.append_range(parameters_of(TraitMethod) | stdv::transform(type_of));
-        return substitute(^^match_method_strict, match_args);
+    constexpr auto trait_method_id = method_identity(TraitMethod);
+    constexpr auto matches         = [=](cw_info auto impl_method) {
+        return [:substitute(^^strictly_matches, {reflect_constant(impl_method), trait_method_id}):];
     };
-    auto [... Is] = make_Is<impl_methods.size()>();
-    return ([:get_matcher(impl_methods[Is]):]() or ...);
+    constexpr auto members = matching_id_public_members<Impl, TraitMethod>();
+    template for (constexpr auto m: members) {
+        if (matches(std::cw<m>))
+            return true;
+    }
+    return false;
 };
 
 template<typename Impl, typename Trait, uZ I = 0>
 concept implements_methods =
     requires { requires I == trait_traits<Trait>::all_methods.size(); }    //
-    or requires {
-           implements_method<Impl, trait_traits<Trait>::all_methods[I]>()    //
-               and
-           [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):];
-       };
+    or (implements_method<Impl, trait_traits<Trait>::all_methods[I]>()     //
+        and
+        [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
+;
 
 }    // namespace detail
 template<typename Impl, typename Trait>

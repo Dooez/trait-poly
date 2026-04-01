@@ -20,29 +20,55 @@ struct some_impl {
     void foo() {
         std::println("some_impl");
     };
-    void bar(){
+    void bar() {
         std::println("bar some_impl");
     };
-;
+    ;
 };
-// struct other_impl {
-//     void foo() {
-//         std::println("other_impl");
-//     };
-// };
+struct other_impl_alt_base {
+    void bar() {
+        std::println("bar other_impl_alt_base");
+    };
+};
+struct other_impl_base {
+    void bar(void*) const {
+        std::println("bar other_impl_base");
+    };
+};
+struct other_impl
+: other_impl_base
+, other_impl_alt_base {
+    void foo() {
+        std::println("other_impl");
+    };
+    // void bar() {
+    //     std::println("bar other_impl");
+    // };
+    // void bar() {
+    //     std::println("other_impl");
+    // };
+};
+static_assert(trp::implements_trait<other_impl, testing::trait_proto>);
+static_assert(
+    trp::detail::implements_method<other_impl,
+                                   trp::detail::trait_traits<testing::trait_proto>::all_methods[0]>());
 //
 int main() {
     std::println("shared");
-    // auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
-    // to.foo();
-    // to = trp::make_shared_trait<testing::trait_proto, other_impl>();
-    //
+    auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
+    to.foo();
+    to = trp::make_shared_trait<testing::trait_proto, other_impl>();
+
+    to.bar();
+    to.foo();
+    // other_impl{}.bar();
+
     // std::println("unique");
-    auto uptr = trp::make_unique_trait<testing::trait_proto, some_impl>();
-    // auto x = trp::detail::v2::trait_vtable_for<testing::trait_proto, some_impl>::value;
-    // constexpr auto x = trp::detail::v2::fill_vtable<testing::trait_proto_base, some_impl>();
-    uptr.foo();
-    uptr.bar();
+    // auto uptr = trp::make_unique_trait<testing::trait_proto, some_impl>();
+    // // auto x = trp::detail::v2::trait_vtable_for<testing::trait_proto, some_impl>::value;
+    // // constexpr auto x = trp::detail::v2::fill_vtable<testing::trait_proto_base, some_impl>();
+    // uptr.foo();
+    // uptr.bar();
     // uptr = trp::make_unique_trait<testing::trait_proto, other_impl>();
     // uptr.foo();
     //
