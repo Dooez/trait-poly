@@ -185,6 +185,8 @@ struct vtable;
 template<any_trait Trait>
 consteval void define_vtable() {
     using namespace meta;
+    if (is_complete_type(^^vtable<Trait>))
+        return;
     using default_delete_fptr = void (*)(void*);
     auto vtable_elements      = std::vector<info>{};
     template for (constexpr auto method_idt: trait_traits<Trait>::all_methods) {
@@ -192,8 +194,7 @@ consteval void define_vtable() {
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
-        using supertrait_t = [:supertrait:];
-        define_vtable<supertrait_t>();
+        using supertrait_t     = [:supertrait:];
         auto supertrait_vtable = substitute(^^vtable, {^^supertrait_t});
         vtable_elements.push_back(data_member_spec(supertrait_vtable));
     }
@@ -221,7 +222,7 @@ consteval auto fill_vtable() {
             return info{};
         }();
 
-        // use constexpr binding when available
+        // use constexpr binding when it becomes available
         auto [... trait_is] = make_Is<trait_method_idt_t::param_infos.size()>();
 
         constexpr auto wrapper_struct_info = [=] {
@@ -237,7 +238,7 @@ consteval auto fill_vtable() {
         using supertrait_t = [:supertriat:];
         return trait_vtable_for<supertrait_t, Impl>::value;
     };
-    // use constexpr binding when available
+    // use constexpr binding when it becomes available
     auto [... Is] = make_Is<ttt::all_methods.size()>();
     auto [... Js] = make_Is<ttt::direct_supertraits.size()>();
     return vtable<Trait>{
@@ -288,6 +289,14 @@ consteval void define_trait() {
     using namespace trp::detail;
 
     using ttt = trait_traits<Trait>;
+
+    template for (constexpr auto supertrait: ttt::direct_supertraits) {
+        using supertrait_t = [:supertrait:];
+        if (not is_complete_type(^^supertrait_t))
+            define_trait<supertrait_t>();
+    }
+    detail::define_vtable<Trait>();
+
     struct method_holder_spec {
         string_view  id;
         vector<info> methods;
@@ -295,8 +304,6 @@ consteval void define_trait() {
     };
     auto method_holder_specs = vector<method_holder_spec>{};
     auto manager_args        = vector<info>{^^vtable<Trait>};
-
-    detail::define_vtable<Trait>();
 
     uZ i = 0;
     template for (constexpr auto mem: ttt::all_methods) {

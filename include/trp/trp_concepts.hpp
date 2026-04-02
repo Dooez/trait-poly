@@ -192,17 +192,8 @@ concept any_traits =
 template<typename Trait>
 concept any_trait = detail::any_traits<Trait>;
 
-template<typename Supertrait, typename Trait>
-concept supertrait_of = any_trait<Supertrait> && any_trait<Trait> && false;
-
-template<typename Supertrait, typename Trait>
-concept explicit_supertrait_of = any_trait<Supertrait> && any_trait<Trait> && false;
-
-template<typename Supertrait, typename Trait>
-concept direct_supertrait_of = any_trait<Supertrait> && any_trait<Trait> && false;
 
 namespace detail {
-
 template<std::invocable<> F>
     requires stdr::random_access_range<std::invoke_result_t<F>>
 consteval auto ce_fn_to_array(const F& f) {
@@ -270,8 +261,31 @@ struct trait_traits {
         return ce_fn_to_array(get_all_methods);
     }();
 };
+}    // namespace detail
+
+template<typename Supertrait, typename Trait>
+concept direct_supertrait_of = any_trait<Trait>    //
+                               and stdr::any_of(detail::trait_traits<Trait>::direct_supertraits,
+                                                [](auto info) { return info == ^^Supertrait; });
+template<typename Supertrait, typename Trait>
+concept explicit_supertrait_of = any_trait<Trait>                             //
+                                 and std::is_base_of_v<Supertrait, Trait>;    //
+
+template<typename Supertrait, typename Trait>
+concept supertrait_of = any_trait<Supertrait>                             //
+                        and any_trait<Trait>                              //
+                        and (explicit_supertrait_of<Supertrait, Trait>    //
+                             or [] {
+                                    for (auto m: detail::trait_traits<Supertrait>::all_methods) {
+                                        using ttt = detail::trait_traits<Trait>;
+                                        if (stdr::find(ttt::all_methods, m) == ttt::all_methods.end())
+                                            return false;
+                                    }
+                                    return true;
+                                }());
 
 
+namespace detail {
 template<non_cvref Impl, any_method_idt TraitMethod>
 consteval auto matching_id_public_members() {
     using namespace meta;
@@ -364,12 +378,10 @@ concept implements_method = non_cvref<Impl> and any_method_idt<MethodIdt>and[] {
 ();
 
 template<typename Impl, typename Trait, uZ I = 0>
-concept implements_methods =
-    requires {
-    requires I == trait_traits<Trait>::all_methods.size(); }         //
-    or [:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
-        and
-        [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):];
+concept implements_methods = requires { requires I == trait_traits<Trait>::all_methods.size(); }    //
+                             or
+[:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
+    and [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):];
 ;
 
 }    // namespace detail

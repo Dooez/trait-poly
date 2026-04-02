@@ -6,6 +6,9 @@ namespace testing {
 struct trait_proto_base {
     void bar();
 };
+consteval {
+    trp::define_trait<trait_proto_base>();
+}
 
 struct trait_proto : trait_proto_base {
     void foo();
@@ -17,6 +20,12 @@ struct trait_proto : trait_proto_base {
 consteval {
     trp::define_trait<testing::trait_proto>();
 }
+
+static_assert(trp::supertrait_of<testing::trait_proto_base, testing::trait_proto>);
+static_assert(trp::supertrait_of<testing::trait_proto, testing::trait_proto>);
+static_assert(not trp::direct_supertrait_of<testing::trait_proto, testing::trait_proto>);
+static_assert(trp::explicit_supertrait_of<testing::trait_proto, testing::trait_proto>);
+static_assert(not trp::supertrait_of<testing::trait_proto, testing::trait_proto_base>);
 
 // NOLINTBEGIN(*-to-static*)
 
