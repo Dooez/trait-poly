@@ -204,15 +204,6 @@ consteval auto ce_fn_to_array(const F& f) {
     return std::array<meta::info, sizeof...(Is)>{f()[Is]...};
 }
 
-constexpr inline struct {
-    consteval static auto operator()(meta::info lhs, meta::info rhs) -> bool {
-        return lhs == rhs;
-    }
-    consteval static auto operator()(meta::info lhs) {
-        return [=](meta::info rhs) { return lhs == rhs; };
-    }
-} equal_methods;
-
 template<typename T>
 struct trait_traits {
     static constexpr auto direct_supertraits = ce_fn_to_array([] {
@@ -221,16 +212,13 @@ struct trait_traits {
                | stdr::to<std::vector<meta::info>>();
     });
 
-    static constexpr auto direct_methods =
-        ce_fn_to_array([] { return nonspecial_members_of(^^T) | stdr::to<std::vector<meta::info>>(); });
-
     static constexpr auto all_methods = [] {
         using namespace meta;
         constexpr auto get_all_methods = [] {
             constexpr auto apply_cv = [](info type) {
-                if constexpr (std::is_const_v<T>)
+                if constexpr (is_const(^^T))
                     type = add_const(type);
-                if constexpr (std::is_volatile_v<T>)
+                if constexpr (is_volatile(^^T))
                     type = add_volatile(type);
                 return type;
             };
@@ -315,7 +303,7 @@ consteval auto matching_id_public_members() {
                       return has_identifier(info) and identifier_of(info) == TraitMethod::identifier;
                   });
             for (auto info: cur_members) {
-                if (stdr::find_if(result, equal_methods(info)) == result.end())
+                if (stdr::find(result, info) == result.end())
                     result.push_back(info);
             }
             constexpr auto has_bases = not stdr::empty(bases_of(type, access_context::unprivileged()));
