@@ -7,6 +7,7 @@
 #include <meta>
 #include <ranges>
 #include <set>
+#include <type_traits>
 
 namespace std {
 template<auto V>
@@ -45,6 +46,8 @@ inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
 
 template<typename T>
 concept non_cvref = std::same_as<T, std::remove_cvref_t<T>>;
+template<typename T>
+concept non_ref = std::same_as<T, std::remove_reference_t<T>>;
 
 namespace detail {
 
@@ -223,10 +226,21 @@ struct trait_traits {
 
     static constexpr auto all_methods = [] {
         using namespace meta;
-        constexpr auto get_all_methods = [] constexpr {
-            auto result = std::vector<info>{};
-            // parsed_methods = std::set<info>{}; // maybe use set to additinally store method spec to avoid find_if
-            auto parsed_bases  = std::vector<info>{};    // replace with set when constexpr set is added
+        constexpr auto get_all_methods = [] {
+            constexpr auto apply_cv = [](info type) {
+                if constexpr (std::is_const_v<T>)
+                    type = add_const(type);
+                if constexpr (std::is_volatile_v<T>)
+                    type = add_volatile(type);
+                return type;
+            };
+            constexpr auto matches_cv = [](info method) {
+                return (is_const(method) or not is_const(^^T))    //
+                       and (is_volatile(method) or not is_volatile(^^T));
+            };
+
+            auto result        = std::vector<info>{};
+            auto parsed_bases  = std::vector<info>{};
             auto append_unique = [&](auto&& method_idts) {
                 for (auto m: method_idts)
                     if (stdr::find(result, m) == result.end())
@@ -253,7 +267,9 @@ struct trait_traits {
                         self(std::type_identity<base_t>{});
                     }
                 }
-                append_unique(nonspecial_members_of(^^U) | stdv::transform(method_identity));
+                append_unique(nonspecial_members_of(apply_cv(^^U))    //
+                              | stdv::filter(matches_cv)              //
+                              | stdv::transform(method_identity));
             }();
 
             return result;
@@ -286,7 +302,7 @@ concept supertrait_of = any_trait<Supertrait>                             //
 
 
 namespace detail {
-template<non_cvref Impl, any_method_idt TraitMethod>
+template<non_ref Impl, any_method_idt TraitMethod>
 consteval auto matching_id_public_members() {
     using namespace meta;
     constexpr auto get_vec = [] {
@@ -340,10 +356,10 @@ constexpr bool match_method_strict() {
     }
 };
 
-template<meta::info ImplMethod, any_method_idt MethodId>
+template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
     using return_type       = MethodId::return_type;
-    using impl_invocation_t = [:MethodId::add_obj_cv(meta::parent_of(ImplMethod)):];
+    using impl_invocation_t = [:MethodId::add_obj_cv(^^Impl):];
     auto [... arg_ids]      = MethodId::param_identities;
 
     if constexpr (meta::is_template(ImplMethod)) {
@@ -362,20 +378,23 @@ inline constexpr bool strictly_matches = [] {
 }();
 
 template<typename Impl, typename MethodIdt>
-concept implements_method = non_cvref<Impl> and any_method_idt<MethodIdt>and[] {
-    using namespace std;
-    using namespace meta;
-    constexpr auto matches = [=](cw_info auto impl_method) {
-        return [:substitute(^^strictly_matches, {reflect_constant(impl_method), ^^MethodIdt}):];
-    };
-    constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
-    template for (constexpr auto m: members) {
-        if (matches(std::cw<m>))
-            return true;
-    }
-    return false;
-}
-();
+concept implements_method =
+    non_ref<Impl>                    //
+    and any_method_idt<MethodIdt>    //
+    and
+    ([] {
+        using namespace std;
+        using namespace meta;
+        constexpr auto matches = [=](cw_info auto impl_method) {
+            return [:substitute(^^strictly_matches, {^^Impl, reflect_constant(impl_method), ^^MethodIdt}):];
+        };
+        constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
+        template for (constexpr auto m: members) {
+            if (matches(std::cw<m>))
+                return true;
+        }
+        return false;
+    }());
 
 template<typename Impl, typename Trait, uZ I = 0>
 concept implements_methods = requires { requires I == trait_traits<Trait>::all_methods.size(); }    //
@@ -387,4 +406,5 @@ concept implements_methods = requires { requires I == trait_traits<Trait>::all_m
 }    // namespace detail
 template<typename Impl, typename Trait>
 concept implements_trait = any_trait<Trait> and detail::implements_methods<Impl, Trait>;
+
 }    // namespace trp
