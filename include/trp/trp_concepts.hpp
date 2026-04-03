@@ -176,7 +176,7 @@ concept any_immediate_trait =
     std::same_as<Trait, std::remove_reference_t<Trait>>                                               //
     and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))                          //
     and detail::static_data_members_are_constexpr<Trait>()                                            //
-    and not stdr::empty(detail::nonspecial_members_of(^^Trait))                                       //
+    // and not stdr::empty(detail::nonspecial_members_of(^^Trait))                                       //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)                       //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
@@ -190,6 +190,15 @@ concept any_traits =
                                                          meta::bases_of(^^Traits, ctx_unchecked)     //
                                                              | stdv::transform(meta::type_of)):])    //
     );
+
+consteval auto copy_cv_to(meta::info proto, meta::info type) {
+    if (meta::is_const(proto))
+        type = meta::add_const(type);
+    if (meta::is_volatile(proto))
+        type = meta::add_volatile(type);
+    return type;
+}
+
 }    // namespace detail
 
 template<typename Trait>
@@ -215,13 +224,6 @@ struct trait_traits {
     static constexpr auto all_methods = [] {
         using namespace meta;
         constexpr auto get_all_methods = [] {
-            constexpr auto apply_cv = [](info type) {
-                if constexpr (is_const(^^T))
-                    type = add_const(type);
-                if constexpr (is_volatile(^^T))
-                    type = add_volatile(type);
-                return type;
-            };
             constexpr auto matches_cv = [](info method) {
                 return (is_const(method) or not is_const(^^T))    //
                        and (is_volatile(method) or not is_volatile(^^T));
@@ -257,8 +259,8 @@ struct trait_traits {
                         self(std::type_identity<base_t>{});
                     }
                 }
-                append_unique(nonspecial_members_of(apply_cv(^^U))    //
-                              | stdv::filter(matches_cv)              //
+                append_unique(nonspecial_members_of(copy_cv_to(^^T, ^^U))    //
+                              | stdv::filter(matches_cv)                     //
                               | stdv::transform(method_identity));
             }();
 

@@ -194,8 +194,8 @@ consteval void define_vtable() {
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
-        using supertrait_t     = [:supertrait:];
-        auto supertrait_vtable = substitute(^^vtable, {^^supertrait_t});
+        // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
+        auto supertrait_vtable = substitute(^^vtable, {copy_cv_to(^^Trait, supertrait)});
         vtable_elements.push_back(data_member_spec(supertrait_vtable));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
@@ -236,7 +236,7 @@ consteval auto fill_vtable() {
         return &wrapper_struct::invoke;
     };
     constexpr auto get_supertrait_vtable = [](cw_info auto supertriat) {
-        using supertrait_t = [:supertriat:];
+        using supertrait_t = [:copy_cv_to(^^Trait, supertriat):];
         return trait_vtable_for<supertrait_t, Impl>::value;
     };
     // use constexpr binding when it becomes available
@@ -280,29 +280,22 @@ constexpr void get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) {
         return get_explicit_supertrait_vtable_ptr<next_supertrait_t, Supertrait>(next_ptr);
     }
 };
-
-}    // namespace detail
-
 template<any_trait Trait>
-consteval void define_trait() {
+constexpr auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
-    using namespace trp::detail;
-
-    using ttt = trait_traits<Trait>;
-
-    template for (constexpr auto supertrait: ttt::direct_supertraits) {
-        using supertrait_t = [:supertrait:];
-        if (not is_complete_type(^^supertrait_t))
-            define_trait<supertrait_t>();
-    }
-    detail::define_vtable<Trait>();
-
     struct method_holder_spec {
         string_view  id;
         vector<info> methods;
         info         type_info{};
     };
+    using ttt = trait_traits<Trait>;
+    template for (constexpr auto supertrait: ttt::direct_supertraits) {
+        using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
+        if (not is_complete_type(substitute(^^indirect_impl, {^^supertrait_t})))
+            maybe_define_cv_trait<supertrait_t>();
+    }
+    define_vtable<Trait>();
     auto method_holder_specs = vector<method_holder_spec>{};
     auto manager_args        = vector<info>{^^vtable<Trait>};
 
@@ -346,5 +339,20 @@ consteval void define_trait() {
                                                //  .attributes = {^^[[no_unique_address]] },
                                            })});
     }
+};
+
+}    // namespace detail
+
+template<any_trait Trait>
+    requires non_cvref<Trait>
+consteval void define_trait() {
+    using c_trait  = [:meta::add_const(^^Trait):];
+    using v_trait  = [:meta::add_volatile(^^Trait):];
+    using cv_trait = [:meta::add_const(^^v_trait):];
+
+    detail::maybe_define_cv_trait<Trait>();
+    detail::maybe_define_cv_trait<c_trait>();
+    detail::maybe_define_cv_trait<v_trait>();
+    detail::maybe_define_cv_trait<cv_trait>();
 };
 }    // namespace trp
