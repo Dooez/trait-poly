@@ -6,8 +6,12 @@ namespace testing {
 struct trait_proto_base {
     void bar();
 };
+struct trait_proto_imposter {
+    void bar();
+};
 consteval {
     trp::define_trait<trait_proto_base>();
+    trp::define_trait<trait_proto_imposter>();
 }
 
 struct trait_proto : trait_proto_base {
@@ -15,18 +19,28 @@ struct trait_proto : trait_proto_base {
     void foo() const;
     void foo() const volatile;
 };
-}    // namespace testing
 
 consteval {
     trp::define_trait<testing::trait_proto>();
 }
 
-static_assert(trp::supertrait_of<testing::trait_proto_base, testing::trait_proto>);
-static_assert(trp::supertrait_of<testing::trait_proto, testing::trait_proto>);
-static_assert(not trp::direct_supertrait_of<testing::trait_proto, testing::trait_proto>);
-static_assert(trp::explicit_supertrait_of<testing::trait_proto, testing::trait_proto>);
-static_assert(not trp::supertrait_of<testing::trait_proto, testing::trait_proto_base>);
+static_assert(trp::supertrait_of<trait_proto, trait_proto>);
+static_assert(trp::supertrait_of<trait_proto_base, trait_proto>);
+static_assert(trp::supertrait_of<trait_proto_imposter, trait_proto>);
 
+static_assert(trp::explicit_supertrait_of<trait_proto, trait_proto>);
+static_assert(trp::explicit_supertrait_of<trait_proto_base, trait_proto>);
+static_assert(not trp::explicit_supertrait_of<trait_proto_imposter, trait_proto>);
+
+static_assert(not trp::direct_supertrait_of<trait_proto, trait_proto>);
+static_assert(trp::direct_supertrait_of<trait_proto_base, trait_proto>);
+static_assert(not trp::direct_supertrait_of<trait_proto_imposter, trait_proto>);
+
+static_assert(not trp::supertrait_of<trait_proto, trait_proto_base>);
+static_assert(not trp::explicit_supertrait_of<trait_proto, trait_proto_base>);
+static_assert(not trp::direct_supertrait_of<trait_proto, trait_proto_base>);
+
+}    // namespace testing
 // NOLINTBEGIN(*-to-static*)
 
 struct some_impl {
@@ -73,44 +87,8 @@ int main() {
     std::println("shared");
     const volatile auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
     to.foo();
-    static_assert(trp::implements_trait<decltype(to), const testing::trait_proto>);
     static_assert(not trp::implements_trait<decltype(to), testing::trait_proto>);
-
-    using to_pure_t      = decltype(to);
-    constexpr auto names = [](trp::detail::cw_info auto type) {
-        using namespace trp;
-        using namespace meta;
-        using namespace trp::detail;
-        constexpr auto get_mems = [=] {
-            auto result = std::vector<std::string_view>{};
-            [&](this auto self, cw_info auto type) {
-                auto cur_members = members_of(type, access_context::unprivileged())    //
-                                   | stdv::filter(std::not_fn(is_static_member))       //
-                                   | stdv::filter(has_identifier)                      //
-                                   | stdv::transform(identifier_of);
-                for (auto info: cur_members) {
-                    if (stdr::find(result, info) == result.end())
-                        result.push_back(info);
-                }
-                constexpr auto has_bases = not stdr::empty(bases_of(type, access_context::unprivileged()));
-                if constexpr (has_bases) {
-                    // separate overload resolution check should be performed, to ensure that bases on the same level do not contain identical methods
-
-                    constexpr auto bases = ce_fn_to_array([=] {
-                        return bases_of(type, access_context::unprivileged()) | stdv::transform(type_of);
-                    });
-                    template for (constexpr auto base: bases) {
-                        self(std::cw<base>);
-                    }
-                }
-            }(type);
-            return result;
-        };
-        auto [... Is] = make_Is<stdr::size(get_mems())>();
-        return std::array<std::string_view, sizeof...(Is)>{get_mems()[Is]...};
-    }(std::cw<^^const some_impl>);
-
-    std::println("to members: {}", names);
+    static_assert(trp::implements_trait<decltype(to), const testing::trait_proto>);
 
     auto to2 = trp::make_shared_trait<testing::trait_proto, other_impl>();
 
