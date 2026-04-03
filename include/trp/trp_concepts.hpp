@@ -244,7 +244,9 @@ struct trait_traits {
             //             self(base);
             //         }
             //     }
-            //     append_unique(nonspecial_members_of(inf));
+            //     append_unique(nonspecial_members_of(apply_cv(inf))    //
+            //                   | stdv::filter(matches_cv)              //
+            //                   | stdv::transform(method_identity));
             // }(^^T);
 
             [&]<typename U = T>(this auto self, std::type_identity<U> = {}) {
