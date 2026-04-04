@@ -24,6 +24,7 @@ struct trait_proto : trait_proto_base {
 };
 
 consteval {
+    trp::define_trait<trait_proto_base>();
     trp::define_trait<testing::trait_proto>();
 }
 

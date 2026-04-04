@@ -322,9 +322,11 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     }
 };
 template<any_trait Trait>
-constexpr auto maybe_define_cv_trait() {
+consteval auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
+    if (is_complete_type(substitute(^^trait_ref_identity, {^^Trait})))
+        return;
     struct method_holder_spec {
         string_view  id;
         vector<info> methods;
@@ -333,8 +335,7 @@ constexpr auto maybe_define_cv_trait() {
     using ttt = trait_traits<Trait>;
     template for (constexpr auto supertrait: ttt::direct_base_types) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
-        if (not is_complete_type(substitute(^^trait_ref_identity, {^^supertrait_t})))
-            maybe_define_cv_trait<supertrait_t>();
+        maybe_define_cv_trait<supertrait_t>();
     }
     define_vtable<Trait>();
     auto method_holder_specs = vector<method_holder_spec>{};
