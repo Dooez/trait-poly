@@ -32,12 +32,11 @@ public:
     shared_trait_ptr_impl() = default;
     shared_trait_ptr_impl(const shared_trait_ptr_impl& other) noexcept {
         other.increment();
-        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
-        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
-        ctrl_ptr_              = other.ctrl_ptr_;
+        trait_ref_ = other.trait_ref_;
+        ctrl_ptr_  = other.ctrl_ptr_;
     }
     shared_trait_ptr_impl(shared_trait_ptr_impl&& other) noexcept
-    : trait_ref_{other.trait_ref_.vtable_ptr_, other.trait_ref_.obj_ptr_}
+    : trait_ref_{other.trait_ref_}
     , ctrl_ptr_(other.ctrl_ptr_) {
         other.release();
     }
@@ -46,15 +45,13 @@ public:
             return *this;
         decrement();
         other.increment();
-        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
-        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
-        ctrl_ptr_              = other.ctrl_ptr_;
+        trait_ref_ = other.trait_ref_;
+        ctrl_ptr_  = other.ctrl_ptr_;
         return *this;
     }
     shared_trait_ptr_impl& operator=(shared_trait_ptr_impl&& other) noexcept {
-        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
-        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
-        ctrl_ptr_              = other.ctrl_ptr_;
+        trait_ref_ = other.trait_ref_;
+        ctrl_ptr_  = other.ctrl_ptr_;
         other.release();
         return *this;
     }
@@ -70,19 +67,22 @@ private:
         increment();
     };
 
-    void release() {
-        trait_ref_.vtable_ptr_ = nullptr;
-        trait_ref_.obj_ptr_    = nullptr;
-        ctrl_ptr_              = nullptr;
+    [[nodiscard]] inline bool holds_value() const {
+        return trait_ref_.holds_value();
     }
 
-    void increment() const {
-        if (trait_ref_.obj_ptr_ == nullptr)
+    inline void release() {
+        trait_ref_.release();
+        ctrl_ptr_ = nullptr;
+    }
+
+    inline void increment() const {
+        if (not holds_value())
             return;
         ctrl_ptr_->counter.fetch_add(1, std::memory_order_relaxed);
     }
-    void decrement() {
-        if (trait_ref_.obj_ptr_ == nullptr)
+    inline void decrement() {
+        if (not holds_value())
             return;
         if (ctrl_ptr_->counter.fetch_sub(1, std::memory_order_release) == 1) {
             std::atomic_thread_fence(std::memory_order_acquire);
@@ -104,13 +104,15 @@ class shared_trait_ptr : public detail::shared_trait_ptr_impl<Trait> {
     template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
     friend auto allocate_shared_trait(const Alloc&, Args&&...);
 
-    explicit shared_trait_ptr(detail::shared_trait_ptr_impl<Trait> manager)
-    : detail::shared_trait_ptr_impl<Trait>(std::move(manager)) {};
+    using impl_t = detail::shared_trait_ptr_impl<Trait>;
+
+    explicit shared_trait_ptr(impl_t manager)
+    : impl_t(std::move(manager)) {};
 
 public:
     shared_trait_ptr() = default;
     explicit operator bool() {
-        return this->_impl_manager.obj_ptr_ != nullptr;
+        return impl_t::holds_value();
     }
 };
 

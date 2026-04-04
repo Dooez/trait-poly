@@ -9,6 +9,8 @@
 namespace trp {
 template<any_trait>
 class unique_trait_ptr;
+template<any_trait Trait>
+class alloc_unique_trait_ptr;
 
 namespace detail {
 template<any_trait Trait>
@@ -20,17 +22,15 @@ using trait_ref = decltype(detail::trait_ref_identity<Trait>::type_v)::type;
 
 namespace detail {
 template<typename VTable, typename... MethodHolders>
-struct trait_ref_impl : public MethodHolders... {
-protected:
+class trait_ref_impl : public MethodHolders... {
     using vtable_t = VTable;
+    const vtable_t* vtable_ptr_{};
+    void*           obj_ptr_{};
 
     trait_ref_impl() = default;
     trait_ref_impl(const vtable_t* vptr, void* optr)
     : vtable_ptr_(vptr)
     , obj_ptr_(optr) {};
-
-    const vtable_t* vtable_ptr_{};
-    void*           obj_ptr_{};
 
     template<typename Manager,
              typename MethodHolder,
@@ -39,10 +39,24 @@ protected:
              any_method_idt MethodId>
     friend struct overload_invoker;
 
+    inline void release() {
+        obj_ptr_ = nullptr;
+    }
+
+    [[nodiscard]] inline bool holds_value() const {
+        return obj_ptr_ != nullptr;
+    }
+
+    inline void default_delete() {
+        vtable_ptr_->default_delete(obj_ptr_);
+    }
+
     template<any_trait>
     friend class shared_trait_ptr_impl;
     template<any_trait>
     friend class ::trp::unique_trait_ptr;
+    template<any_trait Trait>
+    friend class ::trp::alloc_unique_trait_ptr;
 };
 
 template<bool Const, bool Volatile, bool Noexcept, typename Ret, typename... Params>

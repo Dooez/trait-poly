@@ -15,12 +15,11 @@ class unique_trait_ptr {
     template<any_trait>
     friend class alloc_unique_trait_ptr;
 
-    void release() {
-        trait_ref_.vtable_ptr_ = nullptr;
-        trait_ref_.obj_ptr_    = nullptr;
+    inline void release() {
+        trait_ref_.release();
     }
 
-    [[nodiscard]] bool holds_value() const {
+    [[nodiscard]] inline bool holds_value() const {
         return trait_ref_.obj_ptr_ != nullptr;
     }
 
@@ -46,15 +45,20 @@ public:
     unique_trait_ptr(const unique_trait_ptr&)            = delete;
     unique_trait_ptr& operator=(const unique_trait_ptr&) = delete;
 
-    explicit operator bool() const {
-        return holds_value();
-    }
-
     ~unique_trait_ptr() {
         if (not holds_value())
             return;
         trait_ref_.vtable_ptr_->default_delete(trait_ref_.obj_ptr_);
         release();
+    }
+    explicit operator bool() const {
+        return holds_value();
+    }
+    auto operator->(this auto&& self) {
+        return &self.trait_ref_;
+    }
+    auto operator*(this auto&& self) -> decltype(auto) {
+        return self.trait_ref_;
     }
 };
 
@@ -64,50 +68,60 @@ auto make_unique_trait(Args&&... args) -> unique_trait_ptr<Trait> {
 }
 
 template<any_trait Trait>
-class alloc_unique_trait_ptr : public trait_ref<Trait> {
-    using impl_t      = trait_ref<Trait>;
-    using vtable      = impl_t::vtable_t;
+class alloc_unique_trait_ptr {
+    using vtable      = trait_ref<Trait>::vtable_t;
     using ctrl_header = detail::ctrl_header<>;
-    ctrl_header* ctrl_ptr_{};
+    trait_ref<Trait> trait_ref_{};
+    ctrl_header*     ctrl_ptr_{};
 
     template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
     friend auto allocate_unique_trait(const Alloc& allocator, Args&&... args);
 
     alloc_unique_trait_ptr(const vtable* vtable_ptr, void* obj_ptr, ctrl_header* ctrl_ptr)
-    : impl_t{vtable_ptr, obj_ptr}
+    : trait_ref_{vtable_ptr, obj_ptr}
     , ctrl_ptr_(ctrl_ptr) {};
 
-    friend void delete_(alloc_unique_trait_ptr* v) {
-        if (v->obj_ptr_ == nullptr)
+    inline void delete_() {
+        if (not holds_value())
             return;
-        if (v->ctrl_ptr_ != nullptr)
-            v->ctrl_ptr_->destructor_ptr_(v->ctrl_ptr_);
+        if (ctrl_ptr_ != nullptr)
+            ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
         else
-            v->vtable_ptr_->default_delete(v->obj_ptr_);
+            trait_ref_.default_delete();
+        release();
+    }
+
+    [[nodiscard]] inline bool holds_value() const {
+        return trait_ref_.holds_value();
+    }
+
+    inline void release() {
+        trait_ref_.release();
+        ctrl_ptr_ = nullptr;
     }
 
 public:
     alloc_unique_trait_ptr() = default;
     alloc_unique_trait_ptr(unique_trait_ptr<Trait>&& other)    // NOLINT(*explicit*, *param-not-moved*)
-    : impl_t{other.vtable_ptr_, other.obj_ptr_} {
-        other.obj_ptr = nullptr;
+    : trait_ref_{other.vtable_ptr_, other.obj_ptr_} {
+        other.release();
     };
-
     alloc_unique_trait_ptr(alloc_unique_trait_ptr&& other) noexcept
-    : impl_t{other.vtable_ptr_, other.obj_ptr_}
+    : trait_ref_{other.trait_ref_}
     , ctrl_ptr_{other.ctrl_ptr_} {
-        // other.vtable_ptr_ = nullptr;
-        other.obj_ptr_  = nullptr;
-        other.ctrl_ptr_ = nullptr;
+        other.release();
     }
+    alloc_unique_trait_ptr& operator=(unique_trait_ptr<Trait>&& other) noexcept {
+        delete_();
+        this->trait_ref_ = other.trait_ref_;
+        other.release();
+        return *this;
+    };
     alloc_unique_trait_ptr& operator=(alloc_unique_trait_ptr&& other) noexcept {
-        delete_(this);
-        this->vtable_ptr_ = other.vtable_ptr_;
-        this->obj_ptr_    = other.obj_ptr_;
-        this->ctrl_ptr_   = other.ctrl_ptr_;
-        // other.vtable_ptr_ = nullptr;
-        other.obj_ptr_  = nullptr;
-        other.ctrl_ptr_ = nullptr;
+        delete_();
+        this->trait_ref_ = other.trait_ref_;
+        this->ctrl_ptr_  = other.ctrl_ptr_;
+        other.release();
         return *this;
     };
 
@@ -115,7 +129,18 @@ public:
     alloc_unique_trait_ptr& operator=(const alloc_unique_trait_ptr&) = delete;
 
     ~alloc_unique_trait_ptr() {
-        delete_(this);
+        delete_();
+    }
+
+    explicit operator bool() const {
+        return holds_value();
+    }
+
+    auto operator->(this auto&& self) {
+        return &self.trait_ref_;
+    }
+    auto operator*(this auto&& self) -> decltype(auto) {
+        return self.trait_ref_;
     }
 };
 

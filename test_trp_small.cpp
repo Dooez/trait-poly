@@ -114,8 +114,6 @@ int main() {
     const volatile auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
     to->foo();
     // to->bar();
-    // static_assert(not trp::implements_trait<decltype(to), testing::trait_proto>);
-    // static_assert(trp::implements_trait<decltype(to), const testing::trait_proto>);
 
     auto cto = trp::make_shared_trait<const testing::trait_proto, some_impl>();
     cto->foo();
@@ -129,20 +127,20 @@ int main() {
 
     // other_impl{}.bar();
 
-    // std::println("unique");
-    // auto uptr = trp::make_unique_trait<testing::trait_proto, some_impl>();
-    // // auto x = trp::detail::v2::trait_vtable_for<testing::trait_proto, some_impl>::value;
-    // // constexpr auto x = trp::detail::v2::fill_vtable<testing::trait_proto_base, some_impl>();
-    // uptr.foo();
-    // uptr.bar();
-    // uptr = trp::make_unique_trait<testing::trait_proto, other_impl>();
-    // uptr.foo();
-    //
-    // std::println("alloc_unique");
-    // auto auptr = trp::allocate_unique_trait<testing::trait_proto, some_impl>(std::allocator<some_impl>{});
-    // auptr.foo();
-    // auptr = trp::allocate_unique_trait<testing::trait_proto, other_impl>(std::allocator<other_impl>{});
-    // auptr.foo();
+    std::println("unique");
+    auto uptr = trp::make_unique_trait<testing::trait_proto, some_impl>();
+    // auto x = trp::detail::v2::trait_vtable_for<testing::trait_proto, some_impl>::value;
+    // constexpr auto x = trp::detail::v2::fill_vtable<testing::trait_proto_base, some_impl>();
+    uptr->foo();
+    uptr->bar();
+    uptr = trp::make_unique_trait<testing::trait_proto, other_impl>();
+    uptr->foo();
+
+    std::println("alloc_unique");
+    auto auptr = trp::allocate_unique_trait<testing::trait_proto, some_impl>(std::allocator<some_impl>{});
+    auptr->foo();
+    auto auptr2 = trp::allocate_unique_trait<const volatile testing::trait_proto, other_impl>(std::allocator<other_impl>{});
+    auptr2->foo();
 
     return 0;
 }
