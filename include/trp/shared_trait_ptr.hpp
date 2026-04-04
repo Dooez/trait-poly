@@ -7,67 +7,95 @@
 #include <atomic>
 #include <memory>
 namespace trp {
+template<any_trait Trait>
+class shared_trait_ptr;
+
+template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
+auto allocate_shared_trait(const Alloc& allocator, Args&&... args);
+
 namespace detail {
 using arc_t = std::atomic<uint64_t>;
 
 template<any_trait Trait>
-struct shared_trait_ptr_impl : public detail::trait_obj<Trait> {
-    using impl_t = detail::trait_obj<Trait>;
-    using vtable = impl_t::vtable_t;
-    ctrl_header<arc_t>* ctrl_ptr_{};
-
-    shared_trait_ptr_impl(const vtable* vtable_ptr, void* obj_ptr, ctrl_header<arc_t>* ctrl_ptr)
-    : impl_t{vtable_ptr, obj_ptr}
-    , ctrl_ptr_(ctrl_ptr) {
-        increment();
-    };
-
-    void increment() const {
-        if (this->obj_ptr_ == nullptr)
-            return;
-        ctrl_ptr_->counter.fetch_add(1, std::memory_order_relaxed);
+class shared_trait_ptr_impl {
+public:
+    auto operator->(this auto&& self) {
+        return &self.trait_ref_;
     }
-    void decrement() const {
-        if (this->obj_ptr_ == nullptr)
-            return;
-        if (ctrl_ptr_->counter.fetch_sub(1, std::memory_order_release) == 1) {
-            std::atomic_thread_fence(std::memory_order_acquire);
-            ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
-        };
+    auto operator*(this auto&& self) -> decltype(auto) {
+        return self.trait_ref_;
     }
+    ~shared_trait_ptr_impl() {
+        decrement();
+    }
+
     shared_trait_ptr_impl() = default;
     shared_trait_ptr_impl(const shared_trait_ptr_impl& other) noexcept {
         other.increment();
-        this->vtable_ptr_ = other.vtable_ptr_;
-        this->obj_ptr_    = other.obj_ptr_;
-        this->ctrl_ptr_   = other.ctrl_ptr_;
+        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
+        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
+        ctrl_ptr_              = other.ctrl_ptr_;
     }
     shared_trait_ptr_impl(shared_trait_ptr_impl&& other) noexcept
-    : impl_t{other.vtable_ptr_, other.obj_ptr_}
+    : trait_ref_{other.trait_ref_.vtable_ptr_, other.trait_ref_.obj_ptr_}
     , ctrl_ptr_(other.ctrl_ptr_) {
-        other.vtable_ptr_ = nullptr;
-        other.obj_ptr_    = nullptr;
-        other.ctrl_ptr_   = nullptr;
+        other.release();
     }
     shared_trait_ptr_impl& operator=(const shared_trait_ptr_impl& other) noexcept {
         if (this == &other)
             return *this;
         decrement();
         other.increment();
-        this->vtable_ptr_ = other.vtable_ptr_;
-        this->obj_ptr_    = other.obj_ptr_;
+        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
+        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
+        ctrl_ptr_              = other.ctrl_ptr_;
         return *this;
     }
     shared_trait_ptr_impl& operator=(shared_trait_ptr_impl&& other) noexcept {
-        this->vtable_ptr_ = other.vtable_ptr_;
-        this->obj_ptr_    = other.obj_ptr_;
-        other.vtable_ptr_ = nullptr;
-        other.obj_ptr_    = nullptr;
+        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
+        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
+        ctrl_ptr_              = other.ctrl_ptr_;
+        other.release();
         return *this;
     }
-    ~shared_trait_ptr_impl() {
-        decrement();
+
+private:
+    using vtable = trait_ref<Trait>::vtable_t;
+    trait_ref<Trait>    trait_ref_{};
+    ctrl_header<arc_t>* ctrl_ptr_{};
+
+    shared_trait_ptr_impl(const vtable* vtable_ptr, void* obj_ptr, ctrl_header<arc_t>* ctrl_ptr)
+    : trait_ref_{vtable_ptr, obj_ptr}
+    , ctrl_ptr_(ctrl_ptr) {
+        increment();
+    };
+
+    void release() {
+        trait_ref_.vtable_ptr_ = nullptr;
+        trait_ref_.obj_ptr_    = nullptr;
+        ctrl_ptr_              = nullptr;
     }
+
+    void increment() const {
+        if (trait_ref_.obj_ptr_ == nullptr)
+            return;
+        ctrl_ptr_->counter.fetch_add(1, std::memory_order_relaxed);
+    }
+    void decrement() {
+        if (trait_ref_.obj_ptr_ == nullptr)
+            return;
+        if (ctrl_ptr_->counter.fetch_sub(1, std::memory_order_release) == 1) {
+            std::atomic_thread_fence(std::memory_order_acquire);
+            ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
+            release();
+        };
+    }
+
+    template<any_trait Trait_, implements_trait<Trait_> Impl_, typename Alloc, typename... Args>
+    friend auto ::trp::allocate_shared_trait(const Alloc&, Args&&...);
+
+    template<any_trait>
+    friend class ::trp::shared_trait_ptr;
 };
 }    // namespace detail
 
@@ -85,6 +113,7 @@ public:
         return this->_impl_manager.obj_ptr_ != nullptr;
     }
 };
+
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
 auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;

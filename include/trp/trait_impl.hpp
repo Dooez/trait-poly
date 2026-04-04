@@ -7,24 +7,25 @@
 
 
 namespace trp {
+template<any_trait>
+class unique_trait_ptr;
+
 namespace detail {
+template<any_trait Trait>
+struct trait_ref_identity;
+}
 
-template<typename Trait>
-    requires any_trait<std::remove_cvref_t<Trait>>
-struct indirect_impl;
+template<any_trait Trait>
+using trait_ref = decltype(detail::trait_ref_identity<Trait>::type_v)::type;
 
-
-template<typename Trait>
-    requires any_trait<std::remove_cvref_t<Trait>>
-using trait_obj = decltype(indirect_impl<Trait>::type_v)::type;
-
+namespace detail {
 template<typename VTable, typename... MethodHolders>
-struct trait_impl_manager : public MethodHolders... {
+struct trait_ref_impl : public MethodHolders... {
 protected:
     using vtable_t = VTable;
 
-    trait_impl_manager() = default;
-    trait_impl_manager(const vtable_t* vptr, void* optr)
+    trait_ref_impl() = default;
+    trait_ref_impl(const vtable_t* vptr, void* optr)
     : vtable_ptr_(vptr)
     , obj_ptr_(optr) {};
 
@@ -37,6 +38,11 @@ protected:
              uZ             Index,
              any_method_idt MethodId>
     friend struct overload_invoker;
+
+    template<any_trait>
+    friend class shared_trait_ptr_impl;
+    template<any_trait>
+    friend class ::trp::unique_trait_ptr;
 };
 
 template<bool Const, bool Volatile, bool Noexcept, typename Ret, typename... Params>
@@ -121,8 +127,7 @@ struct overload_invoker<
 private:
     template<typename VTable>
     static auto get_method(VTable* vt) {
-        constexpr auto m =
-            std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<VTable>, ctx_unchecked)[Index];
+        constexpr auto m = std::meta::nonstatic_data_members_of(^^VTable, ctx_unchecked)[Index];
         return vt->[:m:];
     }
     auto manager(this auto&& self) -> decltype(auto) {
@@ -298,12 +303,12 @@ constexpr auto maybe_define_cv_trait() {
     using ttt = trait_traits<Trait>;
     template for (constexpr auto supertrait: ttt::direct_base_types) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
-        if (not is_complete_type(substitute(^^indirect_impl, {^^supertrait_t})))
+        if (not is_complete_type(substitute(^^trait_ref_identity, {^^supertrait_t})))
             maybe_define_cv_trait<supertrait_t>();
     }
     define_vtable<Trait>();
     auto method_holder_specs = vector<method_holder_spec>{};
-    auto manager_args        = vector<info>{^^vtable<Trait>};
+    auto trait_ref_args      = vector<info>{^^vtable<Trait>};
 
     uZ i = 0;
     template for (constexpr auto mem: ttt::all_methods) {
@@ -315,14 +320,14 @@ constexpr auto maybe_define_cv_trait() {
             const auto holder_info = substitute(^^method_holder, {^^Trait, reflect_constant(i)});
             method_holder_specs.push_back(
                 {.id = method_idt::identifier, .methods = {spec}, .type_info = holder_info});
-            manager_args.push_back(holder_info);
+            trait_ref_args.push_back(holder_info);
         } else {
             it->methods.push_back(spec);
         }
         ++i;
     }
 
-    const auto mgr_info = substitute(^^trait_impl_manager, manager_args);
+    const auto mgr_info = substitute(^^trait_ref_impl, trait_ref_args);
     for (auto& [name, overloads, mh_info]: method_holder_specs) {
         auto invoker_args = vector{mgr_info, mh_info};
         invoker_args.append_range(overloads);
@@ -337,7 +342,7 @@ constexpr auto maybe_define_cv_trait() {
     }
     {
         const auto type_v_info = substitute(^^type_identity, {mgr_info});
-        define_aggregate(^^indirect_impl<Trait>,
+        define_aggregate(^^trait_ref_identity<Trait>,
                          {data_member_spec(type_v_info,
                                            data_member_options{
                                                .name              = "type_v",

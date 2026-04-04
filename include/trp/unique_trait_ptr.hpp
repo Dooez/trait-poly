@@ -8,38 +8,53 @@
 
 namespace trp {
 template<any_trait Trait>
-class unique_trait_ptr : public detail::trait_obj<Trait> {
-    using impl_t = detail::trait_obj<Trait>;
-    using vtable = impl_t::vtable_t;
+class unique_trait_ptr {
+    trait_ref<Trait> trait_ref_;
+    using vtable = trait_ref<Trait>::vtable_t;
 
     template<any_trait>
     friend class alloc_unique_trait_ptr;
 
+    void release() {
+        trait_ref_.vtable_ptr_ = nullptr;
+        trait_ref_.obj_ptr_    = nullptr;
+    }
+
+    [[nodiscard]] bool holds_value() const {
+        return trait_ref_.obj_ptr_ != nullptr;
+    }
+
 public:
     template<implements_trait<Trait> Impl>
     explicit unique_trait_ptr(Impl* obj_ptr)
-    : impl_t{&detail::trait_vtable_for<Trait, Impl>::value, obj_ptr} {};
+    : trait_ref_{&detail::trait_vtable_for<Trait, Impl>::value, obj_ptr} {};
 
     unique_trait_ptr() = default;
     unique_trait_ptr(unique_trait_ptr&& other) noexcept
-    : impl_t{other.vtable_ptr_, other.obj_ptr_} {
-        other.obj_ptr_ = nullptr;
+    : trait_ref_{other.trait_ref_} {
+        other.release();
     }
     unique_trait_ptr& operator=(unique_trait_ptr&& other) noexcept {
-        if (this->obj_ptr_ != nullptr)
-            this->vtable_ptr_->default_delete(this->obj_ptr_);
-        this->vtable_ptr_ = other.vtable_ptr_;
-        this->obj_ptr_    = other.obj_ptr_;
-        other.obj_ptr_    = nullptr;
+        if (holds_value())
+            trait_ref_.vtable_ptr_->default_delete(trait_ref_.obj_ptr_);
+        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
+        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
+        other.release();
         return *this;
     };
 
     unique_trait_ptr(const unique_trait_ptr&)            = delete;
     unique_trait_ptr& operator=(const unique_trait_ptr&) = delete;
 
+    explicit operator bool() const {
+        return holds_value();
+    }
+
     ~unique_trait_ptr() {
-        if (this->obj_ptr_ != nullptr)
-            this->vtable_ptr_->default_delete(this->obj_ptr_);
+        if (not holds_value())
+            return;
+        trait_ref_.vtable_ptr_->default_delete(trait_ref_.obj_ptr_);
+        release();
     }
 };
 
@@ -49,8 +64,8 @@ auto make_unique_trait(Args&&... args) -> unique_trait_ptr<Trait> {
 }
 
 template<any_trait Trait>
-class alloc_unique_trait_ptr : public detail::trait_obj<Trait> {
-    using impl_t      = detail::trait_obj<Trait>;
+class alloc_unique_trait_ptr : public trait_ref<Trait> {
+    using impl_t      = trait_ref<Trait>;
     using vtable      = impl_t::vtable_t;
     using ctrl_header = detail::ctrl_header<>;
     ctrl_header* ctrl_ptr_{};

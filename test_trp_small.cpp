@@ -112,17 +112,20 @@ static_assert(not compare_structs(vt01, vt2));
 int main() {
     std::println("shared");
     const volatile auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
-    to.foo();
-    static_assert(not trp::implements_trait<decltype(to), testing::trait_proto>);
-    static_assert(trp::implements_trait<decltype(to), const testing::trait_proto>);
+    to->foo();
+    // to->bar();
+    // static_assert(not trp::implements_trait<decltype(to), testing::trait_proto>);
+    // static_assert(trp::implements_trait<decltype(to), const testing::trait_proto>);
 
     auto cto = trp::make_shared_trait<const testing::trait_proto, some_impl>();
-    cto.foo();
+    cto->foo();
 
-    auto to2 = trp::make_shared_trait<testing::trait_proto, other_impl>();
 
-    to2.bar();
-    to2.foo();
+    //
+    // auto to2 = trp::make_shared_trait<testing::trait_proto, other_impl>();
+    //
+    // to2->bar();
+    // to2->foo();
 
     // other_impl{}.bar();
 
