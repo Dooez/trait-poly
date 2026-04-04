@@ -61,8 +61,9 @@ private:
     trait_ref<Trait>    trait_ref_{};
     ctrl_header<arc_t>* ctrl_ptr_{};
 
-    shared_trait_ptr_impl(const vtable* vtable_ptr, void* obj_ptr, ctrl_header<arc_t>* ctrl_ptr)
-    : trait_ref_{vtable_ptr, obj_ptr}
+    template<implements_trait<Trait> Impl>
+    shared_trait_ptr_impl(Impl* obj_ptr, ctrl_header<arc_t>* ctrl_ptr)
+    : trait_ref_(*obj_ptr)
     , ctrl_ptr_(ctrl_ptr) {
         increment();
     };
@@ -133,9 +134,9 @@ auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     }
     try {
         auto cptr = new (ctrl_ptr) ctrl_block(ptr, n, std::move(new_allocator), std::forward<Args>(args)...);
-        const auto impl_ptr   = &(cptr->impl_);
-        const auto vtable_ptr = &detail::trait_vtable_for<Trait, Impl>::value;
-        return shared_trait_ptr<Trait>(detail::shared_trait_ptr_impl<Trait>(vtable_ptr, impl_ptr, cptr));
+        const auto impl_ptr = &(cptr->impl_);
+        // const auto vtable_ptr = &detail::trait_vtable_for<Trait, Impl>::value;
+        return shared_trait_ptr<Trait>(detail::shared_trait_ptr_impl<Trait>(impl_ptr, cptr));
     } catch (...) {
         alloc_traits::deallocate(new_allocator, ptr, n);
         throw;
