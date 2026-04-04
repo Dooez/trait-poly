@@ -19,11 +19,11 @@ using arc_t = std::atomic<uint64_t>;
 template<any_trait Trait>
 class shared_trait_ptr_impl {
 public:
-    auto operator->(this auto&& self) {
-        return &self.trait_ref_;
+    auto operator->(this auto&& self) -> trait_ref<Trait>* {
+        return const_cast<trait_ref<Trait>*>(&self.trait_ref_);
     }
-    auto operator*(this auto&& self) -> decltype(auto) {
-        return self.trait_ref_;
+    auto operator*(this auto&& self) -> trait_ref<Trait>& {
+        return const_cast<trait_ref<Trait>&>(&self.trait_ref_);
     }
     ~shared_trait_ptr_impl() {
         decrement();
@@ -68,21 +68,21 @@ private:
         increment();
     };
 
-    [[nodiscard]] inline bool holds_value() const {
+    [[nodiscard]] bool holds_value() const {
         return trait_ref_.holds_value();
     }
 
-    inline void release() {
+    void release() {
         trait_ref_.release();
         ctrl_ptr_ = nullptr;
     }
 
-    inline void increment() const {
+    void increment() const {
         if (not holds_value())
             return;
         ctrl_ptr_->counter.fetch_add(1, std::memory_order_relaxed);
     }
-    inline void decrement() {
+    void decrement() {
         if (not holds_value())
             return;
         if (ctrl_ptr_->counter.fetch_sub(1, std::memory_order_release) == 1) {
@@ -107,8 +107,9 @@ class shared_trait_ptr : public detail::shared_trait_ptr_impl<Trait> {
 
     using impl_t = detail::shared_trait_ptr_impl<Trait>;
 
-    explicit shared_trait_ptr(impl_t manager)
-    : impl_t(std::move(manager)) {};
+    template<typename... Args>
+    explicit shared_trait_ptr(Args&&... args)
+    : impl_t(std::forward<Args>(args)...){};
 
 public:
     shared_trait_ptr() = default;
@@ -134,8 +135,8 @@ auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     }
     try {
         auto cptr = new (ctrl_ptr) ctrl_block(ptr, n, std::move(new_allocator), std::forward<Args>(args)...);
-        const auto impl_ptr = &(cptr->impl_);
-        // const auto vtable_ptr = &detail::trait_vtable_for<Trait, Impl>::value;
+        const auto impl_ptr   = &(cptr->impl_);
+        const auto vtable_ptr = &detail::trait_vtable_for<Trait, Impl>::value;
         return shared_trait_ptr<Trait>(detail::shared_trait_ptr_impl<Trait>(impl_ptr, cptr));
     } catch (...) {
         alloc_traits::deallocate(new_allocator, ptr, n);

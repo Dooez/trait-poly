@@ -12,7 +12,7 @@ target_include_directories(trp_trp INTERFACE "include/trp")
 
 function(configure_refl TARGET_NAME)
 	target_link_libraries(${TARGET_NAME} PUBLIC "-static" trp_trp)
-	target_compile_options(${TARGET_NAME} PRIVATE -std=c++26 -stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements --save-temps -O2)
+	target_compile_options(${TARGET_NAME} PRIVATE -std=c++26 -stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements -O2)
 	target_link_options(${TARGET_NAME} PRIVATE
 			-fuse-ld=lld
 			-stdlib=libc++

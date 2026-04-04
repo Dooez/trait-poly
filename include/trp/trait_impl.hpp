@@ -21,6 +21,7 @@ template<any_trait Trait>
 using trait_ref = decltype(detail::trait_ref_identity<Trait>::type_v)::type;
 
 namespace detail {
+
 template<any_trait Trait, non_cvref Impl>
 struct trait_vtable_for;
 
@@ -35,6 +36,9 @@ class trait_ref_impl : public MethodHolders... {
     trait_ref_impl(const vtable_t* vptr, void* optr)
     : vtable_ptr_(vptr)
     , obj_ptr_(optr) {};
+
+    trait_ref_impl& operator=(const trait_ref_impl&) = default;
+    trait_ref_impl& operator=(trait_ref_impl&&)      = default;
 
     template<typename Manager,
              typename MethodHolder,
@@ -63,7 +67,12 @@ class trait_ref_impl : public MethodHolders... {
     friend class ::trp::alloc_unique_trait_ptr;
 
 public:
+    trait_ref_impl(const trait_ref_impl&) = default;
+    trait_ref_impl(trait_ref_impl&&)      = default;
+
+
     template<implements_trait<trait_t> Impl>
+        requires(not std::derived_from<Impl, trait_ref_impl>)
     explicit trait_ref_impl(Impl& obj)
     : vtable_ptr_(&detail::trait_vtable_for<trait_t, Impl>::value)
     , obj_ptr_(&obj){};
@@ -229,7 +238,6 @@ consteval void define_vtable() {
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
-
 
 template<any_trait Trait, non_cvref Impl>
 consteval auto fill_vtable() {
