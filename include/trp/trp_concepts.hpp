@@ -233,7 +233,7 @@ struct trait_traits {
             auto parsed_bases  = std::vector<info>{};
             auto append_unique = [&](auto&& method_idts) {
                 for (auto m: method_idts)
-                    if (stdr::find(result, m) == result.end())
+                    if (not stdr::contains(result, m))
                         result.push_back(m);
             };
 
@@ -241,7 +241,7 @@ struct trait_traits {
             // [&](this auto self, meta::info inf) -> void {
             //     auto bases = bases_of(inf, ctx_unchecked) | stdv::transform(type_of);
             //     for (auto base: bases) {
-            //         if (stdr::find(parsed_bases, base) == parsed_bases.end()) {
+            //         if (not stdr::contains(parsed_bases, base)) {
             //             parsed_bases.push_back(base);
             //             self(base);
             //         }
@@ -302,7 +302,7 @@ consteval auto matching_id_public_members() {
                       return has_identifier(info) and identifier_of(info) == TraitMethod::identifier;
                   });
             for (auto info: cur_members) {
-                if (stdr::find(result, info) == result.end())
+                if (not stdr::contains(result, info))
                     result.push_back(info);
             }
             constexpr auto has_bases = not stdr::empty(bases_of(type, access_context::unprivileged()));
@@ -384,13 +384,14 @@ concept implements_method =
     }());
 
 template<typename Impl, typename Trait, uZ I = 0>
-concept implements_methods = requires { requires I == trait_traits<Trait>::all_methods.size(); }    //
-                             or
-[:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
-    and [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):];
-;
+concept implements_methods =
+    requires { requires I == trait_traits<Trait>::all_methods.size(); }                             //
+    or ([:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
+        and
+           [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
 
 }    // namespace detail
+
 template<typename Impl, typename Trait>
 concept implements_trait = any_trait<Trait> and detail::implements_methods<Impl, Trait>;
 
