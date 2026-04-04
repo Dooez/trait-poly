@@ -193,7 +193,7 @@ consteval void define_vtable() {
         vtable_elements.push_back(data_member_spec(substitute(^^wrapper_fptr_for, {method_idt})));
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
-    template for (constexpr auto supertrait: trait_traits<Trait>::direct_supertraits) {
+    template for (constexpr auto supertrait: trait_traits<Trait>::direct_base_types) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
         auto supertrait_vtable = substitute(^^vtable, {copy_cv_to(^^Trait, supertrait)});
         vtable_elements.push_back(data_member_spec(supertrait_vtable));
@@ -241,11 +241,11 @@ consteval auto fill_vtable() {
     };
     // use constexpr binding when it becomes available
     auto [... Is] = make_Is<ttt::all_methods.size()>();
-    auto [... Js] = make_Is<ttt::direct_supertraits.size()>();
+    auto [... Js] = make_Is<ttt::direct_base_types.size()>();
     return vtable<Trait>{
         get_wrapper_ptr(std::cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
-        get_supertrait_vtable(std::cw<ttt::direct_supertraits[Js]>)...,
+        get_supertrait_vtable(std::cw<ttt::direct_base_types[Js]>)...,
     };
 }
 template<any_trait Trait, non_cvref Impl>
@@ -253,31 +253,37 @@ struct trait_vtable_for {
     static constexpr auto value = fill_vtable<Trait, Impl>();
 };
 
-template<any_trait Trait, supertrait_of<Trait> Supertrait>
-constexpr void get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) {
+template<typename Supertrait, any_trait Trait>
+    requires explicit_supertrait_of<Supertrait, Trait>
+constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> const vtable<Supertrait>* {
+    if constexpr (std::same_as<Trait, Supertrait>)
+        return ptr;
+
     using namespace meta;
     using next_supertrait_t = [:[] {
         if constexpr (direct_supertrait_of<Supertrait, Trait>) {
             return ^^Supertrait;
         } else {
-            template for (constexpr auto base: bases_of(^^Trait, ctx_unchecked)) {
-                using base_t = [:type_of(base):];
-                if constexpr (explicit_supertrait<Supertrait, base>())
-                    return type_of(base);
+            template for (constexpr auto base: trait_traits<Trait>::direct_base_types) {
+                using base_t = [:base:];
+                if constexpr (std::derived_from<base_t, Supertrait>)
+                    return base;
             }
         }
     }():];
 
-    auto next_ptr = [=] {
-        template for (constexpr auto mem: members_of(^^vtable<Trait>, ctx_unchecked)) {
-            if constexpr (type_of(mem) == ^^vtable<next_supertrait_t>)
-                return &(ptr->[:mem:]);
+    const auto next_ptr = [=](cw_info auto vt_inf) -> const vtable<next_supertrait_t>* {
+        constexpr auto vt_mems =
+            ce_fn_to_array([=] { return nonstatic_data_members_of(vt_inf, ctx_unchecked); });
+        template for (constexpr auto mem: vt_mems) {
+            if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
+                return &((*ptr).[:mem:]);
         }
-    }();
+    }(std::cw<^^vtable<Trait>>);
     if constexpr (^^next_supertrait_t == ^^Supertrait) {
         return next_ptr;
     } else {
-        return get_explicit_supertrait_vtable_ptr<next_supertrait_t, Supertrait>(next_ptr);
+        return get_explicit_supertrait_vtable_ptr<Supertrait>(next_ptr);
     }
 };
 template<any_trait Trait>
@@ -290,7 +296,7 @@ constexpr auto maybe_define_cv_trait() {
         info         type_info{};
     };
     using ttt = trait_traits<Trait>;
-    template for (constexpr auto supertrait: ttt::direct_supertraits) {
+    template for (constexpr auto supertrait: ttt::direct_base_types) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         if (not is_complete_type(substitute(^^indirect_impl, {^^supertrait_t})))
             maybe_define_cv_trait<supertrait_t>();

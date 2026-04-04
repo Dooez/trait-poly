@@ -173,9 +173,9 @@ consteval bool static_data_members_are_constexpr() {
 
 template<typename Trait>
 concept any_immediate_trait =
-    std::same_as<Trait, std::remove_reference_t<Trait>>                                               //
-    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))                          //
-    and detail::static_data_members_are_constexpr<Trait>()                                            //
+    std::same_as<Trait, std::remove_reference_t<Trait>>                         //
+    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
+    and detail::static_data_members_are_constexpr<Trait>()                      //
     // and not stdr::empty(detail::nonspecial_members_of(^^Trait))                                       //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)                       //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
@@ -215,7 +215,7 @@ consteval auto ce_fn_to_array(const F& f) {
 
 template<typename T>
 struct trait_traits {
-    static constexpr auto direct_supertraits = ce_fn_to_array([] {
+    static constexpr auto direct_base_types = ce_fn_to_array([] {
         return meta::bases_of(^^T, ctx_unchecked)    //
                | stdv::transform(meta::type_of)      //
                | stdr::to<std::vector<meta::info>>();
@@ -252,8 +252,8 @@ struct trait_traits {
             // }(^^T);
 
             [&]<typename U = T>(this auto self, std::type_identity<U> = {}) {
-                template for (constexpr auto base: trait_traits<U>::direct_supertraits) {
-                    if (stdr::find(parsed_bases, base) == parsed_bases.end()) {
+                template for (constexpr auto base: trait_traits<U>::direct_base_types) {
+                    if (not stdr::contains(parsed_bases, base)) {
                         parsed_bases.push_back(base);
                         using base_t = [:base:];
                         self(std::type_identity<base_t>{});
@@ -272,25 +272,20 @@ struct trait_traits {
 }    // namespace detail
 
 template<typename Supertrait, typename Trait>
-concept direct_supertrait_of = any_trait<Trait>    //
-                               and stdr::any_of(detail::trait_traits<Trait>::direct_supertraits,
-                                                [](auto info) { return info == ^^Supertrait; });
+concept supertrait_of = any_trait<Supertrait>    //
+                        and any_trait<Trait>     //
+                        and ([] {
+                                for (auto m: detail::trait_traits<Supertrait>::all_methods) {
+                                    if (not stdr::contains(detail::trait_traits<Trait>::all_methods, m))
+                                        return false;
+                                }
+                                return true;
+                            }());
 template<typename Supertrait, typename Trait>
-concept explicit_supertrait_of = any_trait<Trait>                             //
-                                 and std::is_base_of_v<Supertrait, Trait>;    //
-
+concept direct_supertrait_of = supertrait_of<Supertrait, Trait> and
+                               stdr::contains(detail::trait_traits<Trait>::direct_base_types, ^^Supertrait);
 template<typename Supertrait, typename Trait>
-concept supertrait_of = any_trait<Supertrait>                             //
-                        and any_trait<Trait>                              //
-                        and (explicit_supertrait_of<Supertrait, Trait>    //
-                             or [] {
-                                    for (auto m: detail::trait_traits<Supertrait>::all_methods) {
-                                        using ttt = detail::trait_traits<Trait>;
-                                        if (stdr::find(ttt::all_methods, m) == ttt::all_methods.end())
-                                            return false;
-                                    }
-                                    return true;
-                                }());
+concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::derived_from<Trait, Supertrait>;
 
 
 namespace detail {

@@ -2,6 +2,9 @@
 #include "unique_trait_ptr.hpp"
 
 #include <print>
+namespace stdr = std::ranges;
+namespace stdv = std::views;
+namespace meta = std::meta;
 namespace testing {
 struct trait_proto_base {
     void bar();
@@ -82,6 +85,29 @@ struct other_impl
 static_assert(trp::implements_trait<other_impl, testing::trait_proto>);
 
 // NOLINTEND(*-to-static*)
+template<typename S>
+constexpr bool compare_structs(const S& lhs, const S& rhs) {
+    constexpr auto mems = trp::detail::ce_fn_to_array(
+        [] { return std::meta::nonstatic_data_members_of(^^S, std::meta::access_context::unchecked()); });
+    template for (constexpr auto m: mems) {
+        using mem_t = [:std::meta::type_of(m):];
+        if constexpr (std::equality_comparable<mem_t>) {
+            if (lhs.[:m:] != rhs.[:m:])
+                return false;
+        } else {
+            return compare_structs(lhs.[:m:], rhs.[:m:]);
+        }
+    }
+    return true;
+};
+
+constexpr auto vt0  = trp::detail::fill_vtable<testing::trait_proto, some_impl>();
+constexpr auto vt01 = *trp::detail::get_explicit_supertrait_vtable_ptr<testing::trait_proto_base>(&vt0);
+constexpr auto vt1  = trp::detail::fill_vtable<testing::trait_proto_base, some_impl>();
+constexpr auto vt2  = trp::detail::fill_vtable<testing::trait_proto_base, other_impl>();
+
+static_assert(compare_structs(vt01, vt1));
+static_assert(not compare_structs(vt01, vt2));
 
 int main() {
     std::println("shared");
