@@ -26,7 +26,7 @@ class unique_trait_ptr {
 public:
     template<implements_trait<Trait> Impl>
     explicit unique_trait_ptr(Impl* obj_ptr)
-    : trait_ref_{&detail::trait_vtable_for<Trait, Impl>::value, obj_ptr} {};
+    : trait_ref_(*obj_ptr){};
 
     unique_trait_ptr() = default;
     unique_trait_ptr(unique_trait_ptr&& other) noexcept
@@ -77,9 +77,10 @@ class alloc_unique_trait_ptr {
     template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
     friend auto allocate_unique_trait(const Alloc& allocator, Args&&... args);
 
-    alloc_unique_trait_ptr(const vtable* vtable_ptr, void* obj_ptr, ctrl_header* ctrl_ptr)
-    : trait_ref_{vtable_ptr, obj_ptr}
-    , ctrl_ptr_(ctrl_ptr) {};
+    template<implements_trait<Trait> Impl>
+    alloc_unique_trait_ptr(Impl* obj_ptr, ctrl_header* ctrl_ptr)
+    : trait_ref_(*obj_ptr)
+    , ctrl_ptr_(ctrl_ptr){};
 
     inline void delete_() {
         if (not holds_value())
@@ -161,9 +162,8 @@ auto allocate_unique_trait(const Alloc& allocator, Args&&... args) {
     }
     try {
         auto cptr = new (ctrl_ptr) ctrl_block(ptr, n, std::move(new_allocator), std::forward<Args>(args)...);
-        const auto impl_ptr   = &(cptr->impl_);
-        const auto vtable_ptr = &detail::trait_vtable_for<Trait, Impl>::value;
-        return alloc_unique_trait_ptr<Trait>(vtable_ptr, impl_ptr, cptr);
+        const auto impl_ptr = &(cptr->impl_);
+        return alloc_unique_trait_ptr<Trait>(impl_ptr, cptr);
     } catch (...) {
         alloc_traits::deallocate(new_allocator, ptr, n);
         throw;

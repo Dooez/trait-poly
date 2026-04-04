@@ -135,9 +135,8 @@ auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     }
     try {
         auto cptr = new (ctrl_ptr) ctrl_block(ptr, n, std::move(new_allocator), std::forward<Args>(args)...);
-        const auto impl_ptr   = &(cptr->impl_);
-        const auto vtable_ptr = &detail::trait_vtable_for<Trait, Impl>::value;
-        return shared_trait_ptr<Trait>(detail::shared_trait_ptr_impl<Trait>(impl_ptr, cptr));
+        const auto impl_ptr = &(cptr->impl_);
+        return shared_trait_ptr<Trait>(impl_ptr, cptr);
     } catch (...) {
         alloc_traits::deallocate(new_allocator, ptr, n);
         throw;
