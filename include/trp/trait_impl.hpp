@@ -7,10 +7,6 @@
 
 
 namespace trp {
-template<any_trait>
-class unique_trait_ptr;
-template<any_trait Trait>
-class alloc_unique_trait_ptr;
 
 namespace detail {
 template<any_trait Trait>
@@ -62,9 +58,9 @@ class trait_ref_impl : public MethodHolders... {
     template<any_trait>
     friend class shared_trait_ptr_impl;
     template<any_trait>
-    friend class ::trp::unique_trait_ptr;
-    template<any_trait Trait>
-    friend class ::trp::alloc_unique_trait_ptr;
+    friend class unique_trait_ptr_impl;
+    template<any_trait>
+    friend class alloc_unique_trait_ptr_impl;
 
 public:
     trait_ref_impl(const trait_ref_impl&) = default;

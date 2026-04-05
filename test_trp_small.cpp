@@ -112,8 +112,11 @@ static_assert(not compare_structs(vt01, vt2));
 
 int main() {
     std::println("make_shared:");
-    const volatile auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
+    const auto to = trp::make_shared_trait<testing::trait_proto, some_impl>();
     to->foo();
+    auto to_up = trp::trait_cast<testing::trait_proto_base>(to);
+    to_up->bar();
+
     auto cvto = trp::make_shared_trait<const volatile testing::trait_proto, some_impl>();
     cvto->foo();
 
@@ -139,8 +142,14 @@ int main() {
     std::println("\nalloc_unique:");
     auto auptr = trp::allocate_unique_trait<testing::trait_proto, some_impl>(std::allocator<some_impl>{});
     auptr->foo();
-    auto auptr2 = trp::allocate_unique_trait<const volatile testing::trait_proto, other_impl>(
-        std::allocator<other_impl>{});
+    std::println("\nmove unique to alloc_unique:");
+    auptr = std::move(uptr);
+    auptr->foo();
+    // auto auptr_up = trp::trait_cast<testing::trait_proto_base>(std::move(auptr));
+    // auptr_up->bar();
+
+    auto auptr2 =
+        trp::allocate_unique_trait<const testing::trait_proto, other_impl>(std::allocator<other_impl>{});
     auptr2->foo();
 
     std::println("\nref:");

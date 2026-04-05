@@ -18,7 +18,62 @@ using arc_t = std::atomic<uint64_t>;
 
 template<any_trait Trait>
 class shared_trait_ptr_impl {
+    using vtable      = trait_ref<Trait>::vtable_t;
+    using ctrl_header = detail::ctrl_header<arc_t>;
+    trait_ref<Trait> trait_ref_{};
+    ctrl_header*     ctrl_ptr_{};
+
+protected:
+    shared_trait_ptr_impl(const vtable* vtptr, void* obj_ptr, ctrl_header* ctrl_ptr)
+    : trait_ref_(vtptr, obj_ptr)
+    , ctrl_ptr_(ctrl_ptr) {
+        // increment is external
+    };
+
+    template<implements_trait<Trait> Impl>
+    shared_trait_ptr_impl(Impl* obj_ptr, ctrl_header* ctrl_ptr)
+    : trait_ref_(*obj_ptr)
+    , ctrl_ptr_(ctrl_ptr) {
+        increment();
+    };
+
+    [[nodiscard]] auto get_vtable_ptr() const -> const vtable* {
+        return trait_ref_.vtable_ptr_;
+    }
+    [[nodiscard]] auto get_obj_ptr() const -> void* {
+        return trait_ref_.obj_ptr_;
+    }
+    [[nodiscard]] auto get_ctrl_ptr() const -> ctrl_header* {
+        return ctrl_ptr_;
+    }
+    [[nodiscard]] bool holds_value() const {
+        return trait_ref_.holds_value();
+    }
+
+    void release() {
+        trait_ref_.release();
+        ctrl_ptr_ = nullptr;
+    }
+
+    void increment() const {
+        if (not holds_value())
+            return;
+        ctrl_ptr_->counter.fetch_add(1, std::memory_order_relaxed);
+    }
+    void decrement() {
+        if (not holds_value())
+            return;
+        if (ctrl_ptr_->counter.fetch_sub(1, std::memory_order_release) == 1) {
+            std::atomic_thread_fence(std::memory_order_acquire);
+            ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
+            release();
+        };
+    }
+
 public:
+    explicit operator bool() {
+        return holds_value();
+    }
     auto operator->(this auto&& self) -> trait_ref<Trait>* {
         return const_cast<trait_ref<Trait>*>(&self.trait_ref_);
     }
@@ -55,71 +110,45 @@ public:
         other.release();
         return *this;
     }
-
-private:
-    using vtable = trait_ref<Trait>::vtable_t;
-    trait_ref<Trait>    trait_ref_{};
-    ctrl_header<arc_t>* ctrl_ptr_{};
-
-    template<implements_trait<Trait> Impl>
-    shared_trait_ptr_impl(Impl* obj_ptr, ctrl_header<arc_t>* ctrl_ptr)
-    : trait_ref_(*obj_ptr)
-    , ctrl_ptr_(ctrl_ptr) {
-        increment();
-    };
-
-    [[nodiscard]] bool holds_value() const {
-        return trait_ref_.holds_value();
-    }
-
-    void release() {
-        trait_ref_.release();
-        ctrl_ptr_ = nullptr;
-    }
-
-    void increment() const {
-        if (not holds_value())
-            return;
-        ctrl_ptr_->counter.fetch_add(1, std::memory_order_relaxed);
-    }
-    void decrement() {
-        if (not holds_value())
-            return;
-        if (ctrl_ptr_->counter.fetch_sub(1, std::memory_order_release) == 1) {
-            std::atomic_thread_fence(std::memory_order_acquire);
-            ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
-            release();
-        };
-    }
-
-    template<any_trait Trait_, implements_trait<Trait_> Impl_, typename Alloc, typename... Args>
-    friend auto ::trp::allocate_shared_trait(const Alloc&, Args&&...);
-
-    template<any_trait>
-    friend class ::trp::shared_trait_ptr;
 };
 }    // namespace detail
-
 template<any_trait Trait>
 class shared_trait_ptr : public detail::shared_trait_ptr_impl<Trait> {
+    using impl_t = detail::shared_trait_ptr_impl<Trait>;
+
     template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
     friend auto allocate_shared_trait(const Alloc&, Args&&...);
 
-    using impl_t = detail::shared_trait_ptr_impl<Trait>;
+    template<typename S, typename T>
+        requires explicit_supertrait_of<S, T>
+    friend auto trait_cast(shared_trait_ptr<T> ptr);
 
+    template<any_trait>
+    friend class shared_trait_ptr;
+
+    template<explicit_supertrait_of<Trait> Supertrait>
+    [[nodiscard]] auto upcast() && {
+        auto new_ptr = shared_trait_ptr<Supertrait>(
+            detail::get_explicit_supertrait_vtable_ptr<Supertrait>(impl_t::get_vtable_ptr()),
+            impl_t::get_obj_ptr(),
+            impl_t::get_ctrl_ptr());
+        impl_t::release();
+        return new_ptr;
+    }
     template<typename... Args>
     explicit shared_trait_ptr(Args&&... args)
     : impl_t(std::forward<Args>(args)...){};
-
-public:
-    shared_trait_ptr() = default;
-    explicit operator bool() {
-        return impl_t::holds_value();
-    }
 };
 
+template<typename Supertrait, typename Trait>
+    requires explicit_supertrait_of<Supertrait, Trait>
+auto trait_cast(shared_trait_ptr<Trait> ptr) {
+    return std::move(ptr).template upcast<Supertrait>();
+}
+
+
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
-auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
+[[nodiscard]] auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
     using ctrl_block   = detail::ctrl_block<Impl, alloc, detail::arc_t>;
     using alloc_traits = std::allocator_traits<alloc>;
