@@ -116,6 +116,7 @@ int main() {
     to->foo();
     auto to_up = trp::trait_cast<testing::trait_proto_base>(to);
     to_up->bar();
+    static_assert(trp::direct_supertrait_of<testing::trait_proto_base, testing::trait_proto>);
 
     auto cvto = trp::make_shared_trait<const volatile testing::trait_proto, some_impl>();
     cvto->foo();
@@ -145,8 +146,9 @@ int main() {
     std::println("\nmove unique to alloc_unique:");
     auptr = std::move(uptr);
     auptr->foo();
-    // auto auptr_up = trp::trait_cast<testing::trait_proto_base>(std::move(auptr));
-    // auptr_up->bar();
+    std::println("\ncast auptr to base:");
+    auto auptr_up = trp::trait_cast<testing::trait_proto_base>(std::move(auptr));
+    auptr_up->bar();
 
     auto auptr2 =
         trp::allocate_unique_trait<const testing::trait_proto, other_impl>(std::allocator<other_impl>{});

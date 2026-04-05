@@ -311,7 +311,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
                 return &((*ptr).[:mem:]);
         }
     }(std::cw<^^vtable<Trait>>);
-    if constexpr (^^next_supertrait_t == ^^Supertrait) {
+    if constexpr (std::same_as<next_supertrait_t, Supertrait>) {
         return next_ptr;
     } else {
         return get_explicit_supertrait_vtable_ptr<Supertrait>(next_ptr);
