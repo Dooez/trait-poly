@@ -1,11 +1,10 @@
 # Trait-based Runtime Polymorphism in C++26
-This is a proof of concept implementatin of runtime polymorphism through traits.
-[Godbolt compiler explorer example](https://godbolt.org/z/oEe5EPjGh)  
-
-Traits are defined with a struct declared with a number of non-template non-static methods and no data members.
+This is a basic implementatin of runtime polymorphism through traits.
+Traits are defined with a struct declared with a number of non-template non-static methods and no data members 
+and a `consteval` function `define_trait<trait>()`.
 
 ## Core techinque
-The C++26 reflection cannot generate types with methods, only aggrefates with public data members.  
+The C++26 reflection cannot generate types with methods, only aggregates with public data members.  
 The methods of a polymorphic tait object are emulated by data members with of type `method_invoker<...>` with attribute `[[no_unique_address]]`.  
 `method_invoker<...>` is derived from potentially multiple `overload_invoker<...>` base classes, one for each overload signature.  
 `method_invoker<...>` uses `overload_invoker::operator()`.  

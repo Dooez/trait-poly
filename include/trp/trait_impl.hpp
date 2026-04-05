@@ -2,8 +2,10 @@
 #include <meta>
 #ifndef TRP_GODBOLT
 #include "trp_concepts.hpp"
+
 #endif
 #include <algorithm>
+#include <type_traits>
 
 
 namespace trp {
@@ -198,8 +200,19 @@ private:
         static_assert(std::derived_from<MethodInvoker, overload_invoker>);
         const auto mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
 
+
+        constexpr auto invoker_ptr = [] {
+            auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
+            if (mems.size() != 1)
+                throw "Method holder is expected to have only a single method.";
+            if (meta::type_of(mems[0]) != ^^MethodInvoker)
+                throw "Method invoker type does not match method holders first member type.";
+            return meta::extract<MethodInvoker MethodHolder::*>(mems[0]);
+        }();
+#ifdef __cpp_lib_is_pointer_interconvertible
+        static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>([:invoker_ptr:]);
+#endif
         static_assert(std::is_standard_layout_v<MethodHolder>);
-        // Method invoker is a first member of standard layout type
         const auto mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
 
         static_assert(std::derived_from<Manager, MethodHolder>);
