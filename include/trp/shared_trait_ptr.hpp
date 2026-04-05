@@ -87,8 +87,8 @@ public:
     shared_trait_ptr_impl() = default;
     shared_trait_ptr_impl(const shared_trait_ptr_impl& other) noexcept {
         other.increment();
-        trait_ref_ = other.trait_ref_;
-        ctrl_ptr_  = other.ctrl_ptr_;
+        trait_ref_.rebind(other.trait_ref_);
+        ctrl_ptr_ = other.ctrl_ptr_;
     }
     shared_trait_ptr_impl(shared_trait_ptr_impl&& other) noexcept
     : trait_ref_{other.trait_ref_}
@@ -100,13 +100,13 @@ public:
             return *this;
         decrement();
         other.increment();
-        trait_ref_ = other.trait_ref_;
-        ctrl_ptr_  = other.ctrl_ptr_;
+        trait_ref_.rebind(other.trait_ref_);
+        ctrl_ptr_ = other.ctrl_ptr_;
         return *this;
     }
     shared_trait_ptr_impl& operator=(shared_trait_ptr_impl&& other) noexcept {
-        trait_ref_ = other.trait_ref_;
-        ctrl_ptr_  = other.ctrl_ptr_;
+        trait_ref_.rebind(other.trait_ref_);
+        ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
     }

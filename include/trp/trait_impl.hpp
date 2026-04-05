@@ -47,9 +47,6 @@ private:
     : vtable_ptr_(vptr)
     , obj_ptr_(optr) {};
 
-    trait_ref_impl& operator=(const trait_ref_impl&) = default;
-    trait_ref_impl& operator=(trait_ref_impl&&)      = default;
-
     template<typename Manager,
              typename MethodHolder,
              typename MethodInvoker,
@@ -57,15 +54,20 @@ private:
              any_method_idt MethodId>
     friend struct overload_invoker;
 
-    inline void release() {
+    void release() {
         obj_ptr_ = nullptr;
     }
 
-    [[nodiscard]] inline bool holds_value() const {
+    void rebind(const trait_ref_impl& other) {
+        vtable_ptr_ = other.vtable_ptr_;
+        obj_ptr_    = other.obj_ptr_;
+    }
+
+    [[nodiscard]] bool holds_value() const {
         return obj_ptr_ != nullptr;
     }
 
-    inline void default_delete() {
+    void default_delete() {
         vtable_ptr_->default_delete(obj_ptr_);
     }
 
@@ -88,8 +90,11 @@ private:
     }
 
 public:
-    trait_ref_impl(const trait_ref_impl&) = default;
-    trait_ref_impl(trait_ref_impl&&)      = default;
+    trait_ref_impl(const trait_ref_impl&)            = default;
+    trait_ref_impl(trait_ref_impl&&)                 = default;
+    trait_ref_impl& operator=(const trait_ref_impl&) = delete;
+    trait_ref_impl& operator=(trait_ref_impl&&)      = delete;
+    ~trait_ref_impl()                                = default;
 
     template<implements_trait<trait_t> Impl>
         requires(not std::derived_from<Impl, trait_ref_impl>)

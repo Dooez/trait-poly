@@ -63,8 +63,8 @@ public:
     }
     alloc_unique_trait_ptr_impl& operator=(alloc_unique_trait_ptr_impl&& other) noexcept {
         delete_();
-        this->trait_ref_ = other.trait_ref_;
-        this->ctrl_ptr_  = other.ctrl_ptr_;
+        this->trait_ref_.rebind(other.trait_ref_);
+        this->ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
     };
@@ -186,9 +186,8 @@ protected:
     }
     unique_trait_ptr_impl& operator=(unique_trait_ptr_impl&& other) noexcept {
         if (holds_value())
-            trait_ref_.vtable_ptr_->default_delete(trait_ref_.obj_ptr_);
-        trait_ref_.vtable_ptr_ = other.trait_ref_.vtable_ptr_;
-        trait_ref_.obj_ptr_    = other.trait_ref_.obj_ptr_;
+            trait_ref_.default_delete();
+        trait_ref_.rebind(other.trait_ref_);
         other.release();
         return *this;
     };
@@ -200,7 +199,7 @@ public:
     ~unique_trait_ptr_impl() {
         if (not holds_value())
             return;
-        trait_ref_.vtable_ptr_->default_delete(trait_ref_.obj_ptr_);
+        trait_ref_.default_delete();
         release();
     }
     explicit operator bool() const {
