@@ -24,32 +24,51 @@ i.e. `overload_invoker<typename Manager, MethodHolder, MethodInvoker, uZ Index, 
 
 As far as I can reason, this chain of casts does not include any undefined bahaviour.
 
-## Current state and limitations
-Let `Impl` be the implementation class.
-When constructing vtable, the chosen function is the first member function or template of `Impl` that is invokable with arguments declared in trait and has a matching return type.
-The methods are wrapped to add preceding `void*` argument, that is casted to implementation method.
-Vtable is constructed at compile time.
+## Current state
+- [x] Definition of Triats 
+    - [x] Normal methods
+    - [x] cv-qualified methods
+    - [x] Noexcept qualification
+    - [x] Trait inheritence
+    - [x] conepts 
+        - `any_trait` - checks if the type is a valid for trait definition
+        - `implements_trait` - check if type implements all method of a trait
+        - `supertrait_of<S, T>` - checks if all methods of S are methods of T
+        - `explicit_supertrait_of<S, T>` - `supertrait_of<S, T>` and part of inheritence chain, true for S == T
+        - `direct_supertrait_of<S, T>` - `supertait_of<S, T>` and S is a direcct base class of T, false for S == T
+- [x] Type erased trait handle non-owning `trait_ref<T>`
+    - [x] `trait_ref<cv_trait>` where `cv_trait` is cv-qualified
+    - [x] cv-qualified `trait_ref<T>`
+    - [x] Upcasting to `explicit_supertrait<S, T>` via `trait_cast<S>`
+    - [ ] Implementation method overload resolution. Currently first matched method is used.
+    - [ ] (?) Runtime implementation type identification. Compile time constructed identifiers stored in 
+    the vtable to check e.g. via `bool trp::is_underlying_type<Impl>(const trait_ref<T>&)`.
 
+- [x] Basic owning handles
+    - [x] `unique_trait_ptr` - lifetime management using `new`|`delete` 
+    - [x] `alloca_unique_trait_ptr` - lifetime management with type-erased allocator support
+    - [x] `shared_trait_ptr` - lifetime management with type-erased allocator support and basic reference counting
+    - [x] Upcasting to `explicit_supertrait<S, T>` version via `trait_cast<S>`
+    - [ ] (?) Conversion to `supertrait_of` for allocator-aware handles by constructing vtables at runtime
+
+## Limitations
+gcc is not tested yet, but planned.
 The compilation is relatively slow.
+`Clangd` works, but has a significant delay when dealing with triat handles.
+Some `trp` implementation details could be improved with more C++26 features when compiler supports them.
 
-As a part of proof-of-concept the following is implemented:
-- polymorphic trait objects with pointer semantics
-- trait implementations can have templated methods that implement the required interface
-- key concepts like `implements_trait<Impl, Trait>` and `any_trait<T>`
+Since this is an early stage of compiler and tooling development for reflection these might be improved.
+At the moment I have doubdts about usability in production because of tooling issues.
 
 ## Exploration
 Not implemented, but probably possible and might be interesting:
-- support for functor data members in implementations, besides functions and templates
-- noexcept trait method qualification
-- const trait method qualification
-- `trait_reference<Trait>`
-- `..._trait<const Trait>`
 - some overload resolution in vtable construction
 - definition of trait combinations and corresponging concept checking (e.g. smallest common supertrait or a greatest common subtrait)
 - dynamic upcasting to supertraits
 - an option for return type conversion for implementation methods
 - small object optimisation
-- non-type-erased reference wrapper to ensure restricted interface (i.e. interfaces)
+- (?) non-type-erased reference wrapper to ensure restricted interface (i.e. interfaces)
 
-At this moment the repository is for experimenting and sharing. The CMakeLists.txt is extremely basic and not made to be used as a library.
+At this moment the repository is for experimenting and sharing.  
+The CMakeLists.txt is extremely basic and not made to be used as a library.
 

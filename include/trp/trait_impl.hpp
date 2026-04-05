@@ -2,7 +2,6 @@
 #include <meta>
 #ifndef TRP_GODBOLT
 #include "trp_concepts.hpp"
-
 #endif
 #include <algorithm>
 #include <type_traits>

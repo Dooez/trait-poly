@@ -1,5 +1,5 @@
-#include "shared_trait_ptr.hpp"
-#include "unique_trait_ptr.hpp"
+#include "trp/shared_trait_ptr.hpp"
+#include "trp/unique_trait_ptr.hpp"
 
 #include <print>
 namespace stdr = std::ranges;
