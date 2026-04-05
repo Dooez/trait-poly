@@ -11,20 +11,34 @@ namespace trp {
 namespace detail {
 template<any_trait Trait>
 struct trait_ref_identity;
-}
+template<typename VTable, typename... MethodHolders>
+class trait_ref_impl;
+
+template<typename T>
+concept any_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^trait_ref_impl;
+}    // namespace detail
 
 template<any_trait Trait>
 using trait_ref = decltype(detail::trait_ref_identity<Trait>::type_v)::type;
 
-namespace detail {
+template<typename Supertrait, detail::any_trait_ref TraitRef>
+    requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
+auto trait_cast(const TraitRef& ref) {
+    return ref.template upcast<Supertrait>();
+}
 
+namespace detail {
 template<any_trait Trait, non_cvref Impl>
 struct trait_vtable_for;
 
 template<typename VTable, typename... MethodHolders>
 class trait_ref_impl : public MethodHolders... {
     using vtable_t = VTable;
-    using trait_t  = [:meta::template_arguments_of(^^VTable)[0]:];
+
+public:
+    using trait_t = [:meta::template_arguments_of(^^VTable)[0]:];
+
+private:
     const vtable_t* vtable_ptr_{};
     void*           obj_ptr_{};
 
@@ -61,11 +75,21 @@ class trait_ref_impl : public MethodHolders... {
     friend class unique_trait_ptr_impl;
     template<any_trait>
     friend class alloc_unique_trait_ptr_impl;
+    template<typename, typename...>
+    friend class trait_ref_impl;
+
+    template<typename Supertrait, detail::any_trait_ref TraitRef>
+        requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
+    friend auto ::trp::trait_cast(const TraitRef&);
+
+    template<explicit_supertrait_of<trait_t> Supertrait>
+    [[nodiscard]] auto upcast() const -> trait_ref<Supertrait> {
+        return trait_ref<Supertrait>(get_explicit_supertrait_vtable_ptr<Supertrait>(vtable_ptr_), obj_ptr_);
+    }
 
 public:
     trait_ref_impl(const trait_ref_impl&) = default;
     trait_ref_impl(trait_ref_impl&&)      = default;
-
 
     template<implements_trait<trait_t> Impl>
         requires(not std::derived_from<Impl, trait_ref_impl>)
@@ -212,8 +236,7 @@ struct invoke_wrapper_struct {
         }
     }
 };
-
-template<typename Trait>
+template<any_trait Trait>
 struct vtable;
 
 template<any_trait Trait>

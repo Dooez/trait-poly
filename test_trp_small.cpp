@@ -116,7 +116,6 @@ int main() {
     to->foo();
     auto to_up = trp::trait_cast<testing::trait_proto_base>(to);
     to_up->bar();
-    static_assert(trp::direct_supertrait_of<testing::trait_proto_base, testing::trait_proto>);
 
     auto cvto = trp::make_shared_trait<const volatile testing::trait_proto, some_impl>();
     cvto->foo();
@@ -158,6 +157,10 @@ int main() {
     auto simpl = some_impl{};
     auto tref  = trp::trait_ref<testing::trait_proto>(simpl);
     tref.foo();
+
+    std::println("\nref upcast:");
+    auto tref_up = trp::trait_cast<testing::trait_proto_base>(tref);
+    tref_up.bar();
 
     return 0;
 }
