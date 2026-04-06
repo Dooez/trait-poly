@@ -264,13 +264,13 @@ consteval void define_vtable() {
     using default_delete_fptr = void (*)(void*);
     auto vtable_elements      = std::vector<info>{};
     template for (constexpr auto method_idt: trait_traits<Trait>::all_methods) {
-        vtable_elements.push_back(data_member_spec(substitute(^^wrapper_fptr_for, {method_idt})));
+        vtable_elements.push_back(data_member_spec(substitute(^^wrapper_fptr_for, {method_idt}), {}));
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_base_types) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
         auto supertrait_vtable = substitute(^^vtable, {copy_cv_to(^^Trait, supertrait)});
-        vtable_elements.push_back(data_member_spec(supertrait_vtable));
+        vtable_elements.push_back(data_member_spec(supertrait_vtable, {}));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
