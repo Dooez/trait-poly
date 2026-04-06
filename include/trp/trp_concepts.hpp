@@ -282,8 +282,9 @@ concept supertrait_of = any_trait<Supertrait>    //
                                 return true;
                             }());
 template<typename Supertrait, typename Trait>
-concept direct_supertrait_of = supertrait_of<Supertrait, Trait> and
-                               stdr::contains(detail::trait_traits<Trait>::direct_base_types, ^^Supertrait);
+concept direct_supertrait_of =
+    supertrait_of<Supertrait, Trait> and
+    stdr::contains(detail::trait_traits<Trait>::direct_base_types, meta::remove_cv(^^Supertrait));
 template<typename Supertrait, typename Trait>
 concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::derived_from<Trait, Supertrait>;
 
