@@ -9,6 +9,8 @@
 #include <set>
 #include <type_traits>
 
+#ifndef __cpp_lib_constant_wrapper
+// very dirty hack
 namespace std {
 template<auto V>
 struct constant_wrapper {
@@ -24,6 +26,7 @@ struct constant_wrapper {
 template<auto V>
 constinit auto cw = constant_wrapper<V>{};
 }    // namespace std
+#endif
 namespace trp {
 using i8  = int8_t;
 using i16 = int16_t;
