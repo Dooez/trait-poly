@@ -186,12 +186,18 @@ concept any_immediate_trait =
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
     ;
 
-template<typename... Traits>
+template<meta::info Self, typename... Traits>
 concept any_traits =
     (... and
-     (any_immediate_trait<Traits> and [:meta::substitute(^^any_traits,
-                                                         meta::bases_of(^^Traits, ctx_unchecked)     //
-                                                             | stdv::transform(meta::type_of)):])    //
+     (any_immediate_trait<Traits> and [:meta::substitute(Self,
+                                                         [] {
+                                                             auto res =
+                                                                 std::vector{meta::reflect_constant(Self)};
+                                                             res.append_range(
+                                                                 meta::bases_of(^^Traits, ctx_unchecked)    //
+                                                                 | stdv::transform(meta::type_of));
+                                                             return res;
+                                                         }()):])    //
     );
 
 consteval auto copy_cv_to(meta::info proto, meta::info type) {
@@ -205,7 +211,7 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
 }    // namespace detail
 
 template<typename Trait>
-concept any_trait = detail::any_traits<Trait>;
+concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
 
 
 namespace detail {
@@ -387,16 +393,19 @@ concept implements_method =
         return false;
     }());
 
-template<typename Impl, typename Trait, uZ I = 0>
+
+template<meta::info Self, typename Impl, typename Trait, uZ I = 0>
 concept implements_methods =
     requires { requires I == trait_traits<Trait>::all_methods.size(); }                             //
     or ([:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
         and
-           [:meta::substitute(^^implements_methods, {^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
+           [:meta::substitute(
+                 Self, {meta::reflect_constant(Self), ^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
 
 }    // namespace detail
 
 template<typename Impl, typename Trait>
-concept implements_trait = any_trait<Trait> and detail::implements_methods<Impl, Trait>;
+concept implements_trait =
+    any_trait<Trait> and detail::implements_methods<^^detail::implements_methods, Impl, Trait>;
 
 }    // namespace trp
