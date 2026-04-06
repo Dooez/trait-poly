@@ -29,6 +29,7 @@ struct susp {
     void v_ping() volatile;
     void cv_ping() const volatile;
 };
+
 consteval {
     trp::define_trait<base>();
     trp::define_trait<midl>();
@@ -45,7 +46,7 @@ static_assert(    Co<const          S,     T>); \
 static_assert(    Co<volatile       S,     T>); \
 static_assert(    Co<const volatile S,     T>); \
 \
-static_assert(not Co<               S, const   T>); \ 
+static_assert(not Co<               S, const   T>); \
 static_assert(    Co<const          S, const   T>); \
 static_assert(not Co<volatile       S, const   T>); \
 static_assert(    Co<const volatile S, const   T>); \
@@ -95,16 +96,46 @@ CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, leaf, leaf);
 CHECK_CV_SUPER    (trp::direct_supertrait_of, midl, leaf);
 CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, base, leaf);
 CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, susp, leaf);
-// clang-format on
 
+
+// cv qualification may preserve trait equivalence
+struct ping_cv {
+    void cv_ping() const volatile;
+};
+consteval{
+    trp::define_trait<ping_cv>();
+}
+static_assert(trp::supertrait_of<ping_cv,                ping_cv>);
+static_assert(trp::supertrait_of<const ping_cv,          ping_cv>);
+static_assert(trp::supertrait_of<volatile ping_cv,       ping_cv>);
+static_assert(trp::supertrait_of<const volatile ping_cv, ping_cv>);
+
+static_assert(trp::supertrait_of<ping_cv,                const ping_cv>);
+static_assert(trp::supertrait_of<const ping_cv,          const ping_cv>);
+static_assert(trp::supertrait_of<volatile ping_cv,       const ping_cv>);
+static_assert(trp::supertrait_of<const volatile ping_cv, const ping_cv>);
+
+static_assert(trp::supertrait_of<ping_cv,                volatile ping_cv>);
+static_assert(trp::supertrait_of<const ping_cv,          volatile ping_cv>);
+static_assert(trp::supertrait_of<volatile ping_cv,       volatile ping_cv>);
+static_assert(trp::supertrait_of<const volatile ping_cv, volatile ping_cv>);
+
+static_assert(trp::supertrait_of<ping_cv,                const volatile ping_cv>);
+static_assert(trp::supertrait_of<const ping_cv,          const volatile ping_cv>);
+static_assert(trp::supertrait_of<volatile ping_cv,       const volatile ping_cv>);
+static_assert(trp::supertrait_of<const volatile ping_cv, const volatile ping_cv>);
+
+
+// clang-format on
 
 
 struct trait_touch {
     void touch();
     void c_touch() const;
 };
-trp::define_trait<trait_touch>();
-
+consteval {
+    trp::define_trait<trait_touch>();
+}
 struct impl_all_cv {
     void ping() {}
     void c_ping() const {}
