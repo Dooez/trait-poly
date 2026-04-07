@@ -166,7 +166,7 @@ template<typename T, meta::info M>
 consteval bool check_constexpr_static_data_member() {
 #ifdef TRP_CHECK_CESDM
     return requires { std::cw<( [:M:] )>;};
-#else {
+#else
     return false;
 #endif
 }

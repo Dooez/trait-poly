@@ -9,7 +9,7 @@ add_executable(trp_cv_supertraits cv_supertraits.cpp)
 
 function(configure_refl TARGET_NAME)
 	target_link_libraries(${TARGET_NAME} PUBLIC "-static" trp::trp)
-	target_compile_options(${TARGET_NAME} PRIVATE -stdlib=libc++ -fparameter-reflection -fexpansion-statements -O2)
+	target_compile_options(${TARGET_NAME} PRIVATE -stdlib=libc++ -fparameter-reflection -fexpansion-statements -fconstexpr-steps=2000000 -O2)
 	target_link_options(${TARGET_NAME} PRIVATE
 			-fuse-ld=lld
 			-stdlib=libc++

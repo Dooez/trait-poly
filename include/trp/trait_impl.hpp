@@ -261,16 +261,31 @@ consteval void define_vtable() {
     using namespace meta;
     if (is_complete_type(^^vtable<Trait>))
         return;
+
+    constexpr auto to_str = [](auto&& prefix, uZ i) -> std::string {
+        auto res = std::string(prefix);
+        res.resize(res.size() + 20);
+        auto end = std::to_chars(&*res.begin() + 1, &*res.end(), i);
+        if (end.ec != std::errc{})
+            return {};
+        res.resize(end.ptr - res.data());
+        return res;
+    };
+
     using default_delete_fptr = void (*)(void*);
     auto vtable_elements      = std::vector<info>{};
+    uZ   i                    = 0;
     template for (constexpr auto method_idt: trait_traits<Trait>::all_methods) {
-        vtable_elements.push_back(data_member_spec(substitute(^^wrapper_fptr_for, {method_idt}), {}));
+        using method_idt_t = [:method_idt:];
+        vtable_elements.push_back(
+            data_member_spec(substitute(^^wrapper_fptr_for, {method_idt}), {.name = to_str("m_", i++)}));
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
+    i = 0;
     template for (constexpr auto supertrait: trait_traits<Trait>::direct_base_types) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
         auto supertrait_vtable = substitute(^^vtable, {copy_cv_to(^^Trait, supertrait)});
-        vtable_elements.push_back(data_member_spec(supertrait_vtable, {}));
+        vtable_elements.push_back(data_member_spec(supertrait_vtable, {.name = to_str("supertrait_", i++)}));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }

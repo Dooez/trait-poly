@@ -22,7 +22,7 @@ struct trait_proto {
     void bar10(e0){std::println("bar10(e0)");};
     void bar11(e0){std::println("bar11(e0)");};
     void bar12(e0){std::println("bar12(e0)");};
-    void bar13(e0){std::println("bar13(e0)");};
+    // void bar13(e0){std::println("bar13(e0)");};
     // void bar14(e0){std::println("bar14(e0)");};
     // void bar15(e0){std::println("bar15(e0)");};
     // void bar16(e0){std::println("bar16(e0)");};
@@ -116,6 +116,7 @@ int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();
     std::println("sizeof shared trait object {}", sizeof(to));
     auto toptr = &to;
+    to->bar(e0{});
 
     // test_16bars(to);
     // to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
