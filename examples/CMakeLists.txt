@@ -3,7 +3,7 @@
 set(P2996_INSTALL_PATH "../clang-p2996/install")
 set(LLD_PATH "${P2996_INSTALL_PATH}/bin/lld")
 
-# add_executable(trp test_trp.cpp)
+add_executable(trp test_trp.cpp)
 add_executable(trp_small test_trp_small.cpp)
 add_executable(trp_cv_supertraits cv_supertraits.cpp)
 
@@ -20,6 +20,6 @@ function(configure_refl TARGET_NAME)
 	)
 endfunction()
 
-# configure_refl(trp)
+configure_refl(trp)
 configure_refl(trp_small)
 configure_refl(trp_cv_supertraits)

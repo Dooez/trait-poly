@@ -162,24 +162,27 @@ consteval auto nonspecial_members_of(meta::info inf) {
     return meta::members_of(inf, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function));
 }
 
-template<typename T, uZ I>
-consteval bool check_constexpr_data_member() {
-    constexpr auto x = [:meta::static_data_members_of(^^T, ctx_unchecked)[I]:];
-    return true;
+template<typename T, meta::info M>
+consteval bool check_constexpr_static_data_member() {
+#ifdef TRP_CHECK_CESDM
+    return requires { std::cw<( [:M:] )>;};
+#else {
+    return false;
+#endif
 }
 
 template<typename T>
 consteval bool static_data_members_are_constexpr() {
-    auto [... Is] = make_Is<meta::static_data_members_of(^^T, ctx_unchecked).size()>();
-    return (check_constexpr_data_member<T, Is>() and ... and true);
+    constexpr auto mems = ce_fn_to_array([]{return meta::static_data_members_of(^^T, ctx_unchecked);});
+    auto [... Is] = make_Is<mems.size()>();
+    return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }
 
 template<typename Trait>
 concept any_immediate_trait =
     std::same_as<Trait, std::remove_reference_t<Trait>>                         //
     and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
-    and detail::static_data_members_are_constexpr<Trait>()                      //
-    // and not stdr::empty(detail::nonspecial_members_of(^^Trait))                                       //
+    and detail::static_data_members_are_constexpr<Trait>()                      // only in gcc atm
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)                       //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //

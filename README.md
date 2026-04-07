@@ -44,7 +44,8 @@ As reasoned, this chain of casts avoids undefined behavior. Please open an issue
 
 ## Limitations
 GCC support is untested but planned.  
-Compilation is relatively slow.   
+Compilation is relatively slow.  
+Currently only 16 methods in trait (probably can be fixed).  
 `clangd` works but exhibits significant delays when handling trait objects.  
 Some patterns in the `trp` implementation could be updated to more modern and cleaner versions with additional C++26 features as compiler support matures.  
 
