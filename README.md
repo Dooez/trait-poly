@@ -1,7 +1,8 @@
 # Trait-Based Runtime Polymorphism in C++26
-This repository provides a basic implementation of runtime polymorphism through traits.
+This repository provides a basic implementation of runtime polymorphism through traits.  
+[Godbolt Example](https://godbolt.org/z/adcPecxvPn)  
 Traits are defined with a struct declared with non-template, non-static methods and no data members,
-and a `consteval` function `define_trait<Trait>()`.
+using a `consteval` function `define_trait<Trait>()`.
 
 ## Implementation Details
 C++26 reflection cannot generate types with methods; it can only generate aggregates with public data members.  
@@ -43,9 +44,10 @@ As reasoned, this chain of casts avoids undefined behavior. Please open an issue
     - [ ] (?) Conversion to supertraits for allocator-aware handles by constructing vtables at runtime.
 
 ## Limitations
-GCC support is untested but planned.  
 Compilation is relatively slow.  
-Currently only 16 methods in trait (probably can be fixed).  
+Clang may require `-fconstexpr-steps` with higher number to succesfuuly compile.  
+`static constexpr` trait data members are supported by GCC only.  
+Big number of trait methods causes compilation error in Clang. Probably caused by `template for` over the members.
 `clangd` works but exhibits significant delays when handling trait objects.  
 Some patterns in the `trp` implementation could be updated to more modern and cleaner versions with additional C++26 features as compiler support matures.  
 

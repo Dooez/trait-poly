@@ -83,7 +83,7 @@ public:
         return const_cast<trait_ref<Trait>*>(&self.trait_ref_);
     }
     auto operator*(this auto&& self) -> trait_ref<Trait>& {
-        return const_cast<trait_ref<Trait>&>(&self.trait_ref_);
+        return const_cast<trait_ref<Trait>&>(self.trait_ref_);
     }
 };
 }    // namespace detail
@@ -209,7 +209,7 @@ public:
         return const_cast<trait_ref<Trait>*>(&self.trait_ref_);
     }
     auto operator*(this auto&& self) -> trait_ref<Trait>& {
-        return const_cast<trait_ref<Trait>&>(&self.trait_ref_);
+        return const_cast<trait_ref<Trait>&>(self.trait_ref_);
     }
 };
 }    // namespace detail
