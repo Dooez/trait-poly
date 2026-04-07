@@ -1,56 +1,67 @@
-# Trait-based Runtime Polymorphism in C++26
-This is a proof of concept implementatin of runtime polymorphism through traits.
-[Godbolt compiler explorer example](https://godbolt.org/z/oEe5EPjGh)  
+# Trait-Based Runtime Polymorphism in C++26
+This repository provides a basic implementation of runtime polymorphism through traits.  
+[Godbolt Example](https://godbolt.org/z/h1qqsood1)  
+Traits are defined with a struct declared with non-template, non-static methods and no data members,
+using a `consteval` function `define_trait<Trait>()`.
 
-Traits are defined with a struct declared with a number of non-template non-static methods and no data members.
-
-## Core techinque
-The C++26 reflection cannot generate types with methods, only aggrefates with public data members.  
-The methods of a polymorphic tait object are emulated by data members with of type `method_invoker<...>` with attribute `[[no_unique_address]]`.  
+## Implementation Details
+C++26 reflection cannot generate types with methods; it can only generate aggregates with public data members.  
+The methods of a polymorphic trait object are emulated by data members of type `method_invoker<...>` with the `[[no_unique_address]]` attribute and `operator()`.  
 `method_invoker<...>` is derived from potentially multiple `overload_invoker<...>` base classes, one for each overload signature.  
 `method_invoker<...>` uses `overload_invoker::operator()`.  
-`method_holder<...>` is a standard-layout class with first and only data member of type `method_invoker<...>`.  
-`method_holder<...>` is defined via `std::meta::define_aggregate` to generate "methods" with the correct names.  
-`trait_impl_manager<MethodHolders...>` is the final required class, is derived from all the required holders and also stores vtable pointer and object pointer.  
+`method_holder<...>` is a standard-layout class with a first and only data member of type `method_invoker<...>`.  
+`method_holder<...>` is defined via `std::meta::define_aggregate` to generate "methods" with the correct identifiers.  
+`trait_impl_manager<MethodHolders...>` is the final required class. It is derived from all required holders and stores a vtable pointer and an object pointer.  
 
-To access vtable and object pointers from inside `operator()` the following chain of casts is performed:  
-1. `this` pointer of `overload_invoker::operator()(...)` is static_cast'ed to `method_invoker<...>*`. This is defined because of inheritance.
-2. `method_invoker<...>*` is reinteret_cast'ed to `method_holder<...>*`. This is defined because `method_holder` is standard-layout struct with only one member.
-3. `method_holder<...>*` is static_cast'ed to `trait_impl_manager<...>*`. This is defined because of inheritance.
+To access the vtable and object pointers from inside `operator()`, the following chain of casts is performed:  
+1. The `this` pointer of `overload_invoker::operator()(...)` is `static_cast` to `method_invoker<...>*` (well-defined due to inheritance).
+2. `method_invoker<...>*` is `reinterpret_cast` to `method_holder<...>*` (well-defined because `method_holder` is a standard-layout struct with a single member).
+3. `method_holder<...>*` is `static_cast` to `trait_impl_manager<...>*` (well-defined due to inheritance).
 
-Through the manager pointer vtable and type-erased object pointers are accessed, and the corresponding function pointer is invoked.  
-To perform these casts the final types are passed as template arguments.  
-`Index` non-type template argument is used to select the pointer in the vtable.  
-i.e. `overload_invoker<typename Manager, MethodHolder, MethodInvoker, uZ Index, ...>`.  
+Through the manager pointer, the vtable and type-erased object pointers are accessed, and the corresponding function pointer is invoked.  
+The final types are passed as template arguments to enable these casts.  
+A non-type template parameter `Index` selects the appropriate function pointer from the vtable, e.g., `overload_invoker<Manager, MethodHolder, MethodInvoker, uZ Index, ...>`.
 
-As far as I can reason, this chain of casts does not include any undefined bahaviour.
+As reasoned, this chain of casts avoids undefined behavior. Please open an issue otherwise.
 
-## Current state and limitations
-Let `Impl` be the implementation class.
-When constructing vtable, the chosen function is the first member function or template of `Impl` that is invokable with arguments declared in trait and has a matching return type.
-The methods are wrapped to add preceding `void*` argument, that is casted to implementation method.
-Vtable is constructed at compile time.
+## Current State
+- [x] Definition of Traits
+    - [x] Normal methods
+    - [x] cv-qualified methods
+    - [x] Noexcept qualification
+    - [x] Trait inheritance
+    - [x] Concepts
+        - `any_trait` - checks if a type is valid for trait definition
+        - `implements_trait` - checks if a type implements all methods of the trait
+        - `supertrait_of<S, T>` - checks if the method set of S is a subset of the method set of T
+        - `explicit_supertrait_of<S, T>` - `supertrait_of<S, T>` and S is in the inheritance chain of T, true for S == T
+        - `direct_supertrait_of<S, T>` - `supertrait_of<S, T>` and S is a direct base class of T, false for S == T
+- [x] Non-owning type-erased trait handle `trait_ref<T>`
+    - [x] `trait_ref<cv_trait>` where `cv_trait` is cv-qualified
+    - [x] cv-qualified `trait_ref<T>`
+    - [x] Upcasting to `explicit_supertrait<S, T>` via `trait_cast<S>`
+    - [ ] (?) Runtime type identification for implementations. Compile-time constructed identifiers stored in vtables, e.g., via `bool trp::is_underlying_type<Impl>(const trait_ref<T>&)`.
+    - [ ] (?) Conversion to supertraits for allocator-aware handles by constructing vtables at runtime.
 
-The compilation is relatively slow.
+## Limitations
+Compilation is relatively slow.  
+Clang may require `-fconstexpr-steps` with higher number to succesfuuly compile.  
+`static constexpr` trait data members are supported by GCC only.  
+Big number of trait methods causes compilation error in Clang. Probably caused by `template for` over the members.
+`clangd` works but exhibits significant delays when handling trait objects.  
+Some patterns in the `trp` implementation could be updated to more modern and cleaner versions with additional C++26 features as compiler support matures.  
 
-As a part of proof-of-concept the following is implemented:
-- polymorphic trait objects with pointer semantics
-- trait implementations can have templated methods that implement the required interface
-- key concepts like `implements_trait<Impl, Trait>` and `any_trait<T>`
+Given the early stage of reflection compiler and tooling development, these issues may improve over time. 
+However, current tooling challenges raise concerns about possible production usability.
 
 ## Exploration
-Not implemented, but probably possible and might be interesting:
-- support for functor data members in implementations, besides functions and templates
-- noexcept trait method qualification
-- const trait method qualification
-- `trait_reference<Trait>`
-- `..._trait<const Trait>`
-- some overload resolution in vtable construction
-- definition of trait combinations and corresponging concept checking (e.g. smallest common supertrait or a greatest common subtrait)
-- dynamic upcasting to supertraits
-- an option for return type conversion for implementation methods
-- small object optimisation
-- non-type-erased reference wrapper to ensure restricted interface (i.e. interfaces)
+Not implemented, but potentially feasible and interesting:
+- Partial overload resolution of implementation methods during vtable construction
+- Definition of trait combinations (e.g. greatest common supertrait or common subtrait wo/ inheritence and explicit definition)
+- Dynamic upcasting to supertraits
+- Option for return type conversion in implementation methods
+- Small object optimization
+- (?) Non-type-erased reference wrapper to enforce restricted interfaces
 
-At this moment the repository is for experimenting and sharing. The CMakeLists.txt is extremely basic and not made to be used as a library.
-
+At this moment, the repository is for experimenting and sharing.  
+The CMakeLists.txt is extremely basic and not made to be used as a library.
