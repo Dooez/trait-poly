@@ -209,7 +209,7 @@ private:
             return meta::extract<MethodInvoker MethodHolder::*>(mems[0]);
         }();
 #ifdef __cpp_lib_is_pointer_interconvertible
-        static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>([:invoker_ptr:]));
+        static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
 #endif
         static_assert(std::is_standard_layout_v<MethodHolder>);
         const auto mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
