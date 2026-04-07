@@ -360,15 +360,15 @@ inline constexpr bool strictly_matches = [] {
     auto [... arg_ids]      = MethodId::param_identities;
 
     if constexpr (meta::is_template(ImplMethod)) {
-        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
+        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
             {
-                impl.template[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
+                impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
             } -> std::same_as<return_type>;
         };
     } else {
-        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
+        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
             {
-                impl.[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
+                impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
             } -> std::same_as<return_type>;
         };
     }
