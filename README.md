@@ -1,6 +1,6 @@
 # Trait-Based Runtime Polymorphism in C++26
 This repository provides a basic implementation of runtime polymorphism through traits.  
-[Godbolt Example](https://godbolt.org/z/adcPecxvPn)  
+[Godbolt Example](https://godbolt.org/z/h1qqsood1)  
 Traits are defined with a struct declared with non-template, non-static methods and no data members,
 using a `consteval` function `define_trait<Trait>()`.
 
