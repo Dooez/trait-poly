@@ -359,15 +359,15 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         }
     }():];
 
-    const auto next_ptr = [=](cw_info auto vt_inf) -> const vtable<next_supertrait_t>* {
-        static constexpr auto vt_mems =
-            ce_fn_to_array([=] { return nonstatic_data_members_of(vt_inf, ctx_unchecked); });
+    static constexpr auto vt_mems =
+        ce_fn_to_array([=] { return nonstatic_data_members_of(^^vtable<Trait>, ctx_unchecked); });
+    const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
         template for (constexpr auto mem: vt_mems) {
             if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &((*ptr).[:mem:]);
         }
         std::unreachable();
-    }(cw<^^vtable<Trait>>);
+    }();
     if constexpr (std::same_as<next_supertrait_t, Supertrait>) {
         return next_ptr;
     } else {
