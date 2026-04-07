@@ -9,24 +9,6 @@
 #include <set>
 #include <type_traits>
 
-#ifndef __cpp_lib_constant_wrapper
-// very dirty hack
-namespace std {
-template<auto V>
-struct constant_wrapper {
-    using type       = constant_wrapper;
-    using value_type = decltype(V);
-
-    static constexpr auto value = V;
-
-    constexpr operator decltype(auto)() const noexcept {
-        return value;
-    }
-};
-template<auto V>
-constinit auto cw = constant_wrapper<V>{};
-}    // namespace std
-#endif
 namespace trp {
 using i8  = int8_t;
 using i16 = int16_t;
@@ -45,7 +27,17 @@ namespace stdr = std::ranges;
 namespace stdv = std::views;
 namespace meta = std::meta;
 
-inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
+template<auto V>
+struct constant_wrapper {
+    using type       = constant_wrapper;
+    using value_type = decltype(V);
+
+    static constexpr auto value = V;
+
+    constexpr operator decltype(auto)() const noexcept {
+        return value;
+    }
+};
 
 template<typename T>
 concept non_cvref = std::same_as<T, std::remove_cvref_t<T>>;
@@ -54,9 +46,13 @@ concept non_ref = std::same_as<T, std::remove_reference_t<T>>;
 
 namespace detail {
 
+template<auto V>
+constexpr auto cw = constant_wrapper<V>{};
+
+inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
 template<typename T>
-concept cw_info = meta::has_template_arguments(^^T)                          //
-                  and meta::template_of(^^T) == (^^std::constant_wrapper)    //
+concept cw_info = meta::has_template_arguments(^^T)                     //
+                  and meta::template_of(^^T) == (^^constant_wrapper)    //
                   and
 [:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
 
@@ -165,7 +161,7 @@ consteval auto nonspecial_members_of(meta::info inf) {
 template<typename T, meta::info M>
 consteval bool check_constexpr_static_data_member() {
 #ifdef TRP_CHECK_CESDM
-    return requires { std::cw<( [:M:] )>;};
+    return requires { cw<([:M:])>; };
 #else
     return false;
 #endif
@@ -173,18 +169,18 @@ consteval bool check_constexpr_static_data_member() {
 
 template<typename T>
 consteval bool static_data_members_are_constexpr() {
-    constexpr auto mems = ce_fn_to_array([]{return meta::static_data_members_of(^^T, ctx_unchecked);});
-    auto [... Is] = make_Is<mems.size()>();
+    constexpr auto mems = ce_fn_to_array([] { return meta::static_data_members_of(^^T, ctx_unchecked); });
+    auto [... Is]       = make_Is<mems.size()>();
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }
 
 template<typename Trait>
 concept any_immediate_trait =
-    std::same_as<Trait, std::remove_reference_t<Trait>>                         //
-    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
-    and detail::static_data_members_are_constexpr<Trait>()                      // only in gcc atm
-    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)                       //
-    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
+    std::same_as<Trait, std::remove_reference_t<Trait>>                             //
+    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))        //
+    and detail::static_data_members_are_constexpr<Trait>()                          // only in gcc atm
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)     //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)    //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
     ;
@@ -326,10 +322,10 @@ consteval auto matching_id_public_members() {
                     return bases_of(type, access_context::unprivileged()) | stdv::transform(type_of);
                 });
                 template for (constexpr auto base: bases) {
-                    self(std::cw<base>);
+                    self(cw<base>);
                 }
             }
-        }(std::cw<^^Impl>);
+        }(cw<^^Impl>);
         return result;
     };
     return ce_fn_to_array(get_vec);
@@ -390,7 +386,7 @@ concept implements_method =
         };
         constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
         template for (constexpr auto m: members) {
-            if (matches(std::cw<m>))
+            if (matches(cw<m>))
                 return true;
         }
         return false;

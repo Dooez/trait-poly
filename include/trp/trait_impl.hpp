@@ -303,7 +303,7 @@ consteval auto fill_vtable() {
             };
             constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t>();
             template for (constexpr auto m: members) {
-                if (matches(std::cw<m>))
+                if (matches(cw<m>))
                     return m;
             }
             return info{};
@@ -329,9 +329,9 @@ consteval auto fill_vtable() {
     auto [... Is] = make_Is<ttt::all_methods.size()>();
     auto [... Js] = make_Is<ttt::direct_base_types.size()>();
     return vtable<Trait>{
-        get_wrapper_ptr(std::cw<ttt::all_methods[Is]>)...,
+        get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
-        get_supertrait_vtable(std::cw<ttt::direct_base_types[Js]>)...,
+        get_supertrait_vtable(cw<ttt::direct_base_types[Js]>)...,
     };
 }
 template<any_trait Trait, non_cvref Impl>
@@ -365,7 +365,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
             if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &((*ptr).[:mem:]);
         }
-    }(std::cw<^^vtable<Trait>>);
+    }(cw<^^vtable<Trait>>);
     if constexpr (std::same_as<next_supertrait_t, Supertrait>) {
         return next_ptr;
     } else {
