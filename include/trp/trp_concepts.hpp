@@ -57,7 +57,7 @@ concept cw_info = meta::has_template_arguments(^^T)                     //
 [:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
 
 template<uZ End>
-consteval auto make_Is() {
+consteval auto make_cw_idxs() {
     struct cw_index_sequence;
     consteval {
         constexpr auto define_cw_idx_seq = [] {
@@ -74,18 +74,16 @@ consteval auto make_Is() {
                 return data_member_spec(meta::substitute(^^constant_wrapper, {meta::reflect_constant(i)}),
                                         {.name = name});
             };
+
             auto mems = std::vector<meta::info>();
             for (uZ i = 0; i < End; ++i) {    // noo iota in clang :')
                 mems.push_back(to_mem(i));
             }
-            // mems.append_range(std::make_index_sequence<End>{});
             meta::define_aggregate(cw_seq_info, mems);
             return;
         };
         define_cw_idx_seq();
     }
-    // constexpr auto cw_idx_seq_info = define_cw_idx_seq<End>();
-    // using cw_idx_seq_t =  [:cw_idx_seq_info:];
     return cw_index_sequence{};
 };
 
@@ -195,7 +193,7 @@ consteval bool check_constexpr_static_data_member() {
 template<typename T>
 consteval bool static_data_members_are_constexpr() {
     constexpr auto mems = ce_fn_to_array([] { return meta::static_data_members_of(^^T, ctx_unchecked); });
-    auto [... Is]       = make_Is<mems.size()>();
+    auto [... Is]       = make_cw_idxs<mems.size()>();
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }
 
@@ -242,7 +240,7 @@ namespace detail {
 template<std::invocable<> F>
     requires stdr::random_access_range<std::invoke_result_t<F>>
 consteval auto ce_fn_to_array(const F& f) {
-    auto [... Is] = make_Is<stdr::size(f())>();
+    auto [... Is] = make_cw_idxs<stdr::size(f())>();
     return std::array<meta::info, sizeof...(Is)>{f()[Is]...};
 }
 

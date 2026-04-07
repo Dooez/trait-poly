@@ -306,11 +306,11 @@ consteval auto fill_vtable() {
                 if (matches(cw<m>))
                     return m;
             }
-            return info{};
+            std::unreachable();
         }();
 
         // use constexpr binding when it becomes available
-        auto [... trait_is] = make_Is<trait_method_idt_t::param_infos.size()>();
+        auto [... trait_is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
 
         constexpr auto wrapper_struct_info = [=] {
             return substitute(^^invoke_wrapper_struct,
@@ -326,8 +326,8 @@ consteval auto fill_vtable() {
         return trait_vtable_for<supertrait_t, Impl>::value;
     };
     // use constexpr binding when it becomes available
-    auto [... Is] = make_Is<ttt::all_methods.size()>();
-    auto [... Js] = make_Is<ttt::direct_base_types.size()>();
+    auto [... Is] = make_cw_idxs<ttt::all_methods.size()>();
+    auto [... Js] = make_cw_idxs<ttt::direct_base_types.size()>();
     return vtable<Trait>{
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
@@ -355,6 +355,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
                 if constexpr (std::derived_from<base_t, Supertrait>)
                     return base;
             }
+            std::unreachable();
         }
     }():];
 
@@ -365,6 +366,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
             if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &((*ptr).[:mem:]);
         }
+        std::unreachable();
     }(cw<^^vtable<Trait>>);
     if constexpr (std::same_as<next_supertrait_t, Supertrait>) {
         return next_ptr;
