@@ -346,7 +346,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         return ptr;
 
     using namespace meta;
-    using next_supertrait_t = [:[] {
+    using next_supertrait_t = [:[] -> meta::info {
         if constexpr (direct_supertrait_of<Supertrait, Trait>) {
             return ^^Supertrait;
         } else {
