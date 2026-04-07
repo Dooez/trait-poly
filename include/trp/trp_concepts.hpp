@@ -58,10 +58,35 @@ concept cw_info = meta::has_template_arguments(^^T)                     //
 
 template<uZ End>
 consteval auto make_Is() {
-    using namespace std;
-    return []<uZ... Is>(index_sequence<Is...>) {
-        return make_tuple(integral_constant<uZ, Is>{}...);
-    }(make_index_sequence<End>{});
+    struct cw_index_sequence;
+    consteval {
+        constexpr auto define_cw_idx_seq = [] {
+            constexpr auto cw_seq_info = ^^cw_index_sequence;
+            if (meta::is_complete_type(cw_seq_info))
+                return;
+            constexpr auto to_mem = [](uZ i) {
+                auto name = std::string("i_");
+                name.resize(22);
+                auto end = std::to_chars(&*name.begin() + 1, &*name.end(), i);
+                if (end.ec != std::errc{})
+                    throw "could not form cw_index_sequence member name";
+                name.resize(end.ptr - name.data());
+                return data_member_spec(meta::substitute(^^constant_wrapper, {meta::reflect_constant(i)}),
+                                        {.name = name});
+            };
+            auto mems = std::vector<meta::info>();
+            for (uZ i = 0; i < End; ++i) {    // noo iota in clang :')
+                mems.push_back(to_mem(i));
+            }
+            // mems.append_range(std::make_index_sequence<End>{});
+            meta::define_aggregate(cw_seq_info, mems);
+            return;
+        };
+        define_cw_idx_seq();
+    }
+    // constexpr auto cw_idx_seq_info = define_cw_idx_seq<End>();
+    // using cw_idx_seq_t =  [:cw_idx_seq_info:];
+    return cw_index_sequence{};
 };
 
 // template<uZ End>
