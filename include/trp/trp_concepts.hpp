@@ -384,7 +384,7 @@ concept implements_method =
         constexpr auto matches = [=](cw_info auto impl_method) {
             return [:substitute(^^strictly_matches, {^^Impl, reflect_constant(impl_method), ^^MethodIdt}):];
         };
-        constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
+        static constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
         template for (constexpr auto m: members) {
             if (matches(cw<m>))
                 return true;
