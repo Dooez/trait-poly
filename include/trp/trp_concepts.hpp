@@ -343,7 +343,7 @@ consteval auto matching_id_public_members() {
             if constexpr (has_bases) {
                 // separate overload resolution check should be performed, to ensure that bases on the same level do not contain identical methods
 
-                constexpr auto bases = ce_fn_to_array([=] {
+                static constexpr auto bases = ce_fn_to_array([=] {
                     return bases_of(type, access_context::unprivileged()) | stdv::transform(type_of);
                 });
                 template for (constexpr auto base: bases) {

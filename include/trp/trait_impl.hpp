@@ -301,7 +301,7 @@ consteval auto fill_vtable() {
                 return [:substitute(^^strictly_matches,
                                     {^^Impl, reflect_constant(impl_method), trait_method_idt}):];
             };
-            constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t>();
+            static constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t>();
             template for (constexpr auto m: members) {
                 if (matches(cw<m>))
                     return m;
@@ -359,7 +359,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     }():];
 
     const auto next_ptr = [=](cw_info auto vt_inf) -> const vtable<next_supertrait_t>* {
-        constexpr auto vt_mems =
+        static constexpr auto vt_mems =
             ce_fn_to_array([=] { return nonstatic_data_members_of(vt_inf, ctx_unchecked); });
         template for (constexpr auto mem: vt_mems) {
             if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
