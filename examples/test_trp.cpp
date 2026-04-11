@@ -112,15 +112,17 @@ static_assert(not any_trait<not_trait_static_data>);
 static_assert(not any_trait<not_trait_virt_fn>);
 static_assert(not any_trait<not_trait_template>);
 
-int main() {
-    auto to = make_shared_trait<trait_proto, some_trait_impl>();
-    std::println("sizeof shared trait object {}", sizeof(to));
-    auto toptr = &to;
-    to->bar(e0{});
+void bloo(trp::trait_ref<my_trait> x) {};
 
-    test_16bars(*to);
-    to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
-    test_16bars(*to);
+int main() {
+    // auto to = make_shared_trait<trait_proto, some_trait_impl>();
+    // std::println("sizeof shared trait object {}", sizeof(to));
+    // auto toptr = &to;
+    // to->bar(e0{});
+    //
+    // test_16bars(*to);
+    // to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
+    // test_16bars(*to);
 
     // auto toptr2 = toptr;
     return 0;

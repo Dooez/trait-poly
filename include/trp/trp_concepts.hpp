@@ -245,8 +245,9 @@ namespace detail {
 template<std::invocable<> F>
     requires stdr::random_access_range<std::invoke_result_t<F>>
 consteval auto ce_fn_to_array(const F& f) {
+    using T       = stdr::range_value_t<std::invoke_result_t<F>>;
     auto [... Is] = make_cw_idxs<stdr::size(f())>();
-    return std::array<meta::info, sizeof...(Is)>{f()[Is]...};
+    return std::array<T, sizeof...(Is)>{f()[Is]...};
 }
 
 template<typename T>
@@ -257,49 +258,36 @@ struct trait_traits {
                | stdr::to<std::vector<meta::info>>();
     });
 
+    static constexpr auto direct_methods = [] {
+        using namespace meta;
+        constexpr auto get_direct_methods = [] {
+            constexpr auto is_valid_method = [](auto method) static {
+                return is_function(method)                                 //
+                       and not meta::is_special_member_function(method)    //
+                       and (is_const(method) or not is_const(^^T))         //
+                       and (is_volatile(method) or not is_volatile(^^T));
+            };
+            return meta::members_of(^^T, ctx_unchecked)    //
+                   | stdv::filter(is_valid_method)         //
+                   | stdv::transform(method_identity)      //
+                   | stdr::to<std::vector<info>>();
+        };
+        return ce_fn_to_array(get_direct_methods);
+    }();
+
     static constexpr auto all_methods = [] {
         using namespace meta;
         constexpr auto get_all_methods = [] {
-            constexpr auto matches_cv = [](info method) {
-                return (is_const(method) or not is_const(^^T))    //
-                       and (is_volatile(method) or not is_volatile(^^T));
-            };
-
-            auto result        = std::vector<info>{};
-            auto parsed_bases  = std::vector<info>{};
+            auto result        = direct_methods | stdr::to<std::vector<info>>();
             auto append_unique = [&](auto&& method_idts) {
                 for (auto m: method_idts)
                     if (not stdr::contains(result, m))
                         result.push_back(m);
             };
-
-            // using normal loop with recursive lambda fails, use template for
-            // [&](this auto self, meta::info inf) -> void {
-            //     auto bases = bases_of(inf, ctx_unchecked) | stdv::transform(type_of);
-            //     for (auto base: bases) {
-            //         if (not stdr::contains(parsed_bases, base)) {
-            //             parsed_bases.push_back(base);
-            //             self(base);
-            //         }
-            //     }
-            //     append_unique(nonspecial_members_of(apply_cv(inf))    //
-            //                   | stdv::filter(matches_cv)              //
-            //                   | stdv::transform(method_identity));
-            // }(^^T);
-
-            [&]<typename U = T>(this auto self, std::type_identity<U> = {}) {
-                template for (constexpr auto base: trait_traits<U>::direct_base_types) {
-                    if (not stdr::contains(parsed_bases, base)) {
-                        parsed_bases.push_back(base);
-                        using base_t = [:base:];
-                        self(std::type_identity<base_t>{});
-                    }
-                }
-                append_unique(nonspecial_members_of(copy_cv_to(^^T, ^^U))    //
-                              | stdv::filter(matches_cv)                     //
-                              | stdv::transform(method_identity));
-            }();
-
+            template for (constexpr auto base: direct_base_types) {
+                using base_t = [:copy_cv_to(^^T, base):];
+                append_unique(trait_traits<base_t>::all_methods);
+            }
             return result;
         };
         return ce_fn_to_array(get_all_methods);
