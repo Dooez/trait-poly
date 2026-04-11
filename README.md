@@ -63,5 +63,8 @@ Not implemented, but potentially feasible and interesting:
 - Small object optimization
 - (?) Non-type-erased reference wrapper to enforce restricted interfaces
 
-At this moment, the repository is for experimenting and sharing.  
-The CMakeLists.txt is extremely basic and not made to be used as a library.
+At this moment, the repository is for experimenting and sharing.
+
+## Build examples
+- Configure with the p2996 preset: `cmake --preset clangd-p2996 -DTRP_P2996_INSTALL_PATH=/path/to/clang-p2996/install`
+- Build with the matching build preset: `cmake --build --preset clangd-p2996`
