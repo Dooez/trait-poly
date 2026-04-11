@@ -368,21 +368,19 @@ template<typename Impl, typename MethodIdt>
 concept implements_method =
     non_ref<Impl>                    //
     and any_method_idt<MethodIdt>    //
-    and
-    ([] {
-        using namespace std;
-        using namespace meta;
-        constexpr auto matches = [=](cw_info auto impl_method) {
-            return [:substitute(^^strictly_matches, {^^Impl, reflect_constant(impl_method), ^^MethodIdt}):];
-        };
-        static constexpr auto members =
-            matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>;
-        template for (constexpr auto m: members) {
-            if (matches(cw<m>))
-                return true;
-        }
-        return false;
-    }());
+    and ([] {
+            constexpr auto matches = [=](cw_info auto impl_method) {
+                return [:meta::substitute(^^strictly_matches,
+                                          {^^Impl, meta::reflect_constant(impl_method), ^^MethodIdt}):];
+            };
+            static constexpr auto members =
+                matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>;
+            template for (constexpr auto m: members) {
+                if (matches(cw<m>))
+                    return true;
+            }
+            return false;
+        }());
 
 
 template<meta::info Self, typename Impl, typename Trait, uZ I = 0>
