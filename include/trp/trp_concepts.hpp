@@ -190,9 +190,30 @@ consteval bool check_constexpr_static_data_member() {
 #endif
 }
 
+template<auto F>
+inline constexpr auto ce_fn_to_array = [] {
+    using T = stdr::range_value_t<std::invoke_result_t<decltype(F)>>;
+    struct return_tup;
+    consteval {
+        auto cnt            = 0UZ;
+        auto id_storage     = std::array<char, 21>{"m"};
+        auto info_to_member = [&](auto info) mutable {
+            auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
+            if (id_end.ec != std::errc{})
+                throw "Error while forming member name";
+            auto id = std::string_view(id_storage.data(), id_end.ptr);
+            return meta::data_member_spec(
+                meta::substitute(^^constant_wrapper, {meta::reflect_constant(info)}), {.name = id});
+        };
+        meta::define_aggregate(^^return_tup, F() | stdv::transform(info_to_member));
+    }
+    auto [... values] = return_tup{};
+    return std::array<T, sizeof...(values)>{values...};
+}();
+
 template<typename T>
 consteval bool static_data_members_are_constexpr() {
-    constexpr auto mems = ce_fn_to_array([] { return meta::static_data_members_of(^^T, ctx_unchecked); });
+    constexpr auto mems = ce_fn_to_array<[] { return meta::static_data_members_of(^^T, ctx_unchecked); }>;
     auto [... Is]       = make_cw_idxs<mems.size()>();
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }
@@ -242,21 +263,15 @@ concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
 
 
 namespace detail {
-template<std::invocable<> F>
-    requires stdr::random_access_range<std::invoke_result_t<F>>
-consteval auto ce_fn_to_array(const F& f) {
-    using T       = stdr::range_value_t<std::invoke_result_t<F>>;
-    auto [... Is] = make_cw_idxs<stdr::size(f())>();
-    return std::array<T, sizeof...(Is)>{f()[Is]...};
-}
+
 
 template<typename T>
 struct trait_traits {
-    static constexpr auto direct_base_types = ce_fn_to_array([] {
+    static constexpr auto direct_base_types = ce_fn_to_array<[] {
         return meta::bases_of(^^T, ctx_unchecked)    //
                | stdv::transform(meta::type_of)      //
                | stdr::to<std::vector<meta::info>>();
-    });
+    }>;
 
     static constexpr auto direct_methods = [] {
         using namespace meta;
@@ -272,7 +287,7 @@ struct trait_traits {
                    | stdv::transform(method_identity)      //
                    | stdr::to<std::vector<info>>();
         };
-        return ce_fn_to_array(get_direct_methods);
+        return ce_fn_to_array<get_direct_methods>;
     }();
 
     static constexpr auto all_methods = [] {
@@ -290,7 +305,7 @@ struct trait_traits {
             }
             return result;
         };
-        return ce_fn_to_array(get_all_methods);
+        return ce_fn_to_array<get_all_methods>;
     }();
 };
 }    // namespace detail
@@ -334,9 +349,9 @@ consteval auto matching_id_public_members() {
             if constexpr (has_bases) {
                 // separate overload resolution check should be performed, to ensure that bases on the same level do not contain identical methods
 
-                static constexpr auto bases = ce_fn_to_array([=] {
+                static constexpr auto bases = ce_fn_to_array<[=] {
                     return bases_of(type, access_context::unprivileged()) | stdv::transform(type_of);
-                });
+                }>;
                 template for (constexpr auto base: bases) {
                     self(cw<base>);
                 }
@@ -344,7 +359,7 @@ consteval auto matching_id_public_members() {
         }(cw<^^Impl>);
         return result;
     };
-    return ce_fn_to_array(get_vec);
+    return ce_fn_to_array<get_vec>;
 }
 
 template<meta::info ImplMethod, any_method_idt MethodId>

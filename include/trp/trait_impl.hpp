@@ -360,7 +360,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     }():];
 
     static constexpr auto vt_mems =
-        ce_fn_to_array([=] { return nonstatic_data_members_of(^^vtable<Trait>, ctx_unchecked); });
+        ce_fn_to_array<[=] { return nonstatic_data_members_of(^^vtable<Trait>, ctx_unchecked); }>;
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
         template for (constexpr auto mem: vt_mems) {
             if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
