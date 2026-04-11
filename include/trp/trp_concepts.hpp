@@ -261,39 +261,27 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
 template<typename Trait>
 concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
 
-
 namespace detail {
-
-
 template<typename T>
 struct trait_traits {
     static constexpr auto direct_base_types = ce_fn_to_array<[] {
         return meta::bases_of(^^T, ctx_unchecked)    //
-               | stdv::transform(meta::type_of)      //
-               | stdr::to<std::vector<meta::info>>();
+               | stdv::transform(meta::type_of);
     }>;
 
-    static constexpr auto direct_methods = [] {
+    static constexpr auto all_methods = [] {
         using namespace meta;
-        constexpr auto get_direct_methods = [] {
+        constexpr auto get_all_methods = [] {
             constexpr auto is_valid_method = [](auto method) static {
                 return is_function(method)                                 //
                        and not meta::is_special_member_function(method)    //
                        and (is_const(method) or not is_const(^^T))         //
                        and (is_volatile(method) or not is_volatile(^^T));
             };
-            return meta::members_of(^^T, ctx_unchecked)    //
-                   | stdv::filter(is_valid_method)         //
-                   | stdv::transform(method_identity)      //
-                   | stdr::to<std::vector<info>>();
-        };
-        return ce_fn_to_array<get_direct_methods>;
-    }();
-
-    static constexpr auto all_methods = [] {
-        using namespace meta;
-        constexpr auto get_all_methods = [] {
-            auto result        = direct_methods | stdr::to<std::vector<info>>();
+            auto result = meta::members_of(^^T, ctx_unchecked)    //
+                          | stdv::filter(is_valid_method)         //
+                          | stdv::transform(method_identity)      //
+                          | stdr::to<std::vector<info>>();
             auto append_unique = [&](auto&& method_idts) {
                 for (auto m: method_idts)
                     if (not stdr::contains(result, m))
@@ -333,27 +321,23 @@ template<non_cvref Impl, auto Id>
 constexpr auto matching_id_public_members = [] {
     using namespace meta;
     constexpr auto get_vec = [] {
-        auto result = std::vector<info>{};
-        [&](this auto self, cw_info auto type) {
-            auto cur_members =
-                members_of(type, access_context::unprivileged())    //
-                | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; });
-            for (auto info: cur_members) {
-                if (not stdr::contains(result, info))
-                    result.push_back(info);
-            }
-            constexpr auto has_bases = not stdr::empty(bases_of(type, access_context::unprivileged()));
-            if constexpr (has_bases) {
-                // separate overload resolution check should be performed, to ensure that bases on the same level do not contain identical methods
-
-                static constexpr auto bases = ce_fn_to_array<[] {
-                    return bases_of(decltype(type)::value, access_context::unprivileged()) | stdv::transform(type_of);
-                }>;
-                template for (constexpr auto base: bases) {
-                    self(cw<base>);
-                }
-            }
-        }(cw<^^Impl>);
+        auto result = meta::members_of(^^Impl, meta::access_context::unprivileged())    //
+                      | stdv::filter([](auto info) {
+                            return meta::has_identifier(info) and meta::identifier_of(info) == Id;
+                        })    //
+                      | stdr::to<std::vector<meta::info>>();
+        auto append_unique = [&](auto&& members) {
+            for (auto m: members)
+                if (not stdr::contains(result, m))
+                    result.push_back(m);
+        };
+        constexpr auto bases = ce_fn_to_array<[] {
+            return bases_of(^^Impl, access_context::unprivileged()) | stdv::transform(type_of);
+        }>;
+        template for (constexpr auto base: bases) {
+            using base_t = [:base:];
+            append_unique(matching_id_public_members<base_t, Id>);
+        }
         return result;
     };
     return ce_fn_to_array<get_vec>;
