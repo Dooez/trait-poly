@@ -329,7 +329,7 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 
 namespace detail {
-template<non_ref Impl, auto Id>
+template<non_cvref Impl, auto Id>
 constexpr auto matching_id_public_members = [] {
     using namespace meta;
     constexpr auto get_vec = [] {
@@ -337,10 +337,7 @@ constexpr auto matching_id_public_members = [] {
         [&](this auto self, cw_info auto type) {
             auto cur_members =
                 members_of(type, access_context::unprivileged())    //
-                | stdv::filter(std::not_fn(is_static_member))       //
-                | stdv::filter([](auto info) {
-                      return has_identifier(info) and identifier_of(info) == Id;
-                  });
+                | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; });
             for (auto info: cur_members) {
                 if (not stdr::contains(result, info))
                     result.push_back(info);
@@ -349,8 +346,8 @@ constexpr auto matching_id_public_members = [] {
             if constexpr (has_bases) {
                 // separate overload resolution check should be performed, to ensure that bases on the same level do not contain identical methods
 
-                static constexpr auto bases = ce_fn_to_array<[=] {
-                    return bases_of(type, access_context::unprivileged()) | stdv::transform(type_of);
+                static constexpr auto bases = ce_fn_to_array<[] {
+                    return bases_of(decltype(type)::value, access_context::unprivileged()) | stdv::transform(type_of);
                 }>;
                 template for (constexpr auto base: bases) {
                     self(cw<base>);
@@ -361,27 +358,6 @@ constexpr auto matching_id_public_members = [] {
     };
     return ce_fn_to_array<get_vec>;
 }();
-
-template<meta::info ImplMethod, any_method_idt MethodId>
-constexpr bool match_method_strict() {
-    using return_type       = MethodId::return_type;
-    using impl_invocation_t = [:MethodId::add_obj_cv(meta::parent_of(ImplMethod)):];
-    auto [... arg_ids]      = MethodId::param_identities;
-
-    if constexpr (meta::is_template(ImplMethod)) {
-        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
-            {
-                impl.template[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
-            } -> std::same_as<return_type>;
-        };
-    } else {
-        return requires(impl_invocation_t impl, decltype(arg_ids)::type... args) {
-            {
-                impl.[:ImplMethod:](std::forward<decltype(arg_ids)::type>(args)...)
-            } -> std::same_as<return_type>;
-        };
-    }
-};
 
 template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
@@ -415,7 +391,8 @@ concept implements_method =
         constexpr auto matches = [=](cw_info auto impl_method) {
             return [:substitute(^^strictly_matches, {^^Impl, reflect_constant(impl_method), ^^MethodIdt}):];
         };
-        static constexpr auto members = matching_id_public_members<Impl, MethodIdt::identifier>;
+        static constexpr auto members =
+            matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>;
         template for (constexpr auto m: members) {
             if (matches(cw<m>))
                 return true;
