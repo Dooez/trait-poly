@@ -199,11 +199,16 @@ consteval bool static_data_members_are_constexpr() {
 
 template<typename Trait>
 concept any_immediate_trait =
-    std::same_as<Trait, std::remove_reference_t<Trait>>                             //
-    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))        //
-    and detail::static_data_members_are_constexpr<Trait>()                          // only in gcc atm
-    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)     //
-    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)    //
+    std::same_as<Trait, std::remove_reference_t<Trait>>                         //
+    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
+    and detail::static_data_members_are_constexpr<Trait>()                      // only in gcc atm
+    and stdr::none_of(meta::members_of(^^Trait, ctx_unchecked),
+                      [](auto m) {
+                          return meta::is_special_member_function(m)    //
+                                 and not meta::is_defaulted(m);
+                      })                                                                              //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_virtual)                       //
+    and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
     ;
