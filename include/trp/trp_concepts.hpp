@@ -103,7 +103,7 @@ template<auto Identifier,
          typename Ret,
          typename... Params>
 struct method_identity_t {
-    static constexpr auto identifier       = std::string_view(Identifier);
+    static constexpr auto identifier       = Identifier;
     static constexpr bool is_const         = Const;
     static constexpr bool is_volatile      = Volatile;
     static constexpr bool is_lvalue        = LVRef;
@@ -329,8 +329,8 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 
 namespace detail {
-template<non_ref Impl, any_method_idt TraitMethod>
-consteval auto matching_id_public_members() {
+template<non_ref Impl, auto Id>
+constexpr auto matching_id_public_members = [] {
     using namespace meta;
     constexpr auto get_vec = [] {
         auto result = std::vector<info>{};
@@ -339,7 +339,7 @@ consteval auto matching_id_public_members() {
                 members_of(type, access_context::unprivileged())    //
                 | stdv::filter(std::not_fn(is_static_member))       //
                 | stdv::filter([](auto info) {
-                      return has_identifier(info) and identifier_of(info) == TraitMethod::identifier;
+                      return has_identifier(info) and identifier_of(info) == Id;
                   });
             for (auto info: cur_members) {
                 if (not stdr::contains(result, info))
@@ -360,7 +360,7 @@ consteval auto matching_id_public_members() {
         return result;
     };
     return ce_fn_to_array<get_vec>;
-}
+}();
 
 template<meta::info ImplMethod, any_method_idt MethodId>
 constexpr bool match_method_strict() {
@@ -415,7 +415,7 @@ concept implements_method =
         constexpr auto matches = [=](cw_info auto impl_method) {
             return [:substitute(^^strictly_matches, {^^Impl, reflect_constant(impl_method), ^^MethodIdt}):];
         };
-        static constexpr auto members = matching_id_public_members<Impl, MethodIdt>();
+        static constexpr auto members = matching_id_public_members<Impl, MethodIdt::identifier>;
         template for (constexpr auto m: members) {
             if (matches(cw<m>))
                 return true;

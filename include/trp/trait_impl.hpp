@@ -301,7 +301,7 @@ consteval auto fill_vtable() {
                 return [:substitute(^^strictly_matches,
                                     {^^Impl, reflect_constant(impl_method), trait_method_idt}):];
             };
-            static constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t>();
+            static constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t::identifier>;
             template for (constexpr auto m: members) {
                 if (matches(cw<m>))
                     return m;
