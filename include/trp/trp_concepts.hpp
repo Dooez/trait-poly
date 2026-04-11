@@ -64,22 +64,18 @@ consteval auto make_cw_idxs() {
             constexpr auto cw_seq_info = ^^cw_index_sequence;
             if (meta::is_complete_type(cw_seq_info))
                 return;
-            constexpr auto to_mem = [](uZ i) {
-                auto name = std::string("i_");
-                name.resize(22);
-                auto end = std::to_chars(&*name.begin() + 1, &*name.end(), i);
-                if (end.ec != std::errc{})
-                    throw "could not form cw_index_sequence member name";
-                name.resize(end.ptr - name.data());
-                return data_member_spec(meta::substitute(^^constant_wrapper, {meta::reflect_constant(i)}),
-                                        {.name = name});
+            auto cnt            = 0UZ;
+            auto id_storage     = std::array<char, 21>{"m"};
+            auto info_to_member = [&](auto info) mutable {
+                auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
+                if (id_end.ec != std::errc{})
+                    throw "Error while forming member name";
+                auto id = std::string_view(id_storage.data(), id_end.ptr);
+                return meta::data_member_spec(
+                    meta::substitute(^^constant_wrapper, {meta::reflect_constant(info)}), {.name = id});
             };
 
-            auto mems = std::vector<meta::info>();
-            for (uZ i = 0; i < End; ++i) {    // noo iota in clang :')
-                mems.push_back(to_mem(i));
-            }
-            meta::define_aggregate(cw_seq_info, mems);
+            meta::define_aggregate(cw_seq_info, stdv::iota(0U, End) | stdv::transform(info_to_member));
             return;
         };
         define_cw_idx_seq();
