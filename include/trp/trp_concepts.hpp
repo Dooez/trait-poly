@@ -331,7 +331,7 @@ constexpr auto matching_id_public_members = [] {
                 if (not stdr::contains(result, m))
                     result.push_back(m);
         };
-        constexpr auto bases = ce_fn_to_array<[] {
+        static constexpr auto bases = ce_fn_to_array<[] {
             return bases_of(^^Impl, access_context::unprivileged()) | stdv::transform(type_of);
         }>;
         template for (constexpr auto base: bases) {
