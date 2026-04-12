@@ -357,8 +357,7 @@ consteval auto maybe_define_cv_trait() {
         return;
     struct method_holder_spec {
         string_view  id;
-        vector<info> methods;
-        info         type_info{};
+        vector<info> targs;
     };
     using ttt = trait_traits<Trait>;
     template for (constexpr auto supertrait: direct_base_types<Trait>) {
@@ -367,31 +366,32 @@ consteval auto maybe_define_cv_trait() {
     }
     define_vtable<Trait>();
     auto method_holder_specs = vector<method_holder_spec>{};
-    auto trait_ref_args      = vector<info>{^^vtable<Trait>};
+    method_holder_specs.reserve(ttt::all_methods.size());
+    auto trait_ref_args = vector<info>{^^vtable<Trait>};
 
     uZ i = 0;
     template for (constexpr auto mem: ttt::all_methods) {
         const auto spec  = substitute(^^overload_spec, {reflect_constant(i), mem});
         using method_idt = [:mem:];
 
-        auto it = stdr::find_if(method_holder_specs, [=](auto& p) { return p.id == method_idt::identifier; });
+        auto it = stdr::find(method_holder_specs, method_idt::identifier, &method_holder_spec::id);
         if (it == method_holder_specs.end()) {
             const auto holder_info = substitute(^^method_holder, {^^Trait, reflect_constant(i)});
-            method_holder_specs.push_back(
-                {.id = method_idt::identifier, .methods = {spec}, .type_info = holder_info});
+            method_holder_specs.push_back({
+                .id = method_idt::identifier, .targs = {{}, holder_info, spec}
+            });
             trait_ref_args.push_back(holder_info);
         } else {
-            it->methods.push_back(spec);
+            it->targs.push_back(spec);
         }
         ++i;
     }
 
     const auto mgr_info = substitute(^^trait_ref_impl, trait_ref_args);
-    for (auto& [name, overloads, mh_info]: method_holder_specs) {
-        auto invoker_args = vector{mgr_info, mh_info};
-        invoker_args.append_range(overloads);
-        const auto invoker_type = substitute(^^method_invoker, invoker_args);
-        define_aggregate(mh_info,
+    for (auto& [name, targs]: method_holder_specs) {
+        targs[0]                = mgr_info;
+        const auto invoker_type = substitute(^^method_invoker, targs);
+        define_aggregate(targs[1],
                          {data_member_spec(invoker_type,
                                            data_member_options{
                                                .name              = name,
