@@ -277,32 +277,29 @@ concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
 namespace detail {
 template<typename T>
 struct trait_traits {
-    static constexpr auto all_methods = [] {
+    static constexpr auto all_methods = ce_fn_to_array<[] {
         using namespace meta;
-        constexpr auto get_all_methods = [] {
-            constexpr auto is_valid_method = [](auto method) static {
-                return is_function(method)                                 //
-                       and not meta::is_special_member_function(method)    //
-                       and (is_const(method) or not is_const(^^T))         //
-                       and (is_volatile(method) or not is_volatile(^^T));
-            };
-            auto result = meta::members_of(^^T, ctx_unchecked)    //
-                          | stdv::filter(is_valid_method)         //
-                          | stdv::transform(method_identity)      //
-                          | stdr::to<std::vector<info>>();
-            auto append_unique = [&](auto&& method_idts) {
-                for (auto m: method_idts)
-                    if (not stdr::contains(result, m))
-                        result.push_back(m);
-            };
-            template for (constexpr auto base: direct_base_types<T>) {
-                using base_t = [:copy_cv_to(^^T, base):];
-                append_unique(trait_traits<base_t>::all_methods);
-            }
-            return result;
+        constexpr auto is_valid_method = [](auto method) static {
+            return is_function(method)                                 //
+                   and not meta::is_special_member_function(method)    //
+                   and (is_const(method) or not is_const(^^T))         //
+                   and (is_volatile(method) or not is_volatile(^^T));
         };
-        return ce_fn_to_array<get_all_methods>;
-    }();
+        auto result = meta::members_of(^^T, ctx_unchecked)    //
+                      | stdv::filter(is_valid_method)         //
+                      | stdv::transform(method_identity)      //
+                      | stdr::to<std::vector<info>>();
+        auto append_unique = [&](auto&& method_idts) {
+            for (auto m: method_idts)
+                if (not stdr::contains(result, m))
+                    result.push_back(m);
+        };
+        template for (constexpr auto base: direct_base_types<T>) {
+            using base_t = [:copy_cv_to(^^T, base):];
+            append_unique(trait_traits<base_t>::all_methods);
+        }
+        return result;
+    }>;
 };
 }    // namespace detail
 
@@ -326,27 +323,24 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 namespace detail {
 template<non_cvref Impl, auto Id>
-constexpr auto matching_id_public_members = [] {
+constexpr auto matching_id_public_members = ce_fn_to_array<[] {
     using namespace meta;
-    constexpr auto get_vec = [] {
-        auto result = meta::members_of(^^Impl, meta::access_context::unprivileged())    //
-                      | stdv::filter([](auto info) {
-                            return meta::has_identifier(info) and meta::identifier_of(info) == Id;
-                        })    //
-                      | stdr::to<std::vector<meta::info>>();
-        auto append_unique = [&](auto&& members) {
-            for (auto m: members)
-                if (not stdr::contains(result, m))
-                    result.push_back(m);
-        };
-        template for (constexpr auto base: direct_base_types<Impl>) {
-            using base_t = [:base:];
-            append_unique(matching_id_public_members<base_t, Id>);
-        }
-        return result;
+    auto result = meta::members_of(^^Impl, meta::access_context::unprivileged())    //
+                  | stdv::filter([](auto info) {
+                        return meta::has_identifier(info) and meta::identifier_of(info) == Id;
+                    })    //
+                  | stdr::to<std::vector<meta::info>>();
+    auto append_unique = [&](auto&& members) {
+        for (auto m: members)
+            if (not stdr::contains(result, m))
+                result.push_back(m);
     };
-    return ce_fn_to_array<get_vec>;
-}();
+    template for (constexpr auto base: direct_base_types<Impl>) {
+        using base_t = [:base:];
+        append_unique(matching_id_public_members<base_t, Id>);
+    }
+    return result;
+}>;
 
 template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
