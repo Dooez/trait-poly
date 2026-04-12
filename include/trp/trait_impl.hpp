@@ -121,12 +121,13 @@ template<any_method_idt Method>
 using wrapper_fptr_for = [:[] {
     using wrapper_fptr = [:[] {
         using return_type = typename Method::return_type;
-        auto params       = std::vector{meta::reflect_constant(Method::is_const),    //
-                                  meta::reflect_constant(Method::is_volatile),
-                                  meta::reflect_constant(Method::is_noexcept),
-                                  ^^return_type};
-        params.append_range(Method::param_infos);
-        return meta::substitute(^^wrapper_fptr, params);
+        auto [... infos]  = Method::param_infos;
+        return meta::substitute(^^wrapper_fptr,
+                                {meta::reflect_constant(Method::is_const),    //
+                                 meta::reflect_constant(Method::is_volatile),
+                                 meta::reflect_constant(Method::is_noexcept),
+                                 ^^return_type,
+                                 infos...});
     }():];
     return ^^typename wrapper_fptr::type;
 }():];
@@ -282,7 +283,7 @@ consteval void define_vtable() {
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     i = 0;
-    template for (constexpr auto supertrait: trait_traits<Trait>::direct_base_types) {
+    template for (constexpr auto supertrait: direct_base_types<Trait>) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
         auto supertrait_vtable = substitute(^^vtable, {copy_cv_to(^^Trait, supertrait)});
         vtable_elements.push_back(data_member_spec(supertrait_vtable, {.name = to_str("supertrait_", i++)}));
@@ -310,13 +311,11 @@ consteval auto fill_vtable() {
         }();
 
         // use constexpr binding when it becomes available
-        auto [... trait_is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
 
         constexpr auto wrapper_struct_info = [=] {
+            auto [... infos] = trait_method_idt_t::param_infos;
             return substitute(^^invoke_wrapper_struct,
-                              {reflect_constant(matched_impl_method),
-                               trait_method_idt,
-                               trait_method_idt_t::param_infos[trait_is]...});
+                              {reflect_constant(matched_impl_method), trait_method_idt, infos...});
         }();
         using wrapper_struct = [:wrapper_struct_info:];
         return &wrapper_struct::invoke;
@@ -327,11 +326,11 @@ consteval auto fill_vtable() {
     };
     // use constexpr binding when it becomes available
     auto [... Is] = make_cw_idxs<ttt::all_methods.size()>();
-    auto [... Js] = make_cw_idxs<ttt::direct_base_types.size()>();
+    auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
     return vtable<Trait>{
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
-        get_supertrait_vtable(cw<ttt::direct_base_types[Js]>)...,
+        get_supertrait_vtable(cw<direct_base_types<Trait>[Js]>)...,
     };
 }
 template<any_trait Trait, non_cvref Impl>
@@ -350,7 +349,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         if constexpr (direct_supertrait_of<Supertrait, Trait>) {
             return ^^Supertrait;
         } else {
-            template for (constexpr auto base: trait_traits<Trait>::direct_base_types) {
+            template for (constexpr auto base: direct_base_types<Trait>) {
                 using base_t = [:base:];
                 if constexpr (std::derived_from<base_t, Supertrait>)
                     return base;
@@ -386,7 +385,7 @@ consteval auto maybe_define_cv_trait() {
         info         type_info{};
     };
     using ttt = trait_traits<Trait>;
-    template for (constexpr auto supertrait: ttt::direct_base_types) {
+    template for (constexpr auto supertrait: direct_base_types<Trait>) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         maybe_define_cv_trait<supertrait_t>();
     }

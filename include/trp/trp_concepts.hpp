@@ -207,6 +207,12 @@ inline constexpr auto ce_fn_to_array = [] {
     return std::array<T, sizeof...(values)>{values...};
 }();
 
+
+template<typename T>
+inline constexpr auto direct_base_types = ce_fn_to_array<[] {
+    return meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of);
+}>;
+
 template<typename T>
 consteval bool static_data_members_are_constexpr() {
     constexpr auto mems = ce_fn_to_array<[] { return meta::static_data_members_of(^^T, ctx_unchecked); }>;
@@ -228,19 +234,17 @@ concept any_immediate_trait =
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
-    ;
+    and (stdr::size(direct_base_types<Trait>) ==
+         stdr::size(meta::bases_of(^^Trait, meta::access_context::unchecked())));
 
 template<meta::info Self, typename... Traits>
 concept any_traits =
     (... and
      (any_immediate_trait<Traits> and [:meta::substitute(Self,
                                                          [] {
-                                                             auto res =
-                                                                 std::vector{meta::reflect_constant(Self)};
-                                                             res.append_range(
-                                                                 meta::bases_of(^^Traits, ctx_unchecked)    //
-                                                                 | stdv::transform(meta::type_of));
-                                                             return res;
+                                                             auto [... bases] = direct_base_types<Traits>;
+                                                             return std::array{meta::reflect_constant(Self),
+                                                                               bases...};
                                                          }()):])    //
     );
 
@@ -260,11 +264,6 @@ concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
 namespace detail {
 template<typename T>
 struct trait_traits {
-    static constexpr auto direct_base_types = ce_fn_to_array<[] {
-        return meta::bases_of(^^T, ctx_unchecked)    //
-               | stdv::transform(meta::type_of);
-    }>;
-
     static constexpr auto all_methods = [] {
         using namespace meta;
         constexpr auto get_all_methods = [] {
@@ -283,7 +282,7 @@ struct trait_traits {
                     if (not stdr::contains(result, m))
                         result.push_back(m);
             };
-            template for (constexpr auto base: direct_base_types) {
+            template for (constexpr auto base: direct_base_types<T>) {
                 using base_t = [:copy_cv_to(^^T, base):];
                 append_unique(trait_traits<base_t>::all_methods);
             }
@@ -307,7 +306,7 @@ concept supertrait_of = any_trait<Supertrait>    //
 template<typename Supertrait, typename Trait>
 concept direct_supertrait_of =
     supertrait_of<Supertrait, Trait> and
-    stdr::contains(detail::trait_traits<Trait>::direct_base_types, meta::remove_cv(^^Supertrait));
+    stdr::contains(detail::direct_base_types<Trait>, meta::remove_cv(^^Supertrait));
 template<typename Supertrait, typename Trait>
 concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::derived_from<Trait, Supertrait>;
 
@@ -327,10 +326,7 @@ constexpr auto matching_id_public_members = [] {
                 if (not stdr::contains(result, m))
                     result.push_back(m);
         };
-        static constexpr auto bases = ce_fn_to_array<[] {
-            return bases_of(^^Impl, access_context::unprivileged()) | stdv::transform(type_of);
-        }>;
-        template for (constexpr auto base: bases) {
+        template for (constexpr auto base: direct_base_types<Impl>) {
             using base_t = [:base:];
             append_unique(matching_id_public_members<base_t, Id>);
         }
