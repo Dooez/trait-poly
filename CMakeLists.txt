@@ -1,15 +1,4 @@
 cmake_minimum_required(VERSION 3.23)
-
-set(TRP_P2996_INSTALL_PATH "" CACHE PATH
-		"Path to clang-p2996 install directory"
-)
-
-if (NOT DEFINED CMAKE_CXX_COMPILER AND TRP_P2996_INSTALL_PATH)
-	set(CMAKE_CXX_COMPILER "${TRP_P2996_INSTALL_PATH}/bin/clang++" CACHE FILEPATH
-			"C++ compiler inferred from TRP_P2996_INSTALL_PATH"
-	)
-endif()
-
 project(trp VERSION 0.2.0 LANGUAGES CXX)
 
 add_library(trp_trp INTERFACE)

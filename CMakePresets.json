@@ -21,6 +21,7 @@
       "description": "clang-p2996 toolchain with examples enabled",
       "inherits": "base",
       "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{TRP_P2996_INSTALL_PATH}/bin/clang++",
         "CMAKE_CXX_FLAGS": "-stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements -fconstexpr-steps=200000000 -O2",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -stdlib=libc++ -lc++abi -lunwind",
         "TRP_BUILD_EXAMPLES": "ON"
