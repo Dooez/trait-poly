@@ -117,6 +117,19 @@ struct method_identity_t {
             inf = meta::add_const(inf);
         return inf;
     };
+
+private:
+    using wrapper_obj_ptr = [:[] {
+        auto ptr_info = ^^void;
+        if (Const)
+            ptr_info = meta::add_const(ptr_info);
+        if (Volatile)
+            ptr_info = meta::add_volatile(ptr_info);
+        return meta::add_pointer(ptr_info);
+    }():];
+
+public:
+    using wrapper_fptr_type = auto (*)(wrapper_obj_ptr, Params...) noexcept(Noexcept) -> Ret;
 };
 consteval auto method_identity(meta::info method_info) -> meta::info {
     using namespace meta;

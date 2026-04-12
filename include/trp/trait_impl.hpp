@@ -104,33 +104,8 @@ public:
     , obj_ptr_(&obj){};
 };
 
-template<bool Const, bool Volatile, bool Noexcept, typename Ret, typename... Params>
-struct wrapper_fptr {
-    using obj_ptr = [:[] {
-        auto ptr_info = ^^void;
-        if (Const)
-            ptr_info = meta::add_const(ptr_info);
-        if (Volatile)
-            ptr_info = meta::add_volatile(ptr_info);
-        return meta::add_pointer(ptr_info);
-    }():];
-    using type    = auto (*)(obj_ptr, Params...) noexcept(Noexcept) -> Ret;
-};
-
 template<any_method_idt Method>
-using wrapper_fptr_for = [:[] {
-    using wrapper_fptr = [:[] {
-        using return_type = typename Method::return_type;
-        auto [... infos]  = Method::param_infos;
-        return meta::substitute(^^wrapper_fptr,
-                                {meta::reflect_constant(Method::is_const),    //
-                                 meta::reflect_constant(Method::is_volatile),
-                                 meta::reflect_constant(Method::is_noexcept),
-                                 ^^return_type,
-                                 infos...});
-    }():];
-    return ^^typename wrapper_fptr::type;
-}():];
+using wrapper_fptr_for = Method::wrapper_fptr_type;
 
 template<typename Impl>
 void default_delete(void* ptr) {
@@ -263,30 +238,31 @@ consteval void define_vtable() {
     if (is_complete_type(^^vtable<Trait>))
         return;
 
-    constexpr auto to_str = [](auto&& prefix, uZ i) -> std::string {
-        auto res = std::string(prefix);
-        res.resize(res.size() + 20);
-        auto end = std::to_chars(&*res.begin() + 1, &*res.end(), i);
-        if (end.ec != std::errc{})
-            return {};
-        res.resize(end.ptr - res.data());
-        return res;
+    constexpr auto get_info_to_member = []<uZ N>(const char (&prefix)[N], auto type_getter) {
+        auto res = std::array<char, N + 20>{};
+        stdr::copy(prefix, res.begin());
+        auto i = 0UZ;
+        return [=](auto info) mutable {
+            auto id_end = std::to_chars(&*(res.begin() + N - 1), &*res.end(), i++);
+            if (id_end.ec != std::errc{})
+                throw "Error while forming member name";
+            auto id = std::string_view(res.data(), id_end.ptr);
+            return meta::data_member_spec(type_getter(info), {.name = id});
+        };
     };
 
     using default_delete_fptr = void (*)(void*);
     auto vtable_elements      = std::vector<info>{};
-    uZ   i                    = 0;
-    template for (constexpr auto method_idt: trait_traits<Trait>::all_methods) {
-        using method_idt_t = [:method_idt:];
-        vtable_elements.push_back(
-            data_member_spec(substitute(^^wrapper_fptr_for, {method_idt}), {.name = to_str("m_", i++)}));
+    auto method_spec = get_info_to_member("m_", [](info m) { return substitute(^^wrapper_fptr_for, {m}); });
+    for (auto method_idt: trait_traits<Trait>::all_methods) {
+        vtable_elements.push_back(method_spec(method_idt));
     }
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
-    i = 0;
-    template for (constexpr auto supertrait: direct_base_types<Trait>) {
+    auto supertrait_spec = get_info_to_member(
+        "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
+    for (auto supertrait: direct_base_types<Trait>) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
-        auto supertrait_vtable = substitute(^^vtable, {copy_cv_to(^^Trait, supertrait)});
-        vtable_elements.push_back(data_member_spec(supertrait_vtable, {.name = to_str("supertrait_", i++)}));
+        vtable_elements.push_back(supertrait_spec(supertrait));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
