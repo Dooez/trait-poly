@@ -273,7 +273,7 @@ consteval auto fill_vtable() {
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
         using trait_method_idt_t           = [:trait_method_idt:];
-        constexpr auto matched_impl_method = [] {
+        constexpr auto matched_impl_method = [=] {
             template for (constexpr auto m:
                           matching_id_public_members<Impl, trait_method_idt_t::identifier>) {
                 constexpr auto matches = [:meta::substitute(
