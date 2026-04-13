@@ -16,8 +16,8 @@
       }
     },
     {
-      "name": "clangd-p2996",
-      "displayName": "clangd-p2996",
+      "name": "clang-p2996",
+      "displayName": "clang-p2996",
       "description": "clang-p2996 toolchain with examples enabled",
       "inherits": "base",
       "cacheVariables": {
@@ -26,12 +26,27 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -stdlib=libc++ -lc++abi -lunwind",
         "TRP_BUILD_EXAMPLES": "ON"
       }
+    },
+    {
+      "name": "gcc-latest",
+      "displayName": "gcc-latest",
+      "description": "gcc-latest toolchain with examples enabled",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{TRP_GCC_INSTALL_PATH}/bin/g++",
+        "CMAKE_CXX_FLAGS": "-O2",
+        "TRP_BUILD_EXAMPLES": "ON"
+      }
     }
   ],
   "buildPresets": [
     {
-      "name": "clangd-p2996",
-      "configurePreset": "clangd-p2996"
+      "name": "clang-p2996",
+      "configurePreset": "clang-p2996"
+    },
+    {
+      "name": "gcc-latest",
+      "configurePreset": "gcc-latest"
     }
   ]
 }

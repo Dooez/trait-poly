@@ -116,6 +116,7 @@ int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();
     to->bar(e0{});
 
+
     test_16bars(*to);
     to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
     test_16bars(*to);

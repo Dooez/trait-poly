@@ -12,22 +12,24 @@ struct trait_proto_base {
 struct trait_proto_imposter {
     void bar();
 };
+}    // namespace testing
 consteval {
-    trp::define_trait<trait_proto_base>();
-    trp::define_trait<trait_proto_imposter>();
+    trp::define_trait<testing::trait_proto_base>();
+    trp::define_trait<testing::trait_proto_imposter>();
 }
-
+namespace testing {
 struct trait_proto : trait_proto_base {
     void foo();
     void foo() const;
     void foo() const volatile;
 };
-
+}    // namespace testing
 consteval {
-    trp::define_trait<trait_proto_base>();
+    trp::define_trait<testing::trait_proto_base>();
     trp::define_trait<testing::trait_proto>();
 }
 
+namespace testing {
 static_assert(trp::supertrait_of<trait_proto, trait_proto>);
 static_assert(trp::supertrait_of<trait_proto_base, trait_proto>);
 static_assert(trp::supertrait_of<trait_proto_imposter, trait_proto>);

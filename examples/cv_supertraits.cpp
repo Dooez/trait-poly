@@ -29,13 +29,15 @@ struct susp {
     void v_ping() volatile;
     void cv_ping() const volatile;
 };
+}    // namespace testing
 
 consteval {
-    trp::define_trait<base>();
-    trp::define_trait<midl>();
-    trp::define_trait<leaf>();
-    trp::define_trait<susp>();
+    trp::define_trait<testing::base>();
+    trp::define_trait<testing::midl>();
+    trp::define_trait<testing::leaf>();
+    trp::define_trait<testing::susp>();
 }
+namespace testing {
 
 // clang-format off
 
@@ -102,9 +104,11 @@ CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, susp, leaf);
 struct ping_cv {
     void cv_ping() const volatile;
 };
-consteval{
-    trp::define_trait<ping_cv>();
 }
+consteval{
+    trp::define_trait<testing::ping_cv>();
+}
+namespace testing{
 static_assert(trp::supertrait_of<ping_cv,                ping_cv>);
 static_assert(trp::supertrait_of<const ping_cv,          ping_cv>);
 static_assert(trp::supertrait_of<volatile ping_cv,       ping_cv>);
@@ -133,9 +137,11 @@ struct trait_touch {
     void touch();
     void c_touch() const;
 };
+}    // namespace testing
 consteval {
-    trp::define_trait<trait_touch>();
+    trp::define_trait<testing::trait_touch>();
 }
+namespace testing {
 struct impl_all_cv {
     void ping() {}
     void c_ping() const {}
@@ -164,7 +170,6 @@ static_assert(trp::implements_trait<impl_touch, trait_touch>);
 static_assert(not trp::implements_trait<const impl_touch, trait_touch>);
 static_assert(not trp::implements_trait<volatile impl_touch, trait_touch>);
 static_assert(trp::implements_trait<const impl_touch, const trait_touch>);
-
 
 }    // namespace testing
 
