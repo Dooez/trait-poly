@@ -66,5 +66,6 @@ Not implemented, but potentially feasible and interesting:
 At this moment, the repository is for experimenting and sharing.
 
 ## Build examples
-- Configure with the p2996 preset: `cmake --preset clangd-p2996 -DTRP_P2996_INSTALL_PATH=/path/to/clang-p2996/install`
-- Build with the matching build preset: `cmake --build --preset clangd-p2996`
+- Configure with the p2996 preset: `cmake --preset clang-p2996 -DTRP_P2996_INSTALL_PATH=/path/to/clang-p2996/install`
+- Configure with the gcc preset: `cmake --preset gcc-latest -DTRP_GCC_INSTALL_PATH=/path/to/gcc/install`
+- Build with the matching build preset: `cmake --build --preset <clang-p2996|gcc-latest>`
