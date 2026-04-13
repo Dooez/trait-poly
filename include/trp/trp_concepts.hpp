@@ -47,9 +47,9 @@ concept non_ref = std::same_as<T, std::remove_reference_t<T>>;
 namespace detail {
 
 template<auto V>
-constexpr auto cw = constant_wrapper<V>{};
+inline constexpr auto cw = constant_wrapper<V>{};
 
-static constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
+inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
 template<typename T>
 concept cw_info = meta::has_template_arguments(^^T)                     //
                   and meta::template_of(^^T) == (^^constant_wrapper)    //
@@ -60,25 +60,20 @@ template<uZ End>
 consteval auto make_cw_idxs() {
     struct cw_index_sequence;
     consteval {
-        constexpr auto define_cw_idx_seq = [] {
-            constexpr auto cw_seq_info = ^^cw_index_sequence;
-            if (meta::is_complete_type(cw_seq_info))
-                return;
-            auto cnt            = 0UZ;
-            auto id_storage     = std::array<char, 21>{"m"};
-            auto info_to_member = [&](auto info) mutable {
-                auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
-                if (id_end.ec != std::errc{})
-                    throw "Error while forming member name";
-                auto id = std::string_view(id_storage.data(), id_end.ptr);
-                return meta::data_member_spec(
-                    meta::substitute(^^constant_wrapper, {meta::reflect_constant(info)}), {.name = id});
-            };
-
-            meta::define_aggregate(cw_seq_info, stdv::iota(0U, End) | stdv::transform(info_to_member));
+        constexpr auto cw_seq_info = ^^cw_index_sequence;
+        if (meta::is_complete_type(cw_seq_info))
             return;
+        auto cnt            = 0UZ;
+        auto id_storage     = std::array<char, 21>{"m"};
+        auto info_to_member = [&](auto info) mutable {
+            auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
+            if (id_end.ec != std::errc{})
+                throw "Error while forming member name";
+            auto id = std::string_view(id_storage.data(), id_end.ptr);
+            return meta::data_member_spec(
+                meta::substitute(^^constant_wrapper, {meta::reflect_constant(info)}), {.name = id});
         };
-        define_cw_idx_seq();
+        meta::define_aggregate(cw_seq_info, stdv::iota(0UZ, End) | stdv::transform(info_to_member));
     }
     return cw_index_sequence{};
 };
@@ -220,7 +215,6 @@ inline constexpr auto ce_fn_to_array = [] {
     return std::array<T, sizeof...(values)>{values...};
 }();
 
-
 template<typename T>
 inline constexpr auto direct_base_types = ce_fn_to_array<[] {
     return meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of);
@@ -323,7 +317,7 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 namespace detail {
 template<non_cvref Impl, auto Id>
-constexpr auto matching_id_public_members = ce_fn_to_array<[] {
+inline constexpr auto matching_id_public_members = ce_fn_to_array<[] {
     using namespace meta;
     auto result = meta::members_of(^^Impl, meta::access_context::unprivileged())    //
                   | stdv::filter([](auto info) {
@@ -367,19 +361,17 @@ template<typename Impl, typename MethodIdt>
 concept implements_method =
     non_ref<Impl>                    //
     and any_method_idt<MethodIdt>    //
-    and ([] {
-            constexpr auto matches = [=](cw_info auto impl_method) {
-                return [:meta::substitute(^^strictly_matches,
-                                          {^^Impl, meta::reflect_constant(impl_method), ^^MethodIdt}):];
-            };
-            static constexpr auto members =
-                matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>;
-            template for (constexpr auto m: members) {
-                if (matches(cw<m>))
-                    return true;
-            }
-            return false;
-        }());
+    and
+    ([] {
+        template for (constexpr auto m:
+                      matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>) {
+            constexpr auto matches = [:meta::substitute(^^strictly_matches,
+                                                        {^^Impl, meta::reflect_constant(m), ^^MethodIdt}):];
+            if (matches)
+                return true;
+        }
+        return false;
+    }());
 
 
 template<meta::info Self, typename Impl, typename Trait, uZ I = 0>

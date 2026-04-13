@@ -273,20 +273,19 @@ consteval auto fill_vtable() {
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
         using trait_method_idt_t           = [:trait_method_idt:];
-        constexpr auto matched_impl_method = [=] {
-            constexpr auto matches = [=](cw_info auto impl_method) {
-                return [:substitute(^^strictly_matches,
-                                    {^^Impl, reflect_constant(impl_method), trait_method_idt}):];
-            };
-            static constexpr auto members = matching_id_public_members<Impl, trait_method_idt_t::identifier>;
-            template for (constexpr auto m: members) {
-                if (matches(cw<m>))
+        constexpr auto matched_impl_method = [] {
+            template for (constexpr auto m:
+                          matching_id_public_members<Impl, trait_method_idt_t::identifier>) {
+                constexpr auto matches = [:meta::substitute(
+                                               ^^strictly_matches,
+                                               {^^Impl, meta::reflect_constant(m), ^^trait_method_idt_t}):];
+                if (matches)
                     return m;
             }
             std::unreachable();
         }();
 
-        // use constexpr binding when it becomes available
+        // return typename trait_method_idt_t::wrapper_fptr_type{};
 
         constexpr auto wrapper_struct_info = [=] {
             auto [... infos] = trait_method_idt_t::param_infos;
@@ -300,6 +299,7 @@ consteval auto fill_vtable() {
         using supertrait_t = [:copy_cv_to(^^Trait, supertriat):];
         return trait_vtable_for<supertrait_t, Impl>::value;
     };
+
     // use constexpr binding when it becomes available
     auto [... Is] = make_cw_idxs<ttt::all_methods.size()>();
     auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
@@ -334,12 +334,14 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         }
     }():];
 
-    static constexpr auto vt_mems =
-        ce_fn_to_array<[=] { return nonstatic_data_members_of(^^vtable<Trait>, ctx_unchecked); }>;
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
-        template for (constexpr auto mem: vt_mems) {
-            if constexpr (type_of(mem) == substitute(^^vtable, {^^next_supertrait_t}))
-                return &((*ptr).[:mem:]);
+        static constexpr auto mems = ce_fn_to_array<[] {
+            return meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
+                   stdv::drop(stdr::size(trait_traits<Trait>::all_methods) + 1);
+        }>;
+        template for (constexpr auto m: mems) {
+            if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
+                return &((*ptr).[:m:]);
         }
         std::unreachable();
     }();

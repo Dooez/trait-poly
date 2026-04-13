@@ -114,10 +114,12 @@ static_assert(not any_trait<not_trait_template>);
 
 void bloo(trp::trait_ref<trait_proto> x) {};
 
+// static_assert(trp::implements_trait<some_trait_impl, trait_proto>);
+// constexpr auto x = trp::detail::trait_vtable_for<trait_proto, some_trait_impl>::value;
+// constexpr auto y = trp::detail::trait_vtable_for<trait_proto, other_trait_impl>::value;
+
 int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();
-    std::println("sizeof shared trait object {}", sizeof(to));
-    auto toptr = &to;
     to->bar(e0{});
 
     test_16bars(*to);
