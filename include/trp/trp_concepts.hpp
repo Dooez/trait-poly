@@ -49,7 +49,7 @@ namespace detail {
 template<auto V>
 inline constexpr auto cw = constant_wrapper<V>{};
 
-inline constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
+static constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
 template<typename T>
 concept cw_info = meta::has_template_arguments(^^T)                     //
                   and meta::template_of(^^T) == (^^constant_wrapper)    //
