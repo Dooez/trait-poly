@@ -41,13 +41,13 @@ As reasoned, this chain of casts avoids undefined behavior. Please open an issue
     - [x] cv-qualified `trait_ref<T>`
     - [x] Upcasting to `explicit_supertrait<S, T>` via `trait_cast<S>`
     - [ ] (?) Runtime type identification for implementations. Compile-time constructed identifiers stored in vtables, e.g., via `bool trp::is_underlying_type<Impl>(const trait_ref<T>&)`.
-    - [ ] (?) Conversion to supertraits for allocator-aware handles by constructing vtables at runtime.
+    - [ ] (?) Downcasting after checking type identification.
+    - [ ] (?) Conversion to non-explicit supertraits for allocator-aware handles by constructing vtables at runtime.
 
 ## Limitations
-Compilation is relatively slow.  
-Clang may require `-fconstexpr-steps` with higher number to succesfuuly compile.  
+Compilation is relatively slow. Some effort was put to minimize repeated evalutation in implementation.  
+Compilers may require `-fconstexpr-steps` with high number to successfully compile.  
 `static constexpr` trait data members are supported by GCC only.  
-Big number of trait methods causes compilation error in Clang. Probably caused by `template for` over the members.
 `clangd` works but exhibits significant delays when handling trait objects.  
 Some patterns in the `trp` implementation could be updated to more modern and cleaner versions with additional C++26 features as compiler support matures.  
 
@@ -58,7 +58,6 @@ However, current tooling challenges raise concerns about possible production usa
 Not implemented, but potentially feasible and interesting:
 - Partial overload resolution of implementation methods during vtable construction
 - Definition of trait combinations (e.g. greatest common supertrait or common subtrait wo/ inheritence and explicit definition)
-- Dynamic upcasting to supertraits
 - Option for return type conversion in implementation methods
 - Small object optimization
 - (?) Non-type-erased reference wrapper to enforce restricted interfaces
