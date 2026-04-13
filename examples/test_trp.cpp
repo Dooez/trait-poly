@@ -112,12 +112,6 @@ static_assert(not any_trait<not_trait_static_data>);
 static_assert(not any_trait<not_trait_virt_fn>);
 static_assert(not any_trait<not_trait_template>);
 
-void bloo(trp::trait_ref<trait_proto> x) {};
-
-// static_assert(trp::implements_trait<some_trait_impl, trait_proto>);
-// constexpr auto x = trp::detail::trait_vtable_for<trait_proto, some_trait_impl>::value;
-// constexpr auto y = trp::detail::trait_vtable_for<trait_proto, other_trait_impl>::value;
-
 int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();
     to->bar(e0{});
@@ -126,6 +120,5 @@ int main() {
     to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
     test_16bars(*to);
 
-    // auto toptr2 = toptr;
     return 0;
 }
