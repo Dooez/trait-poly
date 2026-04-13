@@ -11,14 +11,14 @@ The methods of a polymorphic trait object are emulated by data members of type `
 `method_invoker<...>` uses `overload_invoker::operator()`.  
 `method_holder<...>` is a standard-layout class with a first and only data member of type `method_invoker<...>`.  
 `method_holder<...>` is defined via `std::meta::define_aggregate` to generate "methods" with the correct identifiers.  
-`trait_impl_manager<MethodHolders...>` is the final required class. It is derived from all required holders and stores a vtable pointer and an object pointer.  
+`trait_ref_impl<MethodHolders...>` is the final required class. It is derived from all required holders and stores a vtable pointer and an object pointer.  
 
 To access the vtable and object pointers from inside `operator()`, the following chain of casts is performed:  
 1. The `this` pointer of `overload_invoker::operator()(...)` is `static_cast` to `method_invoker<...>*` (well-defined due to inheritance).
 2. `method_invoker<...>*` is `reinterpret_cast` to `method_holder<...>*` (well-defined because `method_holder` is a standard-layout struct with a single member).
-3. `method_holder<...>*` is `static_cast` to `trait_impl_manager<...>*` (well-defined due to inheritance).
+3. `method_holder<...>*` is `static_cast` to `trait_ref_impl<...>*` (well-defined due to inheritance).
 
-Through the manager pointer, the vtable and type-erased object pointers are accessed, and the corresponding function pointer is invoked.  
+Through the `trait_ref_impl*` pointer, the vtable and type-erased object pointers are accessed, and the corresponding function pointer is invoked.  
 The final types are passed as template arguments to enable these casts.  
 A non-type template parameter `Index` selects the appropriate function pointer from the vtable, e.g., `overload_invoker<Manager, MethodHolder, MethodInvoker, uZ Index, ...>`.
 
@@ -50,6 +50,7 @@ Compilers may require `-fconstexpr-steps` with high number to successfully compi
 `static constexpr` trait data members are supported by GCC only.  
 `clangd` works but exhibits significant delays when handling trait objects.  
 Some patterns in the `trp` implementation could be updated to more modern and cleaner versions with additional C++26 features as compiler support matures.  
+`define_trait<Trait>()` must be called in global namespace (not sure if this is the gcc-specific beahvior or standard requires).  
 
 Given the early stage of reflection compiler and tooling development, these issues may improve over time. 
 However, current tooling challenges raise concerns about possible production usability.
