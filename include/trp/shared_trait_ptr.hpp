@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <memory>
+#include <stdexcept>
 namespace trp {
 namespace detail {
 using arc_t = std::atomic<uint64_t>;
@@ -13,7 +14,6 @@ using arc_t = std::atomic<uint64_t>;
 
 template<any_trait Trait>
 class shared_trait_ptr {
-    using vtable      = trait_ref<Trait>::vtable_t;
     using ctrl_header = detail::ctrl_header<detail::arc_t>;
     trait_ref<Trait> trait_ref_{};
     ctrl_header*     ctrl_ptr_{};
@@ -58,7 +58,7 @@ class shared_trait_ptr {
     }
 
 public:
-    explicit operator bool() {
+    explicit operator bool() const {
         return holds_value();
     }
     auto operator->(this auto&& self) -> trait_ref<Trait>* {
@@ -92,6 +92,9 @@ public:
         return *this;
     }
     shared_trait_ptr& operator=(shared_trait_ptr&& other) noexcept {
+        if (this == &other)
+            return *this;
+        decrement();
         trait_ref_.rebind(other.trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
         other.release();

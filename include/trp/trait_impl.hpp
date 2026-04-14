@@ -272,7 +272,10 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
         static constexpr auto mems = std::define_static_array(
             meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
-            stdv::drop(stdr::size(trait_traits<Trait>::all_methods) + 1));
+            stdv::drop(stdr::size(trait_traits<Trait>::all_methods)    //
+                       + 1                                             // default deleter
+                       + 1                                             // impl id
+                       ));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &((*ptr).[:m:]);

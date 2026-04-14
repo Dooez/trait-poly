@@ -2,9 +2,6 @@
 #include "trp/unique_trait_ptr.hpp"
 
 #include <print>
-namespace stdr = std::ranges;
-namespace stdv = std::views;
-namespace meta = std::meta;
 namespace testing {
 struct trait_proto_base {
     void bar();
@@ -25,7 +22,7 @@ struct trait_proto : trait_proto_base {
 };
 }    // namespace testing
 consteval {
-    trp::define_trait<testing::trait_proto_base>();
+    trp::define_trait<testing::trait_proto_base>(); // repeated definition is allowed, and has no effect
     trp::define_trait<testing::trait_proto>();
 }
 

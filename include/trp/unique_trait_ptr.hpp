@@ -5,11 +5,11 @@
 #endif
 
 #include <memory>
+#include <stdexcept>
 
 namespace trp {
 template<any_trait Trait>
 class alloc_unique_trait_ptr {
-    using vtable      = trait_ref<Trait>::vtable_t;
     using ctrl_header = detail::ctrl_header<>;
     trait_ref<Trait> trait_ref_{};
     ctrl_header*     ctrl_ptr_{};
@@ -68,7 +68,7 @@ public:
         delete_();
     }
 
-    explicit operator bool() {
+    explicit operator bool() const {
         return holds_value();
     }
     auto operator->(this auto&& self) -> trait_ref<Trait>* {
@@ -141,7 +141,6 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
 template<any_trait Trait>
 class unique_trait_ptr {
     trait_ref<Trait> trait_ref_;
-    using vtable = trait_ref<Trait>::vtable_t;
 
     void release() {
         trait_ref_.release();

@@ -1,3 +1,4 @@
+#pragma once
 #include <meta>
 #include <print>
 // clang-format off
