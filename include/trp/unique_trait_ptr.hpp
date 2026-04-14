@@ -54,6 +54,8 @@ public:
         other.release();
     }
     alloc_unique_trait_ptr& operator=(alloc_unique_trait_ptr&& other) noexcept {
+        if (this == &other)
+            return *this;
         delete_();
         this->trait_ref_.rebind(other.trait_ref_);
         this->ctrl_ptr_ = other.ctrl_ptr_;
@@ -160,6 +162,8 @@ public:
         other.release();
     }
     unique_trait_ptr& operator=(unique_trait_ptr&& other) noexcept {
+        if (this == &other)
+            return *this;
         if (holds_value())
             trait_ref_.default_delete();
         trait_ref_.rebind(other.trait_ref_);
