@@ -15,9 +15,9 @@ struct trait_ref_identity;
 template<typename VTable, typename... MethodHolders>
 class trait_ref_impl;
 
-template<typename T>
+template<non_ref T>
 struct unique_id_struct {
-    static inline int value;
+    static inline char value{};
 };
 
 template<typename T>
@@ -39,88 +39,6 @@ template<typename Impl, detail::any_trait_ref TraitRef>
 }
 
 namespace detail {
-template<any_trait Trait, non_cvref Impl>
-struct trait_vtable_for;
-
-template<typename VTable, typename... MethodHolders>
-class trait_ref_impl : public MethodHolders... {
-    using vtable_t = VTable;
-
-public:
-    using trait_t = [:meta::template_arguments_of(^^VTable)[0]:];
-
-private:
-    const vtable_t* vtable_ptr_{};
-    void*           obj_ptr_{};
-
-    trait_ref_impl() = default;
-    trait_ref_impl(const vtable_t* vptr, void* optr)
-    : vtable_ptr_(vptr)
-    , obj_ptr_(optr) {};
-
-    template<typename Manager,
-             typename MethodHolder,
-             typename MethodInvoker,
-             uZ             Index,
-             any_method_idt MethodId>
-    friend struct overload_invoker;
-
-    void release() {
-        obj_ptr_ = nullptr;
-    }
-
-    void rebind(const trait_ref_impl& other) {
-        vtable_ptr_ = other.vtable_ptr_;
-        obj_ptr_    = other.obj_ptr_;
-    }
-
-    [[nodiscard]] bool holds_value() const {
-        return obj_ptr_ != nullptr;
-    }
-
-    void default_delete() {
-        vtable_ptr_->default_delete(obj_ptr_);
-    }
-
-    template<any_trait>
-    friend class shared_trait_ptr_impl;
-    template<any_trait>
-    friend class unique_trait_ptr_impl;
-    template<any_trait>
-    friend class alloc_unique_trait_ptr_impl;
-    template<typename, typename...>
-    friend class trait_ref_impl;
-
-
-    template<typename Supertrait, detail::any_trait_ref TraitRef>
-        requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
-    friend auto ::trp::trait_cast(const TraitRef&);
-    template<explicit_supertrait_of<trait_t> Supertrait>
-    [[nodiscard]] auto upcast() const -> trait_ref<Supertrait> {
-        return trait_ref<Supertrait>(get_explicit_supertrait_vtable_ptr<Supertrait>(vtable_ptr_), obj_ptr_);
-    }
-
-    template<typename Impl, detail::any_trait_ref TraitRef>
-        requires implements_trait<Impl, typename TraitRef::trait_t>
-    friend auto ::trp::is_holding_type(const TraitRef& ref) -> bool;
-    template<typename Impl>
-    [[nodiscard]] static auto is_holding_type(const trait_ref_impl& ref) -> bool {
-        return ref.vtable_ptr_->id_ptr == &unique_id_struct<Impl>::value;
-    }
-
-public:
-    trait_ref_impl(const trait_ref_impl&)            = default;
-    trait_ref_impl(trait_ref_impl&&)                 = default;
-    trait_ref_impl& operator=(const trait_ref_impl&) = delete;
-    trait_ref_impl& operator=(trait_ref_impl&&)      = delete;
-    ~trait_ref_impl()                                = default;
-
-    template<implements_trait<trait_t> Impl>
-        requires(not std::derived_from<Impl, trait_ref_impl>)
-    explicit trait_ref_impl(Impl& obj)
-    : vtable_ptr_(&detail::trait_vtable_for<trait_t, Impl>::value)
-    , obj_ptr_(&obj){};
-};
 
 template<any_method_idt Method>
 using wrapper_fptr_for = Method::wrapper_fptr_type;
@@ -192,7 +110,6 @@ private:
 
         static_assert(std::derived_from<MethodInvoker, overload_invoker>);
         const auto mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
-
 
         constexpr auto invoker_ptr = [] {
             auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
@@ -276,7 +193,7 @@ consteval void define_vtable() {
     }
     using default_delete_fptr = void (*)(void*);
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
-    using id_ptr = const int*;
+    using id_ptr = const char*;
     vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
     auto supertrait_spec = get_info_to_member(
         "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
@@ -286,6 +203,12 @@ consteval void define_vtable() {
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
+
+template<any_trait Trait, non_cvref Impl>
+consteval auto fill_vtable();
+
+template<any_trait Trait, non_cvref Impl>
+inline constexpr auto trait_vtable_for = fill_vtable<Trait, Impl>();
 
 template<any_trait Trait, non_cvref Impl>
 consteval auto fill_vtable() {
@@ -303,8 +226,6 @@ consteval auto fill_vtable() {
             std::unreachable();
         }();
 
-        // return typename trait_method_idt_t::wrapper_fptr_type{};
-
         constexpr auto wrapper_struct_info = [=] {
             auto [... infos] = trait_method_idt_t::param_infos;
             return substitute(^^invoke_wrapper_struct,
@@ -312,10 +233,6 @@ consteval auto fill_vtable() {
         }();
         using wrapper_struct = [:wrapper_struct_info:];
         return &wrapper_struct::invoke;
-    };
-    constexpr auto get_supertrait_vtable = [](cw_info auto supertriat) {
-        using supertrait_t = [:copy_cv_to(^^Trait, supertriat):];
-        return trait_vtable_for<supertrait_t, Impl>::value;
     };
 
     // use constexpr binding when it becomes available
@@ -325,13 +242,10 @@ consteval auto fill_vtable() {
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
-        get_supertrait_vtable(cw<direct_base_types<Trait>[Js]>)...,
+        [:meta::substitute(^^trait_vtable_for,
+                           {copy_cv_to(^^Trait, direct_base_types<Trait>[Js]), ^^Impl}):]...,
     };
 }
-template<any_trait Trait, non_cvref Impl>
-struct trait_vtable_for {
-    static constexpr auto value = fill_vtable<Trait, Impl>();
-};
 
 template<typename Supertrait, any_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
@@ -429,6 +343,86 @@ consteval auto maybe_define_cv_trait() {
                                                //  .attributes = {^^[[no_unique_address]] },
                                            })});
     }
+};
+
+template<typename VTable, typename... MethodHolders>
+class trait_ref_impl : public MethodHolders... {
+    using vtable_t = VTable;
+
+public:
+    using trait_t = [:meta::template_arguments_of(^^VTable)[0]:];
+
+private:
+    const vtable_t* vtable_ptr_{};
+    void*           obj_ptr_{};
+
+    trait_ref_impl() = default;
+    trait_ref_impl(const vtable_t* vptr, void* optr)
+    : vtable_ptr_(vptr)
+    , obj_ptr_(optr) {};
+
+    template<typename Manager,
+             typename MethodHolder,
+             typename MethodInvoker,
+             uZ             Index,
+             any_method_idt MethodId>
+    friend struct overload_invoker;
+
+    void release() {
+        obj_ptr_ = nullptr;
+    }
+
+    void rebind(const trait_ref_impl& other) {
+        vtable_ptr_ = other.vtable_ptr_;
+        obj_ptr_    = other.obj_ptr_;
+    }
+
+    [[nodiscard]] bool holds_value() const {
+        return obj_ptr_ != nullptr;
+    }
+
+    void default_delete() {
+        vtable_ptr_->default_delete(obj_ptr_);
+    }
+
+    template<any_trait>
+    friend class shared_trait_ptr_impl;
+    template<any_trait>
+    friend class unique_trait_ptr_impl;
+    template<any_trait>
+    friend class alloc_unique_trait_ptr_impl;
+    template<typename, typename...>
+    friend class trait_ref_impl;
+
+
+    template<typename Supertrait, detail::any_trait_ref TraitRef>
+        requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
+    friend auto ::trp::trait_cast(const TraitRef&);
+    template<explicit_supertrait_of<trait_t> Supertrait>
+    [[nodiscard]] auto upcast() const -> trait_ref<Supertrait> {
+        return trait_ref<Supertrait>(get_explicit_supertrait_vtable_ptr<Supertrait>(vtable_ptr_), obj_ptr_);
+    }
+
+    template<typename Impl, detail::any_trait_ref TraitRef>
+        requires implements_trait<Impl, typename TraitRef::trait_t>
+    friend auto ::trp::is_holding_type(const TraitRef& ref) -> bool;
+    template<typename Impl>
+    [[nodiscard]] static auto is_holding_type(const trait_ref_impl& ref) -> bool {
+        return ref.vtable_ptr_->id_ptr == &unique_id_struct<Impl>::value;
+    }
+
+public:
+    trait_ref_impl(const trait_ref_impl&)            = default;
+    trait_ref_impl(trait_ref_impl&&)                 = default;
+    trait_ref_impl& operator=(const trait_ref_impl&) = delete;
+    trait_ref_impl& operator=(trait_ref_impl&&)      = delete;
+    ~trait_ref_impl()                                = default;
+
+    template<implements_trait<trait_t> Impl>
+        requires(not std::derived_from<Impl, trait_ref_impl>)
+    explicit trait_ref_impl(Impl& obj)
+    : vtable_ptr_(&trait_vtable_for<trait_t, Impl>)
+    , obj_ptr_(&obj){};
 };
 
 }    // namespace detail
