@@ -95,18 +95,18 @@ private:
     friend auto trait_cast(alloc_unique_trait_ptr<T>&& ptr);
 
     template<explicit_supertrait_of<Trait> Supertrait>
-    [[nodiscard]] auto upcast() && {
+    [[nodiscard]] friend auto upcast(alloc_unique_trait_ptr ptr) -> alloc_unique_trait_ptr<Supertrait> {
         auto new_ptr =
-            alloc_unique_trait_ptr<Supertrait>(trait_ref_.template upcast<Supertrait>(), get_ctrl_ptr());
-        release();
+            alloc_unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.get_ctrl_ptr());
+        ptr.release();
         return new_ptr;
     }
 };
 
 template<typename Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-[[nodiscard]] auto trait_cast(alloc_unique_trait_ptr<Trait>&& ptr) {
-    return std::move(ptr).template upcast<Supertrait>();
+[[nodiscard]] auto trait_cast(alloc_unique_trait_ptr<Trait> ptr) -> alloc_unique_trait_ptr<Supertrait> {
+    return upcast<Supertrait>(std::move(ptr));
 }
 
 template<typename Impl, any_trait Trait>
@@ -196,9 +196,9 @@ private:
     friend auto trait_cast(unique_trait_ptr<T>&& ptr);
 
     template<explicit_supertrait_of<Trait> Supertrait>
-    [[nodiscard]] auto upcast() && {
-        auto new_ptr = unique_trait_ptr<Supertrait>(trait_ref_.template upcast<Supertrait>());
-        release();
+    [[nodiscard]] friend auto upcast(unique_trait_ptr ptr) -> unique_trait_ptr<Supertrait> {
+        auto new_ptr = unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_));
+        ptr.release();
         return new_ptr;
     }
 
@@ -216,8 +216,8 @@ public:
 
 template<typename Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-[[nodiscard]] auto trait_cast(unique_trait_ptr<Trait>&& ptr) {
-    return std::move(ptr).template upcast<Supertrait>();
+[[nodiscard]] auto trait_cast(unique_trait_ptr<Trait> ptr) -> unique_trait_ptr<Supertrait> {
+    return upcast<Supertrait>(std::move(ptr));
 }
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>

@@ -210,7 +210,7 @@ consteval bool check_constexpr_static_data_member() {
 #endif
 }
 
-template<typename T>
+template<non_cvref T>
 inline constexpr auto direct_base_types = std::define_static_array(
     meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
 
@@ -223,7 +223,7 @@ consteval bool static_data_members_are_constexpr() {
 
 template<typename Trait>
 concept any_immediate_trait =
-    std::same_as<Trait, std::remove_reference_t<Trait>>                         //
+    non_ref<Trait>                                                              //
     and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
     and detail::static_data_members_are_constexpr<Trait>()                      // only in gcc atm
     and stdr::none_of(meta::members_of(^^Trait, ctx_unchecked),
@@ -235,7 +235,7 @@ concept any_immediate_trait =
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_template)                      //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
-    and (stdr::size(direct_base_types<Trait>) ==
+    and (stdr::size(direct_base_types<std::remove_cv_t<Trait>>) ==
          stdr::size(meta::bases_of(^^Trait, meta::access_context::unchecked())));
 
 template<meta::info Self, typename... Traits>
@@ -245,7 +245,8 @@ concept any_traits =
                                                          [] {
                                                              auto args =
                                                                  std::vector{meta::reflect_constant(Self)};
-                                                             args.append_range(direct_base_types<Traits>);
+                                                             args.append_range(
+                                                                 direct_base_types<std::remove_cv_t<Traits>>);
                                                              return args;
                                                          }()):])    //
     );
@@ -283,7 +284,7 @@ struct trait_traits {
                 if (not stdr::contains(result, m))
                     result.push_back(m);
         };
-        template for (constexpr auto base: direct_base_types<T>) {
+        template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
             using base_t = [:copy_cv_to(^^T, base):];
             append_unique(trait_traits<base_t>::all_methods);
         }
@@ -305,7 +306,7 @@ concept supertrait_of = any_trait<Supertrait>    //
 template<typename Supertrait, typename Trait>
 concept direct_supertrait_of =
     supertrait_of<Supertrait, Trait> and
-    stdr::contains(detail::direct_base_types<Trait>, meta::remove_cv(^^Supertrait));
+    stdr::contains(detail::direct_base_types<std::remove_cv_t<Trait>>, meta::remove_cv(^^Supertrait));
 template<typename Supertrait, typename Trait>
 concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::derived_from<Trait, Supertrait>;
 
@@ -319,14 +320,11 @@ inline constexpr auto matching_id_public_members = [] {
                         return meta::has_identifier(info) and meta::identifier_of(info) == Id;
                     })    //
                   | stdr::to<std::vector<meta::info>>();
-    auto append_unique = [&](auto&& members) {
-        for (auto m: members)
-            if (not stdr::contains(result, m))
-                result.push_back(m);
-    };
     template for (constexpr auto base: direct_base_types<Impl>) {
         using base_t = [:base:];
-        append_unique(matching_id_public_members<base_t, Id>);
+        for (auto m: matching_id_public_members<base_t, Id>)
+            if (not stdr::contains(result, m))
+                result.push_back(m);
     }
     return std::define_static_array(result);
 }();
@@ -336,7 +334,6 @@ inline constexpr bool strictly_matches = [] {
     using return_type       = MethodId::return_type;
     using impl_invocation_t = [:MethodId::add_obj_cv(^^Impl):];
     auto [... arg_ids]      = MethodId::param_identities;
-
     if constexpr (meta::is_template(ImplMethod)) {
         return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
             {

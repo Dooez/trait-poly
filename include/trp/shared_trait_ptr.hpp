@@ -109,9 +109,10 @@ private:
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(shared_trait_ptr<T> ptr);
     template<explicit_supertrait_of<Trait> Supertrait>
-    [[nodiscard]] auto upcast() && {
-        auto new_ptr = shared_trait_ptr<Supertrait>(trait_ref_.template upcast<Supertrait>(), get_ctrl_ptr());
-        release();
+    [[nodiscard]] friend auto upcast(shared_trait_ptr ptr) -> shared_trait_ptr<Supertrait> {
+        auto new_ptr =
+            shared_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.get_ctrl_ptr());
+        ptr.release();
         return new_ptr;
     }
     template<any_trait>
@@ -120,8 +121,8 @@ private:
 
 template<typename Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-auto trait_cast(shared_trait_ptr<Trait> ptr) {
-    return std::move(ptr).template upcast<Supertrait>();
+auto trait_cast(shared_trait_ptr<Trait> ptr) -> shared_trait_ptr<Supertrait> {
+    return upcast<Supertrait>(std::move(ptr));
 }
 
 template<typename Impl, any_trait Trait>

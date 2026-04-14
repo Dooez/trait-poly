@@ -32,7 +32,7 @@ concept any_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(
 template<typename Supertrait, detail::any_trait_ref TraitRef>
     requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
 [[nodiscard]] auto trait_cast(const TraitRef& ref) {
-    return ref.template upcast<Supertrait>();
+    return upcast<Supertrait>(ref);
 }
 template<typename Impl, detail::any_trait_ref TraitRef>
     requires implements_trait<Impl, typename TraitRef::trait_t>
@@ -151,11 +151,11 @@ struct method_invoker
                            typename OvSpecs::id>::operator()...;
 };
 
-template<meta::info ImplMethod, any_method_idt MethodId, typename... Params>
+template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
     using return_type    = MethodId::return_type;
     using erased_obj_ptr = [:meta::add_pointer(MethodId::add_obj_cv(^^void)):];
-    using obj_ptr        = [:meta::add_pointer(MethodId::add_obj_cv(meta::parent_of(ImplMethod))):];
+    using obj_ptr        = [:meta::add_pointer(MethodId::add_obj_cv(^^Impl)):];
 
     static auto invoke(erased_obj_ptr ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
         auto&& impl = *static_cast<obj_ptr>(ptr);
@@ -199,27 +199,27 @@ consteval void define_vtable() {
     vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
     auto supertrait_spec = get_info_to_member(
         "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
-    for (auto supertrait: direct_base_types<Trait>) {
+    for (auto supertrait: direct_base_types<std::remove_cv_t<Trait>>) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
         vtable_elements.push_back(supertrait_spec(supertrait));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
 
-template<any_trait Trait, non_cvref Impl>
+template<any_trait Trait, non_ref Impl>
 consteval auto fill_vtable();
 
-template<any_trait Trait, non_cvref Impl>
+template<any_trait Trait, non_ref Impl>
 inline constexpr auto trait_vtable_for = fill_vtable<Trait, Impl>();
 
-template<any_trait Trait, non_cvref Impl>
+template<any_trait Trait, non_ref Impl>
 consteval auto fill_vtable() {
     using namespace std::meta;
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
         using trait_method_idt_t           = [:trait_method_idt:];
         constexpr auto matched_impl_method = [=] {
-            for (auto m: matching_id_public_members<Impl, trait_method_idt_t::identifier>) {
+            for (auto m: matching_id_public_members<std::remove_cv_t<Impl>, trait_method_idt_t::identifier>) {
                 auto matches = meta::substitute(^^strictly_matches,
                                                 {^^Impl, meta::reflect_constant(m), ^^trait_method_idt_t});
                 if (meta::extract<bool>(matches))
@@ -231,7 +231,7 @@ consteval auto fill_vtable() {
         constexpr auto wrapper_struct_info = [=] {
             auto [... infos] = trait_method_idt_t::param_infos;
             return substitute(^^invoke_wrapper_struct,
-                              {reflect_constant(matched_impl_method), trait_method_idt, infos...});
+                              {^^Impl, reflect_constant(matched_impl_method), trait_method_idt, infos...});
         }();
         using wrapper_struct = [:wrapper_struct_info:];
         return &wrapper_struct::invoke;
@@ -239,13 +239,14 @@ consteval auto fill_vtable() {
 
     // use constexpr binding when it becomes available
     auto [... Is] = make_cw_idxs<ttt::all_methods.size()>();
-    auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
+    auto [... Js] = make_cw_idxs<direct_base_types<std::remove_cv_t<Trait>>.size()>();
     return vtable<Trait>{
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
-        [:meta::substitute(^^trait_vtable_for,
-                           {copy_cv_to(^^Trait, direct_base_types<Trait>[Js]), ^^Impl}):]...,
+        [:meta::substitute(
+              ^^trait_vtable_for,
+              {copy_cv_to(^^Trait, direct_base_types<std::remove_cv_t<Trait>>[Js]), ^^Impl}):]...,
     };
 }
 
@@ -299,7 +300,7 @@ consteval auto maybe_define_cv_trait() {
         vector<info> targs;
     };
     using ttt = trait_traits<Trait>;
-    template for (constexpr auto supertrait: direct_base_types<Trait>) {
+    template for (constexpr auto supertrait: direct_base_types<std::remove_cv_t<Trait>>) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         maybe_define_cv_trait<supertrait_t>();
     }
@@ -359,9 +360,11 @@ class trait_ref_impl : public MethodHolders... {
     void*           obj_ptr_{};
 
     trait_ref_impl() = default;
-    trait_ref_impl(const vtable_t* vptr, void* optr)
+    trait_ref_impl(const vtable_t* vptr, auto* optr)
     : vtable_ptr_(vptr)
-    , obj_ptr_(optr) {};
+    , obj_ptr_(
+          (void*)optr)    // NOLINT(*cast*)cv qualification is kept via `invoke_wrapper_struct<...>::obj_ptr`
+    {};
 
     template<typename Manager,
              typename MethodHolder,
@@ -416,10 +419,10 @@ private:
         requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
     friend auto ::trp::trait_cast(const TraitRef&);
     template<explicit_supertrait_of<trait_t> Supertrait>
-    [[nodiscard]] auto upcast() const -> trait_ref<Supertrait> {
+    [[nodiscard]] friend auto upcast(const trait_ref& ref) -> trait_ref<Supertrait> {
         return trait_ref<Supertrait>(
-            get_explicit_supertrait_vtable_ptr<Supertrait>(trait_ref_impl::vtable_ptr_),
-            trait_ref_impl::obj_ptr_);
+            get_explicit_supertrait_vtable_ptr<Supertrait>(ref.trait_ref_impl::vtable_ptr_),
+            ref.trait_ref_impl::obj_ptr_);
     }
 
     template<typename Impl, detail::any_trait_ref TraitRef>
