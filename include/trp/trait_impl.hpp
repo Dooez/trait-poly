@@ -16,6 +16,11 @@ template<typename VTable, typename... MethodHolders>
 class trait_ref_impl;
 
 template<typename T>
+struct unique_id_struct {
+    static inline int value;
+};
+
+template<typename T>
 concept any_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^trait_ref_impl;
 }    // namespace detail
 
@@ -24,8 +29,13 @@ using trait_ref = decltype(detail::trait_ref_identity<Trait>::type_v)::type;
 
 template<typename Supertrait, detail::any_trait_ref TraitRef>
     requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
-auto trait_cast(const TraitRef& ref) {
+[[nodiscard]] auto trait_cast(const TraitRef& ref) {
     return ref.template upcast<Supertrait>();
+}
+template<typename Impl, detail::any_trait_ref TraitRef>
+    requires implements_trait<Impl, typename TraitRef::trait_t>
+[[nodiscard]] auto is_holding_type(const TraitRef& ref) -> bool {
+    return TraitRef::template is_holding_type<Impl>(ref);
 }
 
 namespace detail {
@@ -81,13 +91,21 @@ private:
     template<typename, typename...>
     friend class trait_ref_impl;
 
+
     template<typename Supertrait, detail::any_trait_ref TraitRef>
         requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
     friend auto ::trp::trait_cast(const TraitRef&);
-
     template<explicit_supertrait_of<trait_t> Supertrait>
     [[nodiscard]] auto upcast() const -> trait_ref<Supertrait> {
         return trait_ref<Supertrait>(get_explicit_supertrait_vtable_ptr<Supertrait>(vtable_ptr_), obj_ptr_);
+    }
+
+    template<typename Impl, detail::any_trait_ref TraitRef>
+        requires implements_trait<Impl, typename TraitRef::trait_t>
+    friend auto ::trp::is_holding_type(const TraitRef& ref) -> bool;
+    template<typename Impl>
+    [[nodiscard]] static auto is_holding_type(const trait_ref_impl& ref) -> bool {
+        return ref.vtable_ptr_->id_ptr == &unique_id_struct<Impl>::value;
     }
 
 public:
@@ -228,10 +246,6 @@ struct invoke_wrapper_struct {
             return impl.[:ImplMethod:](std::forward<Params>(params)...);
         }
     }
-};
-template<typename T>
-struct unique_id_struct {
-    static inline int value;
 };
 template<any_trait Trait>
 struct vtable;

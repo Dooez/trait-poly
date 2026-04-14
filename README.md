@@ -40,7 +40,7 @@ As reasoned, this chain of casts avoids undefined behavior. Please open an issue
     - [x] `trait_ref<cv_trait>` where `cv_trait` is cv-qualified
     - [x] cv-qualified `trait_ref<T>`
     - [x] Upcasting to `explicit_supertrait<S, T>` via `trait_cast<S>`
-    - [ ] (?) Runtime type identification for implementations. Compile-time constructed identifiers stored in vtables, e.g., via `bool trp::is_underlying_type<Impl>(const trait_ref<T>&)`.
+    - [x] Runtime type identification for implementations. via `bool trp::is_holding_type<Impl>(const trait_ref<T>&)`.
     - [ ] (?) Downcasting after checking type identification.
     - [ ] (?) Conversion to non-explicit supertraits for allocator-aware handles by constructing vtables at runtime.
 

@@ -10,6 +10,11 @@ namespace trp {
 template<any_trait Trait>
 class shared_trait_ptr;
 
+template<typename Impl, any_trait Trait>
+    requires implements_trait<Impl, Trait>
+auto is_holding_type(const shared_trait_ptr<Trait>& ptr) -> bool {
+    return is_holding_type<Impl>(*ptr);
+}
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
 auto allocate_shared_trait(const Alloc& allocator, Args&&... args);
 
@@ -119,13 +124,12 @@ class shared_trait_ptr : public detail::shared_trait_ptr_impl<Trait> {
     template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
     friend auto allocate_shared_trait(const Alloc&, Args&&...);
 
-    template<typename S, typename T>
-        requires explicit_supertrait_of<S, T>
-    friend auto trait_cast(shared_trait_ptr<T> ptr);
-
     template<any_trait>
     friend class shared_trait_ptr;
 
+    template<typename S, typename T>
+        requires explicit_supertrait_of<S, T>
+    friend auto trait_cast(shared_trait_ptr<T> ptr);
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] auto upcast() && {
         auto new_ptr = shared_trait_ptr<Supertrait>(
@@ -135,6 +139,7 @@ class shared_trait_ptr : public detail::shared_trait_ptr_impl<Trait> {
         impl_t::release();
         return new_ptr;
     }
+
     template<typename... Args>
     explicit shared_trait_ptr(Args&&... args)
     : impl_t(std::forward<Args>(args)...){};

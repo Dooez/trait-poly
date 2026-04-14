@@ -114,11 +114,14 @@ static_assert(not any_trait<not_trait_template>);
 
 int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();
+    std::println("holding some_trait_impl: {}", trp::is_holding_type<some_trait_impl>(to));
     to->bar(e0{});
 
 
     test_16bars(*to);
     to = allocate_shared_trait<trait_proto, other_trait_impl>(std::allocator<std::byte>{});
+    std::println("holding some_trait_impl: {}", trp::is_holding_type<some_trait_impl>(to));
+    std::println("holding other_trait_impl: {}", trp::is_holding_type<other_trait_impl>(to));
     test_16bars(*to);
 
     return 0;

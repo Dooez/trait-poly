@@ -6,7 +6,6 @@
 #include <functional>
 #include <meta>
 #include <ranges>
-#include <set>
 #include <type_traits>
 
 namespace trp {
@@ -56,6 +55,28 @@ concept cw_info = meta::has_template_arguments(^^T)                     //
                   and
 [:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
 
+template<typename... Ts>
+consteval auto make_aggregate(Ts&&... vs) {
+    struct aggregate;
+    consteval {
+        constexpr auto agg_info = ^^aggregate;
+        if (meta::is_complete_type(agg_info))
+            return;
+        auto cnt            = 0UZ;
+        auto id_storage     = std::array<char, 21>{"m"};
+        auto info_to_member = [&](auto info) mutable {
+            auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
+            if (id_end.ec != std::errc{})
+                throw "Error while forming member name";
+            auto id = std::string_view(id_storage.data(), id_end.ptr);
+            return meta::data_member_spec(info, {.name = id});
+        };
+        meta::define_aggregate(
+            agg_info, std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(info_to_member));
+    }
+    return aggregate{std::forward<Ts>(vs)...};
+};
+
 template<uZ End>
 consteval auto make_cw_idxs() {
     struct cw_index_sequence;
@@ -78,12 +99,6 @@ consteval auto make_cw_idxs() {
     return cw_index_sequence{};
 };
 
-// template<uZ End>
-// consteval auto make_Is() {
-//     const auto [... Is] = std::make_index_sequence<End>{}; // not working in clang atm
-//     return std::make_tuple(std::integral_constant<uZ, Is>{}...);
-// };
-
 template<auto Identifier,
          bool Const,
          bool Volatile,
@@ -103,7 +118,7 @@ struct method_identity_t {
     static constexpr bool is_noexcept      = Noexcept;
     using return_type                      = Ret;
     static constexpr auto param_infos      = std::array<meta::info, sizeof...(Params)>{^^Params...};
-    static constexpr auto param_identities = std::make_tuple(std::type_identity<Params>{}...);
+    static constexpr auto param_identities = make_aggregate(std::type_identity<Params>{}...);
 
     static consteval auto add_obj_cv(meta::info inf) {
         if (is_volatile)

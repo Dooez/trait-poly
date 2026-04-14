@@ -125,6 +125,12 @@ template<typename Supertrait, typename Trait>
     return std::move(ptr).template upcast<Supertrait>();
 }
 
+template<typename Impl, any_trait Trait>
+    requires implements_trait<Impl, Trait>
+[[nodiscard]] auto is_holding_type(const alloc_unique_trait_ptr<Trait>& ptr) -> bool {
+    return is_holding_type<Impl>(*ptr);
+}
+
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
 [[nodiscard]] auto allocate_unique_trait(const Alloc& allocator, Args&&... args) {
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
@@ -213,7 +219,6 @@ public:
     }
 };
 }    // namespace detail
-
 template<any_trait Trait>
 class unique_trait_ptr : public detail::unique_trait_ptr_impl<Trait> {
     using impl_t = detail::unique_trait_ptr_impl<Trait>;
@@ -250,6 +255,11 @@ template<typename Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
 [[nodiscard]] auto trait_cast(unique_trait_ptr<Trait>&& ptr) {
     return std::move(ptr).template upcast<Supertrait>();
+}
+template<typename Impl, any_trait Trait>
+    requires implements_trait<Impl, Trait>
+[[nodiscard]] auto is_holding_type(const unique_trait_ptr<Trait>& ptr) -> bool {
+    return is_holding_type<Impl>(*ptr);
 }
 
 template<any_trait Trait, implements_trait<Trait> Impl, typename... Args>
