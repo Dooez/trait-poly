@@ -7,47 +7,29 @@
 #include <atomic>
 #include <memory>
 namespace trp {
-template<any_trait Trait>
-class shared_trait_ptr;
-
-template<typename Impl, any_trait Trait>
-    requires implements_trait<Impl, Trait>
-auto is_holding_type(const shared_trait_ptr<Trait>& ptr) -> bool {
-    return is_holding_type<Impl>(*ptr);
-}
-template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
-auto allocate_shared_trait(const Alloc& allocator, Args&&... args);
-
 namespace detail {
 using arc_t = std::atomic<uint64_t>;
+}    // namespace detail
 
 template<any_trait Trait>
-class shared_trait_ptr_impl {
+class shared_trait_ptr {
     using vtable      = trait_ref<Trait>::vtable_t;
-    using ctrl_header = detail::ctrl_header<arc_t>;
+    using ctrl_header = detail::ctrl_header<detail::arc_t>;
     trait_ref<Trait> trait_ref_{};
     ctrl_header*     ctrl_ptr_{};
 
-protected:
-    shared_trait_ptr_impl(const vtable* vtptr, void* obj_ptr, ctrl_header* ctrl_ptr)
-    : trait_ref_(vtptr, obj_ptr)
+    shared_trait_ptr(trait_ref<Trait> trait_ref, ctrl_header* ctrl_ptr)
+    : trait_ref_(trait_ref)
     , ctrl_ptr_(ctrl_ptr) {
         // increment is external
     };
 
     template<implements_trait<Trait> Impl>
-    shared_trait_ptr_impl(Impl* obj_ptr, ctrl_header* ctrl_ptr)
+    shared_trait_ptr(Impl* obj_ptr, ctrl_header* ctrl_ptr)
     : trait_ref_(*obj_ptr)
     , ctrl_ptr_(ctrl_ptr) {
         increment();
     };
-
-    [[nodiscard]] auto get_vtable_ptr() const -> const vtable* {
-        return trait_ref_.vtable_ptr_;
-    }
-    [[nodiscard]] auto get_obj_ptr() const -> void* {
-        return trait_ref_.obj_ptr_;
-    }
     [[nodiscard]] auto get_ctrl_ptr() const -> ctrl_header* {
         return ctrl_ptr_;
     }
@@ -85,22 +67,22 @@ public:
     auto operator*(this auto&& self) -> trait_ref<Trait>& {
         return const_cast<trait_ref<Trait>&>(self.trait_ref_);
     }
-    ~shared_trait_ptr_impl() {
+    ~shared_trait_ptr() {
         decrement();
     }
 
-    shared_trait_ptr_impl() = default;
-    shared_trait_ptr_impl(const shared_trait_ptr_impl& other) noexcept {
+    shared_trait_ptr() = default;
+    shared_trait_ptr(const shared_trait_ptr& other) noexcept {
         other.increment();
         trait_ref_.rebind(other.trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
     }
-    shared_trait_ptr_impl(shared_trait_ptr_impl&& other) noexcept
+    shared_trait_ptr(shared_trait_ptr&& other) noexcept
     : trait_ref_{other.trait_ref_}
     , ctrl_ptr_(other.ctrl_ptr_) {
         other.release();
     }
-    shared_trait_ptr_impl& operator=(const shared_trait_ptr_impl& other) noexcept {
+    shared_trait_ptr& operator=(const shared_trait_ptr& other) noexcept {
         if (this == &other)
             return *this;
         decrement();
@@ -109,46 +91,40 @@ public:
         ctrl_ptr_ = other.ctrl_ptr_;
         return *this;
     }
-    shared_trait_ptr_impl& operator=(shared_trait_ptr_impl&& other) noexcept {
+    shared_trait_ptr& operator=(shared_trait_ptr&& other) noexcept {
         trait_ref_.rebind(other.trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
     }
-};
-}    // namespace detail
-template<any_trait Trait>
-class shared_trait_ptr : public detail::shared_trait_ptr_impl<Trait> {
-    using impl_t = detail::shared_trait_ptr_impl<Trait>;
 
+private:
     template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
     friend auto allocate_shared_trait(const Alloc&, Args&&...);
-
-    template<any_trait>
-    friend class shared_trait_ptr;
 
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(shared_trait_ptr<T> ptr);
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] auto upcast() && {
-        auto new_ptr = shared_trait_ptr<Supertrait>(
-            detail::get_explicit_supertrait_vtable_ptr<Supertrait>(impl_t::get_vtable_ptr()),
-            impl_t::get_obj_ptr(),
-            impl_t::get_ctrl_ptr());
-        impl_t::release();
+        auto new_ptr = shared_trait_ptr<Supertrait>(trait_ref_.template upcast<Supertrait>(), get_ctrl_ptr());
+        release();
         return new_ptr;
     }
-
-    template<typename... Args>
-    explicit shared_trait_ptr(Args&&... args)
-    : impl_t(std::forward<Args>(args)...){};
+    template<any_trait>
+    friend class shared_trait_ptr;
 };
 
 template<typename Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
 auto trait_cast(shared_trait_ptr<Trait> ptr) {
     return std::move(ptr).template upcast<Supertrait>();
+}
+
+template<typename Impl, any_trait Trait>
+    requires implements_trait<Impl, Trait>
+auto is_holding_type(const shared_trait_ptr<Trait>& ptr) -> bool {
+    return is_holding_type<Impl>(*ptr);
 }
 
 

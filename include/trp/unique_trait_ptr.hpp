@@ -7,32 +7,24 @@
 #include <memory>
 
 namespace trp {
-namespace detail {
 template<any_trait Trait>
-class alloc_unique_trait_ptr_impl {
+class alloc_unique_trait_ptr {
     using vtable      = trait_ref<Trait>::vtable_t;
     using ctrl_header = detail::ctrl_header<>;
     trait_ref<Trait> trait_ref_{};
     ctrl_header*     ctrl_ptr_{};
 
-protected:
-    [[nodiscard]] auto get_vtable_ptr() const -> const vtable* {
-        return trait_ref_.vtable_ptr_;
-    }
-    [[nodiscard]] auto get_obj_ptr() const -> void* {
-        return trait_ref_.obj_ptr_;
-    }
     [[nodiscard]] auto get_ctrl_ptr() const -> ctrl_header* {
         return ctrl_ptr_;
     }
 
     template<implements_trait<Trait> Impl>
-    alloc_unique_trait_ptr_impl(Impl* obj_ptr, ctrl_header* ctrl_ptr)
+    alloc_unique_trait_ptr(Impl* obj_ptr, ctrl_header* ctrl_ptr)
     : trait_ref_(*obj_ptr)
     , ctrl_ptr_(ctrl_ptr){};
 
-    alloc_unique_trait_ptr_impl(const vtable* vptr, void* obj_ptr, ctrl_header* ctrl_ptr = nullptr)
-    : trait_ref_(vptr, obj_ptr)
+    explicit alloc_unique_trait_ptr(trait_ref<Trait> trait_ref, ctrl_header* ctrl_ptr = nullptr)
+    : trait_ref_(trait_ref)
     , ctrl_ptr_(ctrl_ptr) {}
 
     void delete_() {
@@ -55,13 +47,13 @@ protected:
     }
 
 public:
-    alloc_unique_trait_ptr_impl() = default;
-    alloc_unique_trait_ptr_impl(alloc_unique_trait_ptr_impl&& other) noexcept
+    alloc_unique_trait_ptr() = default;
+    alloc_unique_trait_ptr(alloc_unique_trait_ptr&& other) noexcept
     : trait_ref_{other.trait_ref_}
     , ctrl_ptr_{other.ctrl_ptr_} {
         other.release();
     }
-    alloc_unique_trait_ptr_impl& operator=(alloc_unique_trait_ptr_impl&& other) noexcept {
+    alloc_unique_trait_ptr& operator=(alloc_unique_trait_ptr&& other) noexcept {
         delete_();
         this->trait_ref_.rebind(other.trait_ref_);
         this->ctrl_ptr_ = other.ctrl_ptr_;
@@ -69,10 +61,10 @@ public:
         return *this;
     };
 
-    alloc_unique_trait_ptr_impl(const alloc_unique_trait_ptr_impl&)            = delete;
-    alloc_unique_trait_ptr_impl& operator=(const alloc_unique_trait_ptr_impl&) = delete;
+    alloc_unique_trait_ptr(const alloc_unique_trait_ptr&)            = delete;
+    alloc_unique_trait_ptr& operator=(const alloc_unique_trait_ptr&) = delete;
 
-    ~alloc_unique_trait_ptr_impl() {
+    ~alloc_unique_trait_ptr() {
         delete_();
     }
 
@@ -85,16 +77,8 @@ public:
     auto operator*(this auto&& self) -> trait_ref<Trait>& {
         return const_cast<trait_ref<Trait>&>(self.trait_ref_);
     }
-};
-}    // namespace detail
-template<any_trait Trait>
-class alloc_unique_trait_ptr : public detail::alloc_unique_trait_ptr_impl<Trait> {
-    using impl_t = detail::alloc_unique_trait_ptr_impl<Trait>;
 
-    template<typename... Args>
-    explicit alloc_unique_trait_ptr(Args&&... args)
-    : impl_t(std::forward<Args>(args)...){};
-
+private:
     template<any_trait>
     friend class alloc_unique_trait_ptr;
 
@@ -110,11 +94,9 @@ class alloc_unique_trait_ptr : public detail::alloc_unique_trait_ptr_impl<Trait>
 
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] auto upcast() && {
-        auto new_ptr = alloc_unique_trait_ptr<Supertrait>(
-            detail::get_explicit_supertrait_vtable_ptr<Supertrait>(impl_t::get_vtable_ptr()),
-            impl_t::get_obj_ptr(),
-            impl_t::get_ctrl_ptr());
-        impl_t::release();
+        auto new_ptr =
+            alloc_unique_trait_ptr<Supertrait>(trait_ref_.template upcast<Supertrait>(), get_ctrl_ptr());
+        release();
         return new_ptr;
     }
 };
@@ -156,19 +138,10 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
     }
 }
 
-namespace detail {
 template<any_trait Trait>
-class unique_trait_ptr_impl {
+class unique_trait_ptr {
     trait_ref<Trait> trait_ref_;
     using vtable = trait_ref<Trait>::vtable_t;
-
-protected:
-    [[nodiscard]] auto get_vtable_ptr() const -> const vtable* {
-        return trait_ref_.vtable_ptr_;
-    }
-    [[nodiscard]] auto get_obj_ptr() const -> void* {
-        return trait_ref_.obj_ptr_;
-    }
 
     void release() {
         trait_ref_.release();
@@ -178,19 +151,16 @@ protected:
         return trait_ref_.holds_value();
     }
 
-    unique_trait_ptr_impl(const vtable* vtable_ptr, void* obj_ptr)
-    : trait_ref_(vtable_ptr, obj_ptr) {};
+    explicit unique_trait_ptr(trait_ref<Trait> trait_ref)
+    : trait_ref_(trait_ref) {};
 
-    template<implements_trait<Trait> Impl>
-    explicit unique_trait_ptr_impl(Impl* obj_ptr)
-    : trait_ref_(*obj_ptr){};
-
-    unique_trait_ptr_impl() = default;
-    unique_trait_ptr_impl(unique_trait_ptr_impl&& other) noexcept
+public:
+    unique_trait_ptr() = default;
+    unique_trait_ptr(unique_trait_ptr&& other) noexcept
     : trait_ref_{other.trait_ref_} {
         other.release();
     }
-    unique_trait_ptr_impl& operator=(unique_trait_ptr_impl&& other) noexcept {
+    unique_trait_ptr& operator=(unique_trait_ptr&& other) noexcept {
         if (holds_value())
             trait_ref_.default_delete();
         trait_ref_.rebind(other.trait_ref_);
@@ -198,11 +168,10 @@ protected:
         return *this;
     };
 
-public:
-    unique_trait_ptr_impl(const unique_trait_ptr_impl&)            = delete;
-    unique_trait_ptr_impl& operator=(const unique_trait_ptr_impl&) = delete;
+    unique_trait_ptr(const unique_trait_ptr&)            = delete;
+    unique_trait_ptr& operator=(const unique_trait_ptr&) = delete;
 
-    ~unique_trait_ptr_impl() {
+    ~unique_trait_ptr() {
         if (not holds_value())
             return;
         trait_ref_.default_delete();
@@ -217,36 +186,27 @@ public:
     auto operator*(this auto&& self) -> trait_ref<Trait>& {
         return const_cast<trait_ref<Trait>&>(self.trait_ref_);
     }
-};
-}    // namespace detail
-template<any_trait Trait>
-class unique_trait_ptr : public detail::unique_trait_ptr_impl<Trait> {
-    using impl_t = detail::unique_trait_ptr_impl<Trait>;
 
-    template<any_trait>
-    friend class unique_trait_ptr;
-
+private:
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(unique_trait_ptr<T>&& ptr);
 
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] auto upcast() && {
-        auto new_ptr = unique_trait_ptr<Supertrait>(
-            detail::get_explicit_supertrait_vtable_ptr<Supertrait>(impl_t::get_vtable_ptr()),
-            impl_t::get_obj_ptr());
-        impl_t::release();
+        auto new_ptr = unique_trait_ptr<Supertrait>(trait_ref_.template upcast<Supertrait>());
+        release();
         return new_ptr;
     }
 
 public:
     template<implements_trait<Trait> Impl>
     explicit unique_trait_ptr(Impl* obj_ptr)
-    : impl_t(obj_ptr){};
+    : trait_ref_(*obj_ptr){};
 
     operator alloc_unique_trait_ptr<Trait>() && {
-        auto new_ptr = alloc_unique_trait_ptr<Trait>(impl_t::get_vtable_ptr(), impl_t::get_obj_ptr());
-        impl_t::release();
+        auto new_ptr = alloc_unique_trait_ptr<Trait>(trait_ref_);
+        release();
         return new_ptr;
     }
 };
@@ -266,6 +226,4 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename... Args>
 [[nodiscard]] auto make_unique_trait(Args&&... args) -> unique_trait_ptr<Trait> {
     return unique_trait_ptr<Trait>(new Impl(std::forward<Args>(args)...));
 }
-
-
 }    // namespace trp
