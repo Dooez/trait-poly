@@ -229,6 +229,10 @@ struct invoke_wrapper_struct {
         }
     }
 };
+template<typename T>
+struct unique_id_struct {
+    static inline int value;
+};
 template<any_trait Trait>
 struct vtable;
 
@@ -251,13 +255,15 @@ consteval void define_vtable() {
         };
     };
 
-    using default_delete_fptr = void (*)(void*);
-    auto vtable_elements      = std::vector<info>{};
+    auto vtable_elements = std::vector<info>{};
     auto method_spec = get_info_to_member("m_", [](info m) { return substitute(^^wrapper_fptr_for, {m}); });
     for (auto method_idt: trait_traits<Trait>::all_methods) {
         vtable_elements.push_back(method_spec(method_idt));
     }
+    using default_delete_fptr = void (*)(void*);
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
+    using id_ptr = const int*;
+    vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
     auto supertrait_spec = get_info_to_member(
         "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
     for (auto supertrait: direct_base_types<Trait>) {
@@ -274,12 +280,10 @@ consteval auto fill_vtable() {
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
         using trait_method_idt_t           = [:trait_method_idt:];
         constexpr auto matched_impl_method = [=] {
-            template for (constexpr auto m:
-                          matching_id_public_members<Impl, trait_method_idt_t::identifier>) {
-                constexpr auto matches = [:meta::substitute(
-                                               ^^strictly_matches,
-                                               {^^Impl, meta::reflect_constant(m), ^^trait_method_idt_t}):];
-                if (matches)
+            for (auto m: matching_id_public_members<Impl, trait_method_idt_t::identifier>) {
+                auto matches = meta::substitute(^^strictly_matches,
+                                                {^^Impl, meta::reflect_constant(m), ^^trait_method_idt_t});
+                if (meta::extract<bool>(matches))
                     return m;
             }
             std::unreachable();
@@ -306,6 +310,7 @@ consteval auto fill_vtable() {
     return vtable<Trait>{
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
+        &unique_id_struct<Impl>::value,
         get_supertrait_vtable(cw<direct_base_types<Trait>[Js]>)...,
     };
 }
@@ -325,9 +330,9 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         if constexpr (direct_supertrait_of<Supertrait, Trait>) {
             return ^^Supertrait;
         } else {
-            template for (constexpr auto base: direct_base_types<Trait>) {
-                using base_t = [:base:];
-                if constexpr (std::derived_from<base_t, Supertrait>)
+            for (auto base: direct_base_types<Trait>) {
+                auto is_derived = meta::substitute(^^std::derived_from, {base, ^^Supertrait});
+                if (meta::extract<bool>(is_derived))
                     return base;
             }
             std::unreachable();
@@ -335,10 +340,9 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     }():];
 
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
-        static constexpr auto mems = ce_fn_to_array<[] {
-            return meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
-                   stdv::drop(stdr::size(trait_traits<Trait>::all_methods) + 1);
-        }>;
+        static constexpr auto mems = std::define_static_array(
+            meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
+            stdv::drop(stdr::size(trait_traits<Trait>::all_methods) + 1));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &((*ptr).[:m:]);

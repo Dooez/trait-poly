@@ -194,35 +194,13 @@ consteval bool check_constexpr_static_data_member() {
 #endif
 }
 
-template<auto F>
-inline constexpr auto ce_fn_to_array = [] {
-    using T = stdr::range_value_t<std::invoke_result_t<decltype(F)>>;
-    struct return_tup;
-    consteval {
-        auto cnt            = 0UZ;
-        auto id_storage     = std::array<char, 21>{"m"};
-        auto info_to_member = [&](auto info) mutable {
-            auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
-            if (id_end.ec != std::errc{})
-                throw "Error while forming member name";
-            auto id = std::string_view(id_storage.data(), id_end.ptr);
-            return meta::data_member_spec(
-                meta::substitute(^^constant_wrapper, {meta::reflect_constant(info)}), {.name = id});
-        };
-        meta::define_aggregate(^^return_tup, F() | stdv::transform(info_to_member));
-    }
-    auto [... values] = return_tup{};
-    return std::array<T, sizeof...(values)>{values...};
-}();
-
 template<typename T>
-inline constexpr auto direct_base_types = ce_fn_to_array<[] {
-    return meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of);
-}>;
+inline constexpr auto direct_base_types = std::define_static_array(
+    meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
 
 template<typename T>
 consteval bool static_data_members_are_constexpr() {
-    constexpr auto mems = ce_fn_to_array<[] { return meta::static_data_members_of(^^T, ctx_unchecked); }>;
+    constexpr auto mems = std::define_static_array(meta::static_data_members_of(^^T, ctx_unchecked));
     auto [... Is]       = make_cw_idxs<mems.size()>();
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }
@@ -249,9 +227,10 @@ concept any_traits =
     (... and
      (any_immediate_trait<Traits> and [:meta::substitute(Self,
                                                          [] {
-                                                             auto [... bases] = direct_base_types<Traits>;
-                                                             return std::array{meta::reflect_constant(Self),
-                                                                               bases...};
+                                                             auto args =
+                                                                 std::vector{meta::reflect_constant(Self)};
+                                                             args.append_range(direct_base_types<Traits>);
+                                                             return args;
                                                          }()):])    //
     );
 
@@ -271,7 +250,7 @@ concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
 namespace detail {
 template<typename T>
 struct trait_traits {
-    static constexpr auto all_methods = ce_fn_to_array<[] {
+    static constexpr auto all_methods = [] {
         using namespace meta;
         constexpr auto is_valid_method = [](auto method) static {
             return is_function(method)                                 //
@@ -292,8 +271,8 @@ struct trait_traits {
             using base_t = [:copy_cv_to(^^T, base):];
             append_unique(trait_traits<base_t>::all_methods);
         }
-        return result;
-    }>;
+        return std::define_static_array(result);
+    }();
 };
 }    // namespace detail
 
@@ -317,7 +296,7 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 namespace detail {
 template<non_cvref Impl, auto Id>
-inline constexpr auto matching_id_public_members = ce_fn_to_array<[] {
+inline constexpr auto matching_id_public_members = [] {
     using namespace meta;
     auto result = meta::members_of(^^Impl, meta::access_context::unprivileged())    //
                   | stdv::filter([](auto info) {
@@ -333,8 +312,8 @@ inline constexpr auto matching_id_public_members = ce_fn_to_array<[] {
         using base_t = [:base:];
         append_unique(matching_id_public_members<base_t, Id>);
     }
-    return result;
-}>;
+    return std::define_static_array(result);
+}();
 
 template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
@@ -361,17 +340,15 @@ template<typename Impl, typename MethodIdt>
 concept implements_method =
     non_ref<Impl>                    //
     and any_method_idt<MethodIdt>    //
-    and
-    ([] {
-        template for (constexpr auto m:
-                      matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>) {
-            constexpr auto matches = [:meta::substitute(^^strictly_matches,
-                                                        {^^Impl, meta::reflect_constant(m), ^^MethodIdt}):];
-            if (matches)
-                return true;
-        }
-        return false;
-    }());
+    and ([] {
+            for (auto m: matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>) {
+                auto matches =
+                    meta::substitute(^^strictly_matches, {^^Impl, meta::reflect_constant(m), ^^MethodIdt});
+                if (meta::extract<bool>(matches))
+                    return true;
+            }
+            return false;
+        }());
 
 
 template<meta::info Self, typename Impl, typename Trait, uZ I = 0>
