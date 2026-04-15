@@ -488,13 +488,8 @@ public:
 };
 
 
-template<any_trait Trait>
-    requires non_cvref<Trait>
+template<non_cv_trait Trait>
 consteval void define_trait() {
-    using c_trait  = [:meta::add_const(^^Trait):];
-    using v_trait  = [:meta::add_volatile(^^Trait):];
-    using cv_trait = [:meta::add_cv(^^Trait):];
-
     detail::maybe_define_cv_trait<Trait>();
 };
 }    // namespace trp
