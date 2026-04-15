@@ -15,8 +15,8 @@ using arc_t = std::atomic<uint64_t>;
 template<any_trait Trait>
 class shared_trait_ptr {
     using ctrl_header = detail::ctrl_header<detail::arc_t>;
-    mutable trait_ref<Trait> trait_ref_{};
-    ctrl_header*             ctrl_ptr_{};
+    trait_ref<Trait> trait_ref_{};
+    ctrl_header*     ctrl_ptr_{};
 
     shared_trait_ptr(trait_ref<Trait> trait_ref, ctrl_header* ctrl_ptr)
     : trait_ref_(trait_ref)
@@ -61,10 +61,10 @@ public:
     explicit operator bool() const {
         return holds_value();
     }
-    auto operator->(this auto&& self) -> trait_ref<Trait>* {
+    auto operator->(this auto&& self) -> auto* {
         return &self.trait_ref_;
     }
-    auto operator*(this auto&& self) -> trait_ref<Trait>& {
+    auto operator*(this auto&& self) -> auto& {
         return self.trait_ref_;
     }
     ~shared_trait_ptr() {

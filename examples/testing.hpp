@@ -160,7 +160,8 @@ struct alignas(256) other_trait_impl {
 
 };
 
-void test_16bars(auto& to){
+void test_16bars(auto&& to){
+    std::println(std::meta::display_string_of(std::meta::type_of(^^to)));
     to.bar00(e0{});
     to.bar01(e0{});
     to.bar02(e0{});

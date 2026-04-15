@@ -53,6 +53,111 @@ void default_delete(void* ptr) {
 template<typename Trait, uZ StartIdx>
 struct method_holder;    // holds `mehod_invoker **method_name**;`
 
+
+template<uZ Index, any_method_idt MethodId>
+struct cvo_invoker;
+template<uZ   Index,
+         auto Identifier,
+         bool Const,
+         bool Volatile,
+         bool LVRef,
+         bool RVRef,
+         bool Value,
+         bool Noexcept,
+         typename Ret,
+         typename... Args>
+    requires(not(LVRef or RVRef or Value))    // not supported
+struct cvo_invoker<
+    Index,
+    method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
+    auto operator()(const auto* vtable_ptr, void* obj_ptr, Args... args) noexcept(Noexcept) -> Ret
+        requires(not Const and not Volatile)
+    {
+        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
+    }
+    auto operator()(const auto* vtable_ptr, void* obj_ptr, Args... args) const noexcept(Noexcept) -> Ret
+        requires(Const and not Volatile)
+    {
+        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
+    }
+    auto operator()(const auto* vtable_ptr, void* obj_ptr, Args... args) volatile noexcept(Noexcept) -> Ret
+        requires(not Const and Volatile)
+    {
+        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
+    }
+    auto operator()(const auto* vtable_ptr, void* obj_ptr, Args... args) const volatile noexcept(Noexcept)
+        -> Ret
+        requires(Const and Volatile)
+    {
+        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
+    }
+
+private:
+    template<typename VTable>
+    static auto get_method(VTable* vt) {
+        constexpr auto m = std::meta::nonstatic_data_members_of(^^VTable, ctx_unchecked)[Index];
+        return vt->[:m:];
+    }
+};
+template<uZ I, any_method_idt MethodId>
+struct overload_spec {
+    using id                  = MethodId;
+    static constexpr uZ index = I;
+};
+template<typename... OvSpecs>
+struct cvm_invoker : cvo_invoker<OvSpecs::index, typename OvSpecs::id>... {
+    using cvo_invoker<OvSpecs::index, typename OvSpecs::id>::operator()...;
+};
+
+template<typename Trait, uZ StartIdx>
+struct cvm_holder;    // holds `mehod_invoker **method_name**;`
+
+template<typename CVMInvoker, typename VTable, typename... Args>
+concept noexcept_cvm_invoker =
+    meta::is_template(^^CVMInvoker) and (meta::template_of(^^CVMInvoker) == ^^cvm_invoker) and ([] {
+        CVMInvoker invoker{};
+        VTable     vt{};
+        return noexcept(invoker(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
+    });
+
+template<typename TRef, typename MethodHolder, typename CVMInvoker>
+struct new_method_invoker {
+    template<typename... Args>
+    auto operator()(Args&&... args) const
+        volatile noexcept(noexcept_cvm_invoker<CVMInvoker, typename TRef::vtable_t, Args...>)
+            -> decltype(auto) {
+        CVMInvoker invoker{};
+        auto*      vtptr   = get_trait_ref().vtable_ptr_;
+        void*      obj_ptr = get_trait_ref().obj_ptr_;
+        return invoker(vtptr, obj_ptr, std::forward<Args>(args)...);
+    }
+
+private:
+    auto get_trait_ref(this auto&& self) -> decltype(auto) {
+        constexpr auto add_cvp = [](meta::info type) {
+            using this_t = std::remove_reference_t<decltype(self)>;
+            return meta::add_pointer(copy_cv_to(^^this_t, type));
+        };
+
+        constexpr auto invoker_ptr = [] {
+            auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
+            if (mems.size() != 1)
+                throw "Method holder is expected to have only a single method.";
+            if (meta::type_of(mems[0]) != ^^new_method_invoker)
+                throw "Method invoker type does not match method holders first member type.";
+            return meta::extract<new_method_invoker MethodHolder::*>(mems[0]);
+        }();
+#ifdef __cpp_lib_is_pointer_interconvertible
+        static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
+#endif
+        static_assert(std::is_standard_layout_v<MethodHolder>);
+        const auto mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(&self);
+
+        static_assert(std::derived_from<TRef, MethodHolder>);
+        return *static_cast<[:add_cvp(^^TRef):]>(mh_ptr);
+    }
+};
+
 template<typename Manager, typename MethodHolder, typename MethodInvoker, uZ Index, any_method_idt MethodId>
 struct overload_invoker;
 
@@ -130,11 +235,6 @@ private:
         static_assert(std::derived_from<Manager, MethodHolder>);
         return *static_cast<[:add_cvp(^^Manager):]>(mh_ptr);
     }
-};
-template<uZ I, any_method_idt MethodId>
-struct overload_spec {
-    using id                  = MethodId;
-    static constexpr uZ index = I;
 };
 
 template<typename Manager, typename MethodHolder, typename... OvSpecs>
@@ -297,7 +397,8 @@ consteval auto maybe_define_cv_trait() {
         return;
     struct method_holder_spec {
         string_view  id;
-        vector<info> targs;
+        info         holder_info;
+        vector<info> cvm_invoker_targs;
     };
     using ttt = trait_traits<Trait>;
     template for (constexpr auto supertrait: direct_base_types<std::remove_cv_t<Trait>>) {
@@ -317,21 +418,20 @@ consteval auto maybe_define_cv_trait() {
         auto it = stdr::find(method_holder_specs, method_idt::identifier, &method_holder_spec::id);
         if (it == method_holder_specs.end()) {
             const auto holder_info = substitute(^^method_holder, {^^Trait, reflect_constant(i)});
-            method_holder_specs.push_back({
-                .id = method_idt::identifier, .targs = {{}, holder_info, spec}
-            });
+            method_holder_specs.push_back(
+                {.id = method_idt::identifier, .holder_info = holder_info, .cvm_invoker_targs = {spec}});
             trait_ref_args.push_back(holder_info);
         } else {
-            it->targs.push_back(spec);
+            it->cvm_invoker_targs.push_back(spec);
         }
         ++i;
     }
 
     const auto mgr_info = substitute(^^trait_ref_impl, trait_ref_args);
-    for (auto& [name, targs]: method_holder_specs) {
-        targs[0]                = mgr_info;
-        const auto invoker_type = substitute(^^method_invoker, targs);
-        define_aggregate(targs[1],
+    for (auto& [name, holder_info, cvm_invoker_targs]: method_holder_specs) {
+        const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
+        const auto invoker_type = substitute(^^new_method_invoker, {mgr_info, holder_info, cvm_invoker_info});
+        define_aggregate(holder_info,
                          {data_member_spec(invoker_type,
                                            data_member_options{
                                                .name              = name,
@@ -372,6 +472,9 @@ class trait_ref_impl : public MethodHolders... {
              uZ             Index,
              any_method_idt MethodId>
     friend struct overload_invoker;
+
+    template<typename Manager, typename MethodHolder, typename CVMInvoker>
+    friend struct new_method_invoker;
 
     void release() {
         obj_ptr_ = nullptr;

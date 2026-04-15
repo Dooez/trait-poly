@@ -73,10 +73,10 @@ public:
     explicit operator bool() const {
         return holds_value();
     }
-    auto operator->(this auto&& self) -> trait_ref<Trait>* {
+    auto operator->(this auto&& self) -> decltype(auto) {
         return &self.trait_ref_;
     }
-    auto operator*(this auto&& self) -> trait_ref<Trait>& {
+    auto operator*(this auto&& self) -> decltype(auto) {
         return self.trait_ref_;
     }
 
