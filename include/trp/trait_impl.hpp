@@ -441,6 +441,10 @@ private:
     trait_ref(const vtable_t* vptr, void* optr)
     : trait_ref_impl(vptr, optr) {};
 
+    template<implements_trait<trait_t> Impl>
+    explicit trait_ref(Impl* obj)
+    : trait_ref_impl(&detail::trait_vtable_for<trait_t, Impl>, obj){};
+
 public:
     template<implements_trait<trait_t> Impl>
         requires(not std::derived_from<Impl, trait_ref_impl>)

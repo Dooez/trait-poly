@@ -73,9 +73,11 @@ public:
     explicit operator bool() const {
         return holds_value();
     }
+    // UB if not holding value
     auto operator->(this auto&& self) -> decltype(auto) {
         return &self.trait_ref_;
     }
+    // UB if not holding value
     auto operator*(this auto&& self) -> decltype(auto) {
         return self.trait_ref_;
     }
@@ -96,6 +98,8 @@ private:
 
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] friend auto upcast(alloc_unique_trait_ptr ptr) -> alloc_unique_trait_ptr<Supertrait> {
+        if (not ptr)
+            return {};
         auto new_ptr =
             alloc_unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.get_ctrl_ptr());
         ptr.release();
@@ -112,7 +116,7 @@ template<typename Supertrait, typename Trait>
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
 [[nodiscard]] auto is_holding_type(const alloc_unique_trait_ptr<Trait>& ptr) -> bool {
-    return is_holding_type<Impl>(*ptr);
+    return ptr and is_holding_type<Impl>(*ptr);
 }
 
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
@@ -183,9 +187,11 @@ public:
     explicit operator bool() const {
         return holds_value();
     }
+    // UB if not holding value
     auto operator->(this auto&& self) -> trait_ref<Trait>* {
         return &self.trait_ref_;
     }
+    // UB if not holding value
     auto operator*(this auto&& self) -> trait_ref<Trait>& {
         return self.trait_ref_;
     }
@@ -197,17 +203,20 @@ private:
 
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] friend auto upcast(unique_trait_ptr ptr) -> unique_trait_ptr<Supertrait> {
+        if (not ptr)
+            return {};
         auto new_ptr = unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_));
         ptr.release();
         return new_ptr;
     }
 
 public:
+    // new allocated object only
     template<implements_trait<Trait> Impl>
     explicit unique_trait_ptr(Impl* obj_ptr)
-    : trait_ref_(*obj_ptr){};
+    : trait_ref_(obj_ptr){};
 
-    operator alloc_unique_trait_ptr<Trait>() && {
+    operator alloc_unique_trait_ptr<Trait>() && {    // NOLINT(*explicit*)
         auto new_ptr = alloc_unique_trait_ptr<Trait>(trait_ref_);
         release();
         return new_ptr;
@@ -222,7 +231,7 @@ template<typename Supertrait, typename Trait>
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
 [[nodiscard]] auto is_holding_type(const unique_trait_ptr<Trait>& ptr) -> bool {
-    return is_holding_type<Impl>(*ptr);
+    return ptr and is_holding_type<Impl>(*ptr);
 }
 
 template<any_trait Trait, implements_trait<Trait> Impl, typename... Args>

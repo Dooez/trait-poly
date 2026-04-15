@@ -61,9 +61,11 @@ public:
     explicit operator bool() const {
         return holds_value();
     }
+    // UB if not holding value
     auto operator->(this auto&& self) -> auto* {
         return &self.trait_ref_;
     }
+    // UB if not holding value
     auto operator*(this auto&& self) -> auto& {
         return self.trait_ref_;
     }
@@ -110,6 +112,8 @@ private:
     friend auto trait_cast(shared_trait_ptr<T> ptr);
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] friend auto upcast(shared_trait_ptr ptr) -> shared_trait_ptr<Supertrait> {
+        if (not ptr)
+            return {};
         auto new_ptr =
             shared_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.get_ctrl_ptr());
         ptr.release();
@@ -128,7 +132,7 @@ auto trait_cast(shared_trait_ptr<Trait> ptr) -> shared_trait_ptr<Supertrait> {
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
 auto is_holding_type(const shared_trait_ptr<Trait>& ptr) -> bool {
-    return is_holding_type<Impl>(*ptr);
+    return ptr and is_holding_type<Impl>(*ptr);
 }
 
 
