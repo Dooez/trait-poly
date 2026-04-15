@@ -125,9 +125,6 @@ struct method_invoker {
     auto operator()(Args&&... args) const
         volatile noexcept(noexcept_cvm_invoker<CVMInvoker, typename TRef::vtable_t, Args...>)
             -> decltype(auto) {
-        // CVMInvoker invoker{};
-        // auto*      vtptr   = get_trait_ref().vtable_ptr_;
-        // void*      obj_ptr = get_trait_ref().obj_ptr_;
         return CVMInvoker{}(
             get_trait_ref().vtable_ptr_, get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
     }
