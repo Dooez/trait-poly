@@ -111,7 +111,9 @@ static_assert(not compare_structs(vt01, vt2));
 int main() {
     std::println("make_shared:");
     const auto to = trp::make_shared_trait<trait_proto, some_impl>();
+    const auto toref = *to;
     to->foo();
+    toref.foo();
     auto to_up = trp::trait_cast<trait_proto_base>(to);
     to_up->bar();
 

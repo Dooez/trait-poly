@@ -11,8 +11,8 @@ namespace trp {
 template<any_trait Trait>
 class alloc_unique_trait_ptr {
     using ctrl_header = detail::ctrl_header<>;
-    trait_ref<Trait> trait_ref_{};
-    ctrl_header*     ctrl_ptr_{};
+    mutable trait_ref<Trait> trait_ref_{};
+    ctrl_header*             ctrl_ptr_{};
 
     [[nodiscard]] auto get_ctrl_ptr() const -> ctrl_header* {
         return ctrl_ptr_;
@@ -142,7 +142,7 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
 
 template<any_trait Trait>
 class unique_trait_ptr {
-    trait_ref<Trait> trait_ref_;
+    mutable trait_ref<Trait> trait_ref_;
 
     void release() {
         trait_ref_.release();
