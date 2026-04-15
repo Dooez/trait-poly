@@ -262,7 +262,7 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
 }    // namespace detail
 
 template<typename Trait>
-concept any_trait = detail::any_traits<^^detail::any_traits, Trait>;
+concept any_trait = std::is_class_v<Trait> and detail::any_traits<^^detail::any_traits, Trait>;
 
 namespace detail {
 template<typename T>
@@ -375,7 +375,7 @@ concept implements_methods =
 }    // namespace detail
 
 template<typename Impl, typename Trait>
-concept implements_trait =
-    any_trait<Trait> and detail::implements_methods<^^detail::implements_methods, Impl, Trait>;
+concept implements_trait = any_trait<Trait> and std::is_class_v<Impl> and
+                           detail::implements_methods<^^detail::implements_methods, Impl, Trait>;
 
 }    // namespace trp
