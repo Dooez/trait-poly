@@ -53,7 +53,6 @@ void default_delete(void* ptr) {
 template<typename Trait, uZ StartIdx>
 struct method_holder;    // holds `mehod_invoker **method_name**;`
 
-
 template<uZ Index, any_method_idt MethodId>
 struct cvo_invoker;
 template<uZ   Index,
@@ -121,7 +120,7 @@ concept noexcept_cvm_invoker =
     });
 
 template<typename TRef, typename MethodHolder, typename CVMInvoker>
-struct new_method_invoker {
+struct method_invoker {
     template<typename... Args>
     auto operator()(Args&&... args) const
         volatile noexcept(noexcept_cvm_invoker<CVMInvoker, typename TRef::vtable_t, Args...>)
@@ -143,9 +142,9 @@ private:
             auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
             if (mems.size() != 1)
                 throw "Method holder is expected to have only a single method.";
-            if (meta::type_of(mems[0]) != ^^new_method_invoker)
+            if (meta::type_of(mems[0]) != ^^method_invoker)
                 throw "Method invoker type does not match method holders first member type.";
-            return meta::extract<new_method_invoker MethodHolder::*>(mems[0]);
+            return meta::extract<method_invoker MethodHolder::*>(mems[0]);
         }();
 #ifdef __cpp_lib_is_pointer_interconvertible
         static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
@@ -156,99 +155,6 @@ private:
         static_assert(std::derived_from<TRef, MethodHolder>);
         return *static_cast<[:add_cvp(^^TRef):]>(mh_ptr);
     }
-};
-
-template<typename Manager, typename MethodHolder, typename MethodInvoker, uZ Index, any_method_idt MethodId>
-struct overload_invoker;
-
-template<typename Manager,
-         typename MethodHolder,
-         typename MethodInvoker,
-         uZ   Index,
-         auto Identifier,
-         bool Const,
-         bool Volatile,
-         bool LVRef,
-         bool RVRef,
-         bool Value,
-         bool Noexcept,
-         typename Ret,
-         typename... Args>
-    requires(not(LVRef or RVRef or Value))    // not supported
-struct overload_invoker<
-    Manager,
-    MethodHolder,
-    MethodInvoker,
-    Index,
-    method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
-    auto operator()(Args... args) noexcept(Noexcept) -> Ret
-        requires(not Const and not Volatile)
-    {
-        return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
-    }
-    auto operator()(Args... args) const noexcept(Noexcept) -> Ret
-        requires(Const and not Volatile)
-    {
-        return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
-    }
-    auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
-        requires(not Const and Volatile)
-    {
-        return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
-    }
-    auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
-        requires(Const and Volatile)
-    {
-        return get_method(manager().vtable_ptr_)(manager().obj_ptr_, std::forward<Args>(args)...);
-    }
-
-private:
-    template<typename VTable>
-    static auto get_method(VTable* vt) {
-        constexpr auto m = std::meta::nonstatic_data_members_of(^^VTable, ctx_unchecked)[Index];
-        return vt->[:m:];
-    }
-    auto manager(this auto&& self) -> decltype(auto) {
-        constexpr auto add_cvp = [](meta::info type) {
-            using method_id =
-                method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
-            return meta::add_pointer(method_id::add_obj_cv(type));
-        };
-
-        static_assert(std::derived_from<MethodInvoker, overload_invoker>);
-        const auto mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
-
-        constexpr auto invoker_ptr = [] {
-            auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
-            if (mems.size() != 1)
-                throw "Method holder is expected to have only a single method.";
-            if (meta::type_of(mems[0]) != ^^MethodInvoker)
-                throw "Method invoker type does not match method holders first member type.";
-            return meta::extract<MethodInvoker MethodHolder::*>(mems[0]);
-        }();
-#ifdef __cpp_lib_is_pointer_interconvertible
-        static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
-#endif
-        static_assert(std::is_standard_layout_v<MethodHolder>);
-        const auto mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
-
-        static_assert(std::derived_from<Manager, MethodHolder>);
-        return *static_cast<[:add_cvp(^^Manager):]>(mh_ptr);
-    }
-};
-
-template<typename Manager, typename MethodHolder, typename... OvSpecs>
-struct method_invoker
-: overload_invoker<Manager,
-                   MethodHolder,
-                   method_invoker<Manager, MethodHolder, OvSpecs...>,
-                   OvSpecs::index,
-                   typename OvSpecs::id>... {
-    using overload_invoker<Manager,
-                           MethodHolder,
-                           method_invoker<Manager, MethodHolder, OvSpecs...>,
-                           OvSpecs::index,
-                           typename OvSpecs::id>::operator()...;
 };
 
 template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId, typename... Params>
@@ -430,7 +336,7 @@ consteval auto maybe_define_cv_trait() {
     const auto mgr_info = substitute(^^trait_ref_impl, trait_ref_args);
     for (auto& [name, holder_info, cvm_invoker_targs]: method_holder_specs) {
         const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
-        const auto invoker_type = substitute(^^new_method_invoker, {mgr_info, holder_info, cvm_invoker_info});
+        const auto invoker_type     = substitute(^^method_invoker, {mgr_info, holder_info, cvm_invoker_info});
         define_aggregate(holder_info,
                          {data_member_spec(invoker_type,
                                            data_member_options{
@@ -466,15 +372,8 @@ class trait_ref_impl : public MethodHolders... {
           (void*)optr)    // NOLINT(*cast*)cv qualification is kept via `invoke_wrapper_struct<...>::obj_ptr`
     {};
 
-    template<typename Manager,
-             typename MethodHolder,
-             typename MethodInvoker,
-             uZ             Index,
-             any_method_idt MethodId>
-    friend struct overload_invoker;
-
-    template<typename Manager, typename MethodHolder, typename CVMInvoker>
-    friend struct new_method_invoker;
+    template<typename, typename, typename>
+    friend struct method_invoker;
 
     void release() {
         obj_ptr_ = nullptr;
