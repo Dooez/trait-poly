@@ -264,6 +264,9 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
 template<typename Trait>
 concept any_trait = std::is_class_v<Trait> and detail::any_traits<^^detail::any_traits, Trait>;
 
+template<typename Trait>
+concept non_cv_trait = any_trait<Trait> and non_cvref<Trait>;
+
 namespace detail {
 template<typename T>
 struct trait_traits {

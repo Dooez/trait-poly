@@ -110,8 +110,8 @@ static_assert(not compare_structs(vt01, vt2));
 
 int main() {
     std::println("make_shared:");
-    const auto to = trp::make_shared_trait<trait_proto, some_impl>();
-    const auto toref = *to;
+    const auto          to    = trp::make_shared_trait<trait_proto, some_impl>();
+    const volatile auto toref = *to;
     to->foo();
     toref.foo();
     auto to_up = trp::trait_cast<trait_proto_base>(to);
@@ -119,6 +119,8 @@ int main() {
 
     auto cvto = trp::make_shared_trait<const volatile trait_proto, some_impl>();
     cvto->foo();
+    auto cvtoref = *cvto;
+    auto(cvtoref).foo();
 
     auto cto = trp::make_shared_trait<const trait_proto, some_impl>();
     cto->foo();

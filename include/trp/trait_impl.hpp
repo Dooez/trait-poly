@@ -12,7 +12,7 @@ namespace trp {
 namespace detail {
 template<any_trait Trait>
 struct trait_ref_identity;
-template<typename VTable, typename... MethodHolders>
+template<any_trait Trait, typename... MethodHolders>
 class trait_ref_impl;
 
 template<non_ref T>
@@ -170,10 +170,10 @@ struct invoke_wrapper_struct {
         }
     }
 };
-template<any_trait Trait>
+template<non_cv_trait Trait>
 struct vtable;
 
-template<any_trait Trait>
+template<non_cv_trait Trait>
 consteval void define_vtable() {
     using namespace meta;
     if (is_complete_type(^^vtable<Trait>))
@@ -203,22 +203,22 @@ consteval void define_vtable() {
     vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
     auto supertrait_spec = get_info_to_member(
         "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
-    for (auto supertrait: direct_base_types<std::remove_cv_t<Trait>>) {
+    for (auto supertrait: direct_base_types<Trait>) {
         // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
         vtable_elements.push_back(supertrait_spec(supertrait));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
 
-template<any_trait Trait, non_ref Impl>
+template<non_cv_trait Trait, non_ref Impl>
 consteval auto fill_vtable();
 
-template<any_trait Trait, non_ref Impl>
+template<non_cv_trait Trait, non_ref Impl>
 inline constexpr auto trait_vtable_for = fill_vtable<Trait, Impl>();
 
-template<any_trait Trait, non_ref Impl>
+template<non_cv_trait Trait, non_ref Impl>
 consteval auto fill_vtable() {
-    using namespace std::meta;
+    using namespace meta;
     using ttt                      = trait_traits<Trait>;
     constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
         using trait_method_idt_t           = [:trait_method_idt:];
@@ -229,8 +229,14 @@ consteval auto fill_vtable() {
                 if (meta::extract<bool>(matches))
                     return m;
             }
-            std::unreachable();
+            return info{};
         }();
+
+        // Common vtable is used for any combination of cv-qualification of trait.
+        // Implementation is checked by externally.
+        // Fill the missing vtable elements with nullptr.
+        if (matched_impl_method == info{})
+            return typename trait_method_idt_t::wrapper_fptr_type{nullptr};
 
         constexpr auto wrapper_struct_info = [=] {
             auto [... infos] = trait_method_idt_t::param_infos;
@@ -243,18 +249,17 @@ consteval auto fill_vtable() {
 
     // use constexpr binding when it becomes available
     auto [... Is] = make_cw_idxs<ttt::all_methods.size()>();
-    auto [... Js] = make_cw_idxs<direct_base_types<std::remove_cv_t<Trait>>.size()>();
+    auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
     return vtable<Trait>{
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
-        [:meta::substitute(
-              ^^trait_vtable_for,
-              {copy_cv_to(^^Trait, direct_base_types<std::remove_cv_t<Trait>>[Js]), ^^Impl}):]...,
+        [:meta::substitute(^^trait_vtable_for,
+                           {copy_cv_to(^^Trait, direct_base_types<Trait>[Js]), ^^Impl}):]...,
     };
 }
 
-template<typename Supertrait, any_trait Trait>
+template<non_cv_trait Supertrait, non_cv_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
 constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> const vtable<Supertrait>* {
     if constexpr (std::same_as<Trait, Supertrait>)
@@ -293,7 +298,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         return get_explicit_supertrait_vtable_ptr<Supertrait>(next_ptr);
     }
 };
-template<any_trait Trait>
+template<non_cv_trait Trait>
 consteval auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
@@ -305,60 +310,84 @@ consteval auto maybe_define_cv_trait() {
         vector<info> cvm_invoker_targs;
     };
     using ttt = trait_traits<Trait>;
-    template for (constexpr auto supertrait: direct_base_types<std::remove_cv_t<Trait>>) {
+    template for (constexpr auto supertrait: direct_base_types<Trait>) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         maybe_define_cv_trait<supertrait_t>();
     }
     define_vtable<Trait>();
-    auto method_holder_specs = vector<method_holder_spec>{};
-    method_holder_specs.reserve(ttt::all_methods.size());
-    auto trait_ref_args = vector<info>{^^vtable<Trait>};
+    auto method_holders_specs    = vector<method_holder_spec>{};
+    auto method_holders_specs_c  = vector<method_holder_spec>{};
+    auto method_holders_specs_v  = vector<method_holder_spec>{};
+    auto method_holders_specs_cv = vector<method_holder_spec>{};
+    method_holders_specs.reserve(ttt::all_methods.size());
+    method_holders_specs_c.reserve(ttt::all_methods.size());
+    method_holders_specs_v.reserve(ttt::all_methods.size());
+    method_holders_specs_cv.reserve(ttt::all_methods.size());
+
+    auto trait_ref_args    = vector<info>{^^Trait};
+    auto trait_ref_args_c  = vector<info>{^^Trait};
+    auto trait_ref_args_v  = vector<info>{^^Trait};
+    auto trait_ref_args_cv = vector<info>{^^Trait};
 
     uZ i = 0;
     template for (constexpr auto mem: ttt::all_methods) {
-        const auto spec  = substitute(^^overload_spec, {reflect_constant(i), mem});
         using method_idt = [:mem:];
-
-        auto it = stdr::find(method_holder_specs, method_idt::identifier, &method_holder_spec::id);
-        if (it == method_holder_specs.end()) {
-            const auto holder_info = substitute(^^method_holder, {^^Trait, reflect_constant(i)});
-            method_holder_specs.push_back(
-                {.id = method_idt::identifier, .holder_info = holder_info, .cvm_invoker_targs = {spec}});
-            trait_ref_args.push_back(holder_info);
-        } else {
-            it->cvm_invoker_targs.push_back(spec);
-        }
+        auto add_holder  = [](auto& method_holders_specs, auto& trait_ref_args, auto trait_info, auto i) {
+            const auto spec = substitute(^^overload_spec, {reflect_constant(i), mem});
+            auto       it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
+            if (it == method_holders_specs.end()) {
+                const auto holder_info = substitute(^^method_holder, {trait_info, reflect_constant(i)});
+                method_holders_specs.push_back(
+                    {.id = method_idt::identifier, .holder_info = holder_info, .cvm_invoker_targs = {spec}});
+                trait_ref_args.push_back(holder_info);
+            } else {
+                it->cvm_invoker_targs.push_back(spec);
+            }
+        };
+        add_holder(method_holders_specs, trait_ref_args, ^^Trait, i);
+        if (method_idt::is_const)
+            add_holder(method_holders_specs_c, trait_ref_args_c, meta::add_const(^^Trait), i);
+        if (method_idt::is_volatile)
+            add_holder(method_holders_specs_v, trait_ref_args_v, meta::add_volatile(^^Trait), i);
+        if (method_idt::is_const and method_idt::is_volatile)
+            add_holder(method_holders_specs_cv, trait_ref_args_cv, meta::add_cv(^^Trait), i);
         ++i;
     }
 
-    const auto mgr_info = substitute(^^trait_ref_impl, trait_ref_args);
-    for (auto& [name, holder_info, cvm_invoker_targs]: method_holder_specs) {
-        const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
-        const auto invoker_type     = substitute(^^method_invoker, {mgr_info, holder_info, cvm_invoker_info});
-        define_aggregate(holder_info,
-                         {data_member_spec(invoker_type,
-                                           data_member_options{
-                                               .name              = name,
-                                               .no_unique_address = true,
-                                               //  .attributes = {^^[[no_unique_address]] },
-                                           })});
-    }
-    {
-        const auto type_v_info = substitute(^^type_identity, {mgr_info});
-        define_aggregate(^^trait_ref_identity<Trait>,
-                         {data_member_spec(type_v_info,
-                                           data_member_options{
-                                               .name              = "type_v",
-                                               .no_unique_address = true,
-                                               //  .attributes = {^^[[no_unique_address]] },
-                                           })});
-    }
+    constexpr auto define = [](auto& method_holders_specs, auto& trait_ref_args, info trait_inf) {
+        const auto ref_info = substitute(^^trait_ref_impl, trait_ref_args);
+        for (auto& [name, holder_info, cvm_invoker_targs]: method_holders_specs) {
+            const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
+            const auto invoker_type = substitute(^^method_invoker, {ref_info, holder_info, cvm_invoker_info});
+            define_aggregate(holder_info,
+                             {data_member_spec(invoker_type,
+                                               data_member_options{
+                                                   .name              = name,
+                                                   .no_unique_address = true,
+                                                   //  .attributes = {^^[[no_unique_address]] },
+                                               })});
+        }
+        {
+            const auto type_v_info = substitute(^^type_identity, {ref_info});
+            define_aggregate(substitute(^^trait_ref_identity, {trait_inf}),
+                             {data_member_spec(type_v_info,
+                                               data_member_options{
+                                                   .name              = "type_v",
+                                                   .no_unique_address = true,
+                                                   //  .attributes = {^^[[no_unique_address]] },
+                                               })});
+        }
+    };
+    define(method_holders_specs, trait_ref_args, ^^Trait);
+    define(method_holders_specs_c, trait_ref_args_c, meta::add_const(^^Trait));
+    define(method_holders_specs_v, trait_ref_args_v, meta::add_volatile(^^Trait));
+    define(method_holders_specs_cv, trait_ref_args_cv, meta::add_cv(^^Trait));
 };
 
-template<typename VTable, typename... MethodHolders>
+template<any_trait Trait, typename... MethodHolders>
 class trait_ref_impl : public MethodHolders... {
-    using vtable_t = VTable;
-    using trait_t  = [:meta::template_arguments_of(^^VTable)[0]:];
+    using vtable_t = vtable<std::remove_cv_t<Trait>>;
+    using trait_t  = Trait;
 
     const vtable_t* vtable_ptr_{};
     void*           obj_ptr_{};
@@ -449,7 +478,7 @@ public:
     template<implements_trait<trait_t> Impl>
         requires(not std::derived_from<Impl, trait_ref_impl>)
     explicit trait_ref(Impl& obj)
-    : trait_ref_impl(&detail::trait_vtable_for<trait_t, Impl>, &obj){};
+    : trait_ref_impl(&detail::trait_vtable_for<std::remove_cv_t<trait_t>, Impl>, &obj){};
 
     trait_ref(const trait_ref&)            = default;
     trait_ref(trait_ref&&)                 = default;
@@ -464,11 +493,8 @@ template<any_trait Trait>
 consteval void define_trait() {
     using c_trait  = [:meta::add_const(^^Trait):];
     using v_trait  = [:meta::add_volatile(^^Trait):];
-    using cv_trait = [:meta::add_const(^^v_trait):];
+    using cv_trait = [:meta::add_cv(^^Trait):];
 
     detail::maybe_define_cv_trait<Trait>();
-    detail::maybe_define_cv_trait<c_trait>();
-    detail::maybe_define_cv_trait<v_trait>();
-    detail::maybe_define_cv_trait<cv_trait>();
 };
 }    // namespace trp
