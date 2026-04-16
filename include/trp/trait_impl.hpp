@@ -19,7 +19,6 @@ template<non_ref T>
 struct unique_id_struct {
     static inline char value{};
 };
-
 }    // namespace detail
 
 template<any_trait Trait>
@@ -29,15 +28,15 @@ namespace detail {
 template<typename T>
 concept any_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^trait_ref;
 }
-template<typename Supertrait, detail::any_trait_ref TraitRef>
-    requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
-[[nodiscard]] auto trait_cast(const TraitRef& ref) {
-    return upcast<Supertrait>(ref);
+template<typename Supertrait, any_trait Trait>
+    requires explicit_supertrait_of<Supertrait, Trait>
+[[nodiscard]] auto trait_cast(const trait_ref<Trait>& ref) -> trait_ref<Supertrait> {
+    return ref;
 }
-template<typename Impl, detail::any_trait_ref TraitRef>
-    requires implements_trait<Impl, typename TraitRef::trait_t>
-[[nodiscard]] auto is_holding_type(const TraitRef& ref) -> bool {
-    return TraitRef::template is_holding_type<Impl>(ref);
+template<typename Impl, any_trait Trait>
+    requires implements_trait<Impl, Trait>
+[[nodiscard]] auto is_holding_type(const trait_ref<Trait>& ref) -> bool {
+    return is_holding_type<Impl>(ref);
 }
 
 namespace detail {
@@ -52,6 +51,9 @@ void default_delete(void* ptr) {
 
 template<typename Trait, uZ StartIdx>
 struct method_holder;    // holds `mehod_invoker **method_name**;`
+
+template<non_cv_trait Trait>
+struct vtable;
 
 template<uZ Index, any_method_idt MethodId>
 struct cvo_invoker;
@@ -119,12 +121,17 @@ concept noexcept_cvm_invoker =
         return noexcept(invoker(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
     });
 
+
 template<typename TRef, typename MethodHolder, typename CVMInvoker>
 struct method_invoker {
+private:
+    using trait_t  = [:meta::template_arguments_of(^^TRef)[0]:];
+    using vtable_t = vtable<std::remove_cv_t<trait_t>>;
+
+public:
     template<typename... Args>
     auto operator()(Args&&... args) const
-        volatile noexcept(noexcept_cvm_invoker<CVMInvoker, typename TRef::vtable_t, Args...>)
-            -> decltype(auto) {
+        volatile noexcept(noexcept_cvm_invoker<CVMInvoker, vtable_t, Args...>) -> decltype(auto) {
         return CVMInvoker{}(
             get_trait_ref().vtable_ptr_, get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
     }
@@ -170,8 +177,6 @@ struct invoke_wrapper_struct {
         }
     }
 };
-template<non_cv_trait Trait>
-struct vtable;
 
 template<non_cv_trait Trait>
 consteval void define_vtable() {
@@ -306,7 +311,7 @@ consteval auto maybe_define_cv_trait() {
         return;
     struct method_holder_spec {
         string_view  id;
-        info         holder_info;
+        info         holder_info{};
         vector<info> cvm_invoker_targs;
     };
     using ttt = trait_traits<Trait>;
@@ -385,53 +390,56 @@ consteval auto maybe_define_cv_trait() {
 };
 
 template<any_trait Trait, typename... MethodHolders>
+void ref_release(trait_ref_impl<Trait, MethodHolders...>& ref) {
+    ref.obj_ptr_ = nullptr;
+}
+template<any_trait Trait, typename... MethodHolders>
+void ref_rebind(trait_ref_impl<Trait, MethodHolders...>&       ref,
+                const trait_ref_impl<Trait, MethodHolders...>& other) {
+    ref.vtable_ptr_ = other.vtable_ptr_;
+    ref.obj_ptr_    = other.obj_ptr_;
+}
+template<any_trait Trait, typename... MethodHolders>
+[[nodiscard]] auto ref_holds_value(const trait_ref_impl<Trait, MethodHolders...>& ref) -> bool {
+    return ref.obj_ptr_ != nullptr;
+}
+template<any_trait Trait, typename... MethodHolders>
+void ref_default_delete(const trait_ref_impl<Trait, MethodHolders...>& ref) {
+    ref.vtable_ptr_->default_delete(ref.obj_ptr_);
+}
+template<any_trait Trait, typename... MethodHolders>
 class trait_ref_impl : public MethodHolders... {
-    using vtable_t = vtable<std::remove_cv_t<Trait>>;
-    using trait_t  = Trait;
-
-    const vtable_t* vtable_ptr_{};
-    void*           obj_ptr_{};
+    const vtable<std::remove_cv_t<Trait>>* vtable_ptr_{};
+    void*                                  obj_ptr_{};
 
     trait_ref_impl() = default;
-    trait_ref_impl(const vtable_t* vptr, auto* optr)
+    trait_ref_impl(const vtable<std::remove_cv_t<Trait>>* vptr, auto* optr)
     : vtable_ptr_(vptr)
     , obj_ptr_(
           (void*)optr)    // NOLINT(*cast*)cv qualification is kept via `invoke_wrapper_struct<...>::obj_ptr`
     {};
 
+    template<any_trait U, typename... MHs>
+    friend void ref_release(trait_ref_impl<U, MHs...>& ref);
+    template<any_trait U, typename... MHs>
+    friend void ref_rebind(trait_ref_impl<U, MHs...>& ref, const trait_ref_impl<U, MHs...>& other);
+    template<any_trait U, typename... MHs>
+    friend auto ref_holds_value(const trait_ref_impl<U, MHs...>& ref) -> bool;
+    template<any_trait U, typename... MHs>
+    friend void ref_default_delete(const trait_ref_impl<U, MHs...>& ref);
+
     template<typename, typename, typename>
     friend struct method_invoker;
 
-    void release() {
-        obj_ptr_ = nullptr;
-    }
-    void rebind(const trait_ref_impl& other) {
-        vtable_ptr_ = other.vtable_ptr_;
-        obj_ptr_    = other.obj_ptr_;
-    }
-    [[nodiscard]] bool holds_value() const {
-        return obj_ptr_ != nullptr;
-    }
-    void default_delete() {
-        vtable_ptr_->default_delete(obj_ptr_);
-    }
-    template<typename Impl>
-    [[nodiscard]] static auto is_holding_type(const trait_ref_impl& ref) -> bool {
-        return ref.vtable_ptr_->id_ptr == &unique_id_struct<Impl>::value;
-    }
     template<any_trait>
     friend class ::trp::trait_ref;
 };
 
+
 }    // namespace detail
 template<any_trait Trait>
 class trait_ref : public decltype(detail::trait_ref_identity<Trait>::type_v)::type {
-    using trait_ref_impl = decltype(detail::trait_ref_identity<Trait>::type_v)::type;
-    using vtable_t       = trait_ref_impl::vtable_t;
-
 public:
-    using trait_t = trait_ref_impl::trait_t;
-
 private:
     trait_ref() = default;
 
@@ -444,41 +452,35 @@ private:
     template<any_trait>
     friend class trait_ref;
 
-    template<typename Supertrait, detail::any_trait_ref TraitRef>
-        requires explicit_supertrait_of<Supertrait, typename TraitRef::trait_t>
-    friend auto ::trp::trait_cast(const TraitRef&);
-    template<explicit_supertrait_of<trait_t> Supertrait>
-    [[nodiscard]] friend auto upcast(const trait_ref& ref) -> trait_ref<Supertrait> {
-        return trait_ref<Supertrait>(
-            get_explicit_supertrait_vtable_ptr<Supertrait>(ref.trait_ref_impl::vtable_ptr_),
-            ref.trait_ref_impl::obj_ptr_);
-    }
-
     template<typename Impl, detail::any_trait_ref TraitRef>
         requires implements_trait<Impl, typename TraitRef::trait_t>
     friend auto is_holding_type(const TraitRef& ref) -> bool;
     template<typename Impl>
     [[nodiscard]] static auto is_holding_type(const trait_ref& ref) -> bool {
-        return trait_ref_impl::template is_holding_type<Impl>(ref);
+        return ref.vtable_ptr_->id_ptr == &detail::unique_id_struct<Impl>::value;
     }
 
-    using trait_ref_impl::default_delete;
-    using trait_ref_impl::holds_value;
-    using trait_ref_impl::rebind;
-    using trait_ref_impl::release;
+    trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
+    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(vptr, optr) {};
 
-    trait_ref(const vtable_t* vptr, void* optr)
-    : trait_ref_impl(vptr, optr) {};
-
-    template<implements_trait<trait_t> Impl>
+    template<implements_trait<Trait> Impl>
     explicit trait_ref(Impl* obj)
-    : trait_ref_impl(&detail::trait_vtable_for<trait_t, Impl>, obj){};
+    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(&detail::trait_vtable_for<Trait, Impl>,
+                                                                obj){};
 
 public:
-    template<implements_trait<trait_t> Impl>
-        requires(not std::derived_from<Impl, trait_ref_impl>)
+    template<any_trait U>
+        requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
+    trait_ref(const trait_ref<U>& ref)    // NOLINT(*-explicit-*)
+    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(
+          get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(ref.trait_ref_impl::vtable_ptr_),
+          ref.trait_ref_impl::obj_ptr_){};
+
+    template<implements_trait<Trait> Impl>
+        requires(not detail::any_trait_ref<Impl>)
     explicit trait_ref(Impl& obj)
-    : trait_ref_impl(&detail::trait_vtable_for<std::remove_cv_t<trait_t>, Impl>, &obj){};
+    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(
+          &detail::trait_vtable_for<std::remove_cv_t<Trait>, Impl>, &obj){};
 
     trait_ref(const trait_ref&)            = default;
     trait_ref(trait_ref&&)                 = default;

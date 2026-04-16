@@ -33,16 +33,16 @@ class alloc_unique_trait_ptr {
         if (ctrl_ptr_ != nullptr)
             ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
         else
-            trait_ref_.default_delete();
+            detail::ref_default_delete(trait_ref_);
         release();
     }
 
     [[nodiscard]] bool holds_value() const {
-        return trait_ref_.holds_value();
+        return detail::ref_holds_value(trait_ref_);
     }
 
     void release() {
-        trait_ref_.release();
+        detail::ref_release(trait_ref_);
         ctrl_ptr_ = nullptr;
     }
 
@@ -57,7 +57,7 @@ public:
         if (this == &other)
             return *this;
         delete_();
-        this->trait_ref_.rebind(other.trait_ref_);
+        detail::ref_rebind(this->trait_ref_, other.trait_ref_);
         this->ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
@@ -149,11 +149,11 @@ class unique_trait_ptr {
     mutable trait_ref<Trait> trait_ref_;
 
     void release() {
-        trait_ref_.release();
+        detail::ref_release(trait_ref_);
     }
 
     [[nodiscard]] bool holds_value() const {
-        return trait_ref_.holds_value();
+        return detail::ref_holds_value(trait_ref_);
     }
 
     explicit unique_trait_ptr(trait_ref<Trait> trait_ref)
@@ -169,8 +169,8 @@ public:
         if (this == &other)
             return *this;
         if (holds_value())
-            trait_ref_.default_delete();
-        trait_ref_.rebind(other.trait_ref_);
+            detail::ref_default_delete(trait_ref_);
+        detail::ref_rebind(trait_ref_, other.trait_ref_);
         other.release();
         return *this;
     };
@@ -181,7 +181,7 @@ public:
     ~unique_trait_ptr() {
         if (not holds_value())
             return;
-        trait_ref_.default_delete();
+        detail::ref_default_delete(trait_ref_);
         release();
     }
     explicit operator bool() const {

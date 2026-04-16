@@ -30,15 +30,13 @@ class shared_trait_ptr {
     , ctrl_ptr_(ctrl_ptr) {
         increment();
     };
-    [[nodiscard]] auto get_ctrl_ptr() const -> ctrl_header* {
-        return ctrl_ptr_;
-    }
+
     [[nodiscard]] bool holds_value() const {
-        return trait_ref_.holds_value();
+        return detail::ref_holds_value(trait_ref_);
     }
 
     void release() {
-        trait_ref_.release();
+        detail::ref_release(trait_ref_);
         ctrl_ptr_ = nullptr;
     }
 
@@ -76,7 +74,7 @@ public:
     shared_trait_ptr() = default;
     shared_trait_ptr(const shared_trait_ptr& other) noexcept {
         other.increment();
-        trait_ref_.rebind(other.trait_ref_);
+        detail::ref_rebind(trait_ref_, other.trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
     }
     shared_trait_ptr(shared_trait_ptr&& other) noexcept
@@ -89,7 +87,7 @@ public:
             return *this;
         decrement();
         other.increment();
-        trait_ref_.rebind(other.trait_ref_);
+        detail::ref_rebind(trait_ref_, other.trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
         return *this;
     }
@@ -97,7 +95,7 @@ public:
         if (this == &other)
             return *this;
         decrement();
-        trait_ref_.rebind(other.trait_ref_);
+        detail::ref_rebind(trait_ref_, other.trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
@@ -114,8 +112,7 @@ private:
     [[nodiscard]] friend auto upcast(shared_trait_ptr ptr) -> shared_trait_ptr<Supertrait> {
         if (not ptr)
             return {};
-        auto new_ptr =
-            shared_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.get_ctrl_ptr());
+        auto new_ptr = shared_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.ctrl_ptr_);
         ptr.release();
         return new_ptr;
     }
