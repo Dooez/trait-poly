@@ -113,6 +113,7 @@ struct method_identity_t {
     static constexpr auto identifier       = Identifier;
     static constexpr bool is_const         = Const;
     static constexpr bool is_volatile      = Volatile;
+    static constexpr bool is_cv            = Const and Volatile;
     static constexpr bool is_lvalue        = LVRef;
     static constexpr bool is_rvalue        = RVRef;
     static constexpr bool is_value         = Value;

@@ -3,10 +3,10 @@
 
 #include <print>
 struct trait_proto_base {
-    void bar();
+    void bar() const;
 };
 struct trait_proto_imposter {
-    void bar();
+    void bar() const;
 };
 consteval {
     trp::define_trait<trait_proto_base>();
@@ -39,12 +39,6 @@ static_assert(not trp::explicit_supertrait_of<trait_proto, trait_proto_base>);
 static_assert(not trp::direct_supertrait_of<trait_proto, trait_proto_base>);
 
 // NOLINTBEGIN(*-to-static*)
-struct trait_foo_only {
-    void foo();
-};
-consteval {
-    trp::define_trait<trait_foo_only>();
-}
 struct some_impl {
     void foo() {
         std::println("some_impl");
@@ -55,7 +49,7 @@ struct some_impl {
     void foo() const volatile {
         std::println("foo const volatile some_impl");
     };
-    void bar() {
+    void bar() const {
         std::println("bar some_impl");
     };
 };
@@ -79,6 +73,23 @@ struct other_impl
     };
     void foo() const volatile {
         std::println("foo const volatile other_impl");
+    };
+};
+
+struct trait_foo_only {
+    void foo();
+};
+struct trait_fb {
+    void foo() const;
+    void bar();
+};
+consteval {
+    trp::define_trait<trait_foo_only>();
+    trp::define_trait<trait_fb>();
+}
+struct foo_only_impl {
+    void foo() const {
+        std::println("foo foo_only_impl");
     };
 };
 static_assert(trp::implements_trait<other_impl, trait_proto>);
@@ -110,8 +121,8 @@ static_assert(not compare_structs(vt01, vt2));
 
 int main() {
     std::println("make_shared:");
-    const auto          to    = trp::make_shared_trait<trait_proto, some_impl>();
-    const volatile auto toref = *to;
+    const auto to    = trp::make_shared_trait<trait_proto, some_impl>();
+    const auto toref = *to;
     to->foo();
     toref.foo();
     auto to_up = trp::trait_cast<trait_proto_base>(to);
@@ -120,6 +131,8 @@ int main() {
     auto cvto = trp::make_shared_trait<const volatile trait_proto, some_impl>();
     cvto->foo();
     auto cvtoref = *cvto;
+    std::println("Can cast to non-const trait_proto: {}",
+                 trp::is_valid_const_trait_cast<trait_proto>(cvtoref));
     auto(cvtoref).foo();
 
     auto cto = trp::make_shared_trait<const trait_proto, some_impl>();
@@ -154,14 +167,12 @@ int main() {
     auto auptr2 = trp::allocate_unique_trait<const trait_proto, other_impl>(std::allocator<other_impl>{});
     auptr2->foo();
 
-    std::println("\nref:");
-    auto simpl = some_impl{};
-    auto tref  = trp::trait_ref<trait_proto>(simpl);
-    tref.foo();
 
-    std::println("\nref upcast:");
-    auto tref_up = trp::trait_cast<trait_proto_base>(tref);
-    tref_up.bar();
+    std::println("\nref:");
+    const auto simpl = foo_only_impl{};
+    auto       tref  = trp::trait_ref<const trait_fb>(simpl);
+    tref.foo();
+    std::println("Can cast to non-const trait_fb: {}", trp::is_valid_const_trait_cast<trait_fb>(tref));
 
     const auto csimpl = some_impl{};
     auto       tref2  = trp::trait_ref<trait_foo_only>(csimpl);    // implementation may be overqualified

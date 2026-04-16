@@ -178,6 +178,13 @@ struct invoke_wrapper_struct {
     }
 };
 
+struct vtable_cv_quals {
+    bool has_full     = true;
+    bool has_const    = true;
+    bool has_volatile = true;
+    // bool has_cv=true; not needed since this is a biggest supertrait
+};
+
 template<non_cv_trait Trait>
 consteval void define_vtable() {
     using namespace meta;
@@ -206,10 +213,12 @@ consteval void define_vtable() {
     vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
     using id_ptr = const char*;
     vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
+    vtable_elements.push_back(data_member_spec(^^vtable_cv_quals, {.name = "cv_quals"}));
+
     auto supertrait_spec = get_info_to_member(
         "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
     for (auto supertrait: direct_base_types<Trait>) {
-        // not defining supertrait vtable because define_aggregate calls define_vtable for each trait in the hierarchy
+        // not defining supertrait vtable because maybe_define_cv_trait calls define_vtable for each trait in the hierarchy
         vtable_elements.push_back(supertrait_spec(supertrait));
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
@@ -224,8 +233,9 @@ inline constexpr auto trait_vtable_for = fill_vtable<Trait, Impl>();
 template<non_cv_trait Trait, non_ref Impl>
 consteval auto fill_vtable() {
     using namespace meta;
-    using ttt                      = trait_traits<Trait>;
-    constexpr auto get_wrapper_ptr = [](cw_info auto trait_method_idt) {
+    auto quals                 = vtable_cv_quals{};
+    using ttt                  = trait_traits<Trait>;
+    const auto get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t           = [:trait_method_idt:];
         constexpr auto matched_impl_method = [=] {
             for (auto m: matching_id_public_members<std::remove_cv_t<Impl>, trait_method_idt_t::identifier>) {
@@ -240,16 +250,23 @@ consteval auto fill_vtable() {
         // Common vtable is used for any combination of cv-qualification of trait.
         // Implementation is checked by externally.
         // Fill the missing vtable elements with nullptr.
-        if (matched_impl_method == info{})
+        if constexpr (matched_impl_method == info{}) {
+            if (trait_method_idt_t::is_const)
+                quals.has_const = false;
+            if (trait_method_idt_t::is_volatile)
+                quals.has_volatile = false;
+            quals.has_full = false;
             return typename trait_method_idt_t::wrapper_fptr_type{nullptr};
-
-        constexpr auto wrapper_struct_info = [=] {
-            auto [... infos] = trait_method_idt_t::param_infos;
-            return substitute(^^invoke_wrapper_struct,
-                              {^^Impl, reflect_constant(matched_impl_method), trait_method_idt, infos...});
-        }();
-        using wrapper_struct = [:wrapper_struct_info:];
-        return &wrapper_struct::invoke;
+        } else {
+            constexpr auto wrapper_struct_info = [=] {
+                auto [... infos] = trait_method_idt_t::param_infos;
+                return substitute(
+                    ^^invoke_wrapper_struct,
+                    {^^Impl, reflect_constant(matched_impl_method), trait_method_idt, infos...});
+            }();
+            using wrapper_struct = [:wrapper_struct_info:];
+            return &wrapper_struct::invoke;
+        }
     };
 
     // use constexpr binding when it becomes available
@@ -259,6 +276,7 @@ consteval auto fill_vtable() {
         get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
+        quals,
         [:meta::substitute(^^trait_vtable_for,
                            {copy_cv_to(^^Trait, direct_base_types<Trait>[Js]), ^^Impl}):]...,
     };
@@ -288,8 +306,9 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         static constexpr auto mems = std::define_static_array(
             meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
             stdv::drop(stdr::size(trait_traits<Trait>::all_methods)    //
-                       + 1                                             // default deleter
-                       + 1                                             // impl id
+                       + 1                                             // default_deleter
+                       + 1                                             // id_ptr
+                       + 1                                             // cv_quals
                        ));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
@@ -459,6 +478,21 @@ private:
     [[nodiscard]] static auto is_holding_type(const trait_ref& ref) -> bool {
         return ref.vtable_ptr_->id_ptr == &detail::unique_id_struct<Impl>::value;
     }
+    template<any_trait U>
+        requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
+    [[nodiscard]] friend constexpr auto is_valid_const_trait_cast(const trait_ref& ref) -> bool {
+        if constexpr (supertrait_of<U, Trait>) {
+            return true;
+        } else {
+            if constexpr (non_cv_trait<U>) {
+                return ref.vtable_ptr_->cv_quals.has_full;
+            } else if constexpr (std::is_const_v<U>) {
+                return ref.vtable_ptr_->cv_quals.has_const;
+            } else if constexpr (std::is_volatile_v<U>) {
+                return ref.vtable_ptr_->cv_quals.has_volatile;
+            }
+        }
+    }
 
     trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
     : decltype(detail::trait_ref_identity<Trait>::type_v)::type(vptr, optr) {};
@@ -489,6 +523,11 @@ public:
     ~trait_ref()                           = default;
 };
 
+template<any_trait U, any_trait T>
+    requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<T>>
+[[nodiscard]] static constexpr auto is_valid_const_trait_cast(trait_ref<T> ref) -> bool {
+    return is_valid_const_trait_cast<U>(ref);
+}
 
 template<non_cv_trait Trait>
 consteval void define_trait() {
