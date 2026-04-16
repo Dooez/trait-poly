@@ -1,7 +1,7 @@
 #pragma once
 #ifndef TRP_GODBOLT
 #include "allocator_ctrl_block.hpp"
-#include "trait_impl.hpp"
+#include "dyn_trait_ref.hpp"
 #endif
 
 #include <atomic>
@@ -15,28 +15,28 @@ using arc_t = std::atomic<uint64_t>;
 template<any_trait Trait>
 class shared_trait_ptr {
     using ctrl_header = detail::ctrl_header<detail::arc_t>;
-    trait_ref<Trait> trait_ref_{};
-    ctrl_header*     ctrl_ptr_{};
+    dyn_trait_ref<Trait> dyn_trait_ref_{};
+    ctrl_header*         ctrl_ptr_{};
 
-    shared_trait_ptr(trait_ref<Trait> trait_ref, ctrl_header* ctrl_ptr)
-    : trait_ref_(trait_ref)
+    shared_trait_ptr(dyn_trait_ref<Trait> trait_ref, ctrl_header* ctrl_ptr)
+    : dyn_trait_ref_(trait_ref)
     , ctrl_ptr_(ctrl_ptr) {
         // increment is external
     };
 
     template<implements_trait<Trait> Impl>
     shared_trait_ptr(Impl* obj_ptr, ctrl_header* ctrl_ptr)
-    : trait_ref_(*obj_ptr)
+    : dyn_trait_ref_(*obj_ptr)
     , ctrl_ptr_(ctrl_ptr) {
         increment();
     };
 
     [[nodiscard]] bool holds_value() const {
-        return detail::ref_holds_value(trait_ref_);
+        return detail::ref_holds_value(dyn_trait_ref_);
     }
 
     void release() {
-        detail::ref_release(trait_ref_);
+        detail::ref_release(dyn_trait_ref_);
         ctrl_ptr_ = nullptr;
     }
 
@@ -61,11 +61,11 @@ public:
     }
     // UB if not holding value
     auto operator->(this auto&& self) -> auto* {
-        return &self.trait_ref_;
+        return &self.dyn_trait_ref_;
     }
     // UB if not holding value
     auto operator*(this auto&& self) -> auto& {
-        return self.trait_ref_;
+        return self.dyn_trait_ref_;
     }
     ~shared_trait_ptr() {
         decrement();
@@ -74,11 +74,11 @@ public:
     shared_trait_ptr() = default;
     shared_trait_ptr(const shared_trait_ptr& other) noexcept {
         other.increment();
-        detail::ref_rebind(trait_ref_, other.trait_ref_);
+        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
     }
     shared_trait_ptr(shared_trait_ptr&& other) noexcept
-    : trait_ref_{other.trait_ref_}
+    : dyn_trait_ref_{other.dyn_trait_ref_}
     , ctrl_ptr_(other.ctrl_ptr_) {
         other.release();
     }
@@ -87,7 +87,7 @@ public:
             return *this;
         decrement();
         other.increment();
-        detail::ref_rebind(trait_ref_, other.trait_ref_);
+        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
         return *this;
     }
@@ -95,7 +95,7 @@ public:
         if (this == &other)
             return *this;
         decrement();
-        detail::ref_rebind(trait_ref_, other.trait_ref_);
+        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
@@ -112,7 +112,8 @@ private:
     [[nodiscard]] friend auto upcast(shared_trait_ptr ptr) -> shared_trait_ptr<Supertrait> {
         if (not ptr)
             return {};
-        auto new_ptr = shared_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.ctrl_ptr_);
+        auto new_ptr =
+            shared_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.dyn_trait_ref_), ptr.ctrl_ptr_);
         ptr.release();
         return new_ptr;
     }

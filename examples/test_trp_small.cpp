@@ -132,7 +132,7 @@ int main() {
     cvto->foo();
     std::println();
 
-    std::println("/* trait_ref<const volatile trait_proto> */ x.foo();");
+    std::println("/* dyn_trait_ref<const volatile trait_proto> */ x.foo();");
     auto cvtoref = *cvto;
     auto(cvtoref).foo();
     std::println("Can cast to non-const trait_proto: {}",
@@ -176,12 +176,12 @@ int main() {
 
     std::println("\nref:");
     const auto simpl = foo_only_impl{};
-    auto       tref  = trp::trait_ref<const trait_fb>(simpl);
+    auto       tref  = trp::dyn_trait_ref<const trait_fb>(simpl);
     tref.foo();
     std::println("Can cast to non-const trait_fb: {}", trp::is_valid_const_trait_cast<trait_fb>(tref));
 
     const auto csimpl = some_impl{};
-    auto       tref2  = trp::trait_ref<trait_foo_only>(csimpl);    // implementation may be overqualified
+    auto       tref2  = trp::dyn_trait_ref<trait_foo_only>(csimpl);    // implementation may be overqualified
     tref2.foo();
 
     return 0;

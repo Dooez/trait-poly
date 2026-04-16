@@ -6,14 +6,12 @@
 #include <algorithm>
 #include <type_traits>
 
-
 namespace trp {
-
 namespace detail {
 template<any_trait Trait>
-struct trait_ref_identity;
+struct dyn_trait_ref_identity;
 template<any_trait Trait, typename... MethodHolders>
-class trait_ref_impl;
+class dyn_trait_ref_impl;
 
 template<non_ref T>
 struct unique_id_struct {
@@ -22,20 +20,20 @@ struct unique_id_struct {
 }    // namespace detail
 
 template<any_trait Trait>
-struct trait_ref;
+struct dyn_trait_ref;
 
 namespace detail {
 template<typename T>
-concept any_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^trait_ref;
+concept any_dyn_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^dyn_trait_ref;
 }
 template<typename Supertrait, any_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-[[nodiscard]] auto trait_cast(const trait_ref<Trait>& ref) -> trait_ref<Supertrait> {
+[[nodiscard]] auto trait_cast(const dyn_trait_ref<Trait>& ref) -> dyn_trait_ref<Supertrait> {
     return ref;
 }
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
-[[nodiscard]] auto is_holding_type(const trait_ref<Trait>& ref) -> bool {
+[[nodiscard]] auto is_holding_type(const dyn_trait_ref<Trait>& ref) -> bool {
     return is_holding_type<Impl>(ref);
 }
 
@@ -326,7 +324,7 @@ template<non_cv_trait Trait>
 consteval auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
-    if (is_complete_type(substitute(^^trait_ref_identity, {^^Trait})))
+    if (is_complete_type(substitute(^^dyn_trait_ref_identity, {^^Trait})))
         return;
     struct method_holder_spec {
         string_view  id;
@@ -348,38 +346,38 @@ consteval auto maybe_define_cv_trait() {
     method_holders_specs_v.reserve(ttt::all_methods.size());
     method_holders_specs_cv.reserve(ttt::all_methods.size());
 
-    auto trait_ref_args    = vector<info>{^^Trait};
-    auto trait_ref_args_c  = vector<info>{^^Trait};
-    auto trait_ref_args_v  = vector<info>{^^Trait};
-    auto trait_ref_args_cv = vector<info>{^^Trait};
+    auto dyn_trait_ref_args    = vector<info>{^^Trait};
+    auto dyn_trait_ref_args_c  = vector<info>{^^Trait};
+    auto dyn_trait_ref_args_v  = vector<info>{^^Trait};
+    auto dyn_trait_ref_args_cv = vector<info>{^^Trait};
 
     uZ i = 0;
     template for (constexpr auto mem: ttt::all_methods) {
         using method_idt = [:mem:];
-        auto add_holder  = [](auto& method_holders_specs, auto& trait_ref_args, auto trait_info, auto i) {
+        auto add_holder  = [](auto& method_holders_specs, auto& dyn_trait_ref_args, auto trait_info, auto i) {
             const auto spec = substitute(^^overload_spec, {reflect_constant(i), mem});
             auto       it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
             if (it == method_holders_specs.end()) {
                 const auto holder_info = substitute(^^method_holder, {trait_info, reflect_constant(i)});
                 method_holders_specs.push_back(
                     {.id = method_idt::identifier, .holder_info = holder_info, .cvm_invoker_targs = {spec}});
-                trait_ref_args.push_back(holder_info);
+                dyn_trait_ref_args.push_back(holder_info);
             } else {
                 it->cvm_invoker_targs.push_back(spec);
             }
         };
-        add_holder(method_holders_specs, trait_ref_args, ^^Trait, i);
+        add_holder(method_holders_specs, dyn_trait_ref_args, ^^Trait, i);
         if (method_idt::is_const)
-            add_holder(method_holders_specs_c, trait_ref_args_c, meta::add_const(^^Trait), i);
+            add_holder(method_holders_specs_c, dyn_trait_ref_args_c, meta::add_const(^^Trait), i);
         if (method_idt::is_volatile)
-            add_holder(method_holders_specs_v, trait_ref_args_v, meta::add_volatile(^^Trait), i);
+            add_holder(method_holders_specs_v, dyn_trait_ref_args_v, meta::add_volatile(^^Trait), i);
         if (method_idt::is_const and method_idt::is_volatile)
-            add_holder(method_holders_specs_cv, trait_ref_args_cv, meta::add_cv(^^Trait), i);
+            add_holder(method_holders_specs_cv, dyn_trait_ref_args_cv, meta::add_cv(^^Trait), i);
         ++i;
     }
 
-    constexpr auto define = [](auto& method_holders_specs, auto& trait_ref_args, info trait_inf) {
-        const auto ref_info = substitute(^^trait_ref_impl, trait_ref_args);
+    constexpr auto define = [](auto& method_holders_specs, auto& dyn_trait_ref_args, info trait_inf) {
+        const auto ref_info = substitute(^^dyn_trait_ref_impl, dyn_trait_ref_args);
         for (auto& [name, holder_info, cvm_invoker_targs]: method_holders_specs) {
             const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
             const auto invoker_type = substitute(^^method_invoker, {ref_info, holder_info, cvm_invoker_info});
@@ -393,7 +391,7 @@ consteval auto maybe_define_cv_trait() {
         }
         {
             const auto type_v_info = substitute(^^type_identity, {ref_info});
-            define_aggregate(substitute(^^trait_ref_identity, {trait_inf}),
+            define_aggregate(substitute(^^dyn_trait_ref_identity, {trait_inf}),
                              {data_member_spec(type_v_info,
                                                data_member_options{
                                                    .name              = "type_v",
@@ -402,65 +400,62 @@ consteval auto maybe_define_cv_trait() {
                                                })});
         }
     };
-    define(method_holders_specs, trait_ref_args, ^^Trait);
-    define(method_holders_specs_c, trait_ref_args_c, meta::add_const(^^Trait));
-    define(method_holders_specs_v, trait_ref_args_v, meta::add_volatile(^^Trait));
-    define(method_holders_specs_cv, trait_ref_args_cv, meta::add_cv(^^Trait));
+    define(method_holders_specs, dyn_trait_ref_args, ^^Trait);
+    define(method_holders_specs_c, dyn_trait_ref_args_c, meta::add_const(^^Trait));
+    define(method_holders_specs_v, dyn_trait_ref_args_v, meta::add_volatile(^^Trait));
+    define(method_holders_specs_cv, dyn_trait_ref_args_cv, meta::add_cv(^^Trait));
 };
 
 template<any_trait Trait, typename... MethodHolders>
-void ref_release(trait_ref_impl<Trait, MethodHolders...>& ref) {
+void ref_release(dyn_trait_ref_impl<Trait, MethodHolders...>& ref) {
     ref.obj_ptr_ = nullptr;
 }
 template<any_trait Trait, typename... MethodHolders>
-void ref_rebind(trait_ref_impl<Trait, MethodHolders...>&       ref,
-                const trait_ref_impl<Trait, MethodHolders...>& other) {
+void ref_rebind(dyn_trait_ref_impl<Trait, MethodHolders...>&       ref,
+                const dyn_trait_ref_impl<Trait, MethodHolders...>& other) {
     ref.vtable_ptr_ = other.vtable_ptr_;
     ref.obj_ptr_    = other.obj_ptr_;
 }
 template<any_trait Trait, typename... MethodHolders>
-[[nodiscard]] auto ref_holds_value(const trait_ref_impl<Trait, MethodHolders...>& ref) -> bool {
+[[nodiscard]] auto ref_holds_value(const dyn_trait_ref_impl<Trait, MethodHolders...>& ref) -> bool {
     return ref.obj_ptr_ != nullptr;
 }
 template<any_trait Trait, typename... MethodHolders>
-void ref_default_delete(const trait_ref_impl<Trait, MethodHolders...>& ref) {
+void ref_default_delete(const dyn_trait_ref_impl<Trait, MethodHolders...>& ref) {
     ref.vtable_ptr_->default_delete(ref.obj_ptr_);
 }
 template<any_trait Trait, typename... MethodHolders>
-class trait_ref_impl : public MethodHolders... {
+class dyn_trait_ref_impl : public MethodHolders... {
     const vtable<std::remove_cv_t<Trait>>* vtable_ptr_{};
     void*                                  obj_ptr_{};
 
-    trait_ref_impl() = default;
-    trait_ref_impl(const vtable<std::remove_cv_t<Trait>>* vptr, auto* optr)
+    dyn_trait_ref_impl() = default;
+    dyn_trait_ref_impl(const vtable<std::remove_cv_t<Trait>>* vptr, auto* optr)
     : vtable_ptr_(vptr)
     , obj_ptr_(
           (void*)optr)    // NOLINT(*cast*)cv qualification is kept via `invoke_wrapper_struct<...>::obj_ptr`
     {};
 
     template<any_trait U, typename... MHs>
-    friend void ref_release(trait_ref_impl<U, MHs...>& ref);
+    friend void ref_release(dyn_trait_ref_impl<U, MHs...>& ref);
     template<any_trait U, typename... MHs>
-    friend void ref_rebind(trait_ref_impl<U, MHs...>& ref, const trait_ref_impl<U, MHs...>& other);
+    friend void ref_rebind(dyn_trait_ref_impl<U, MHs...>& ref, const dyn_trait_ref_impl<U, MHs...>& other);
     template<any_trait U, typename... MHs>
-    friend auto ref_holds_value(const trait_ref_impl<U, MHs...>& ref) -> bool;
+    friend auto ref_holds_value(const dyn_trait_ref_impl<U, MHs...>& ref) -> bool;
     template<any_trait U, typename... MHs>
-    friend void ref_default_delete(const trait_ref_impl<U, MHs...>& ref);
+    friend void ref_default_delete(const dyn_trait_ref_impl<U, MHs...>& ref);
 
     template<typename, typename, typename>
     friend struct method_invoker;
 
     template<any_trait>
-    friend class ::trp::trait_ref;
+    friend class ::trp::dyn_trait_ref;
 };
-
 
 }    // namespace detail
 template<any_trait Trait>
-class trait_ref : public decltype(detail::trait_ref_identity<Trait>::type_v)::type {
-public:
-private:
-    trait_ref() = default;
+class dyn_trait_ref : public decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type {
+    dyn_trait_ref() = default;
 
     template<any_trait>
     friend class shared_trait_ptr;
@@ -469,18 +464,18 @@ private:
     template<any_trait>
     friend class alloc_unique_trait_ptr;
     template<any_trait>
-    friend class trait_ref;
+    friend class dyn_trait_ref;
 
-    template<typename Impl, detail::any_trait_ref TraitRef>
+    template<typename Impl, detail::any_dyn_trait_ref TraitRef>
         requires implements_trait<Impl, typename TraitRef::trait_t>
     friend auto is_holding_type(const TraitRef& ref) -> bool;
     template<typename Impl>
-    [[nodiscard]] static auto is_holding_type(const trait_ref& ref) -> bool {
+    [[nodiscard]] static auto is_holding_type(const dyn_trait_ref& ref) -> bool {
         return ref.vtable_ptr_->id_ptr == &detail::unique_id_struct<Impl>::value;
     }
     template<any_trait U>
         requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
-    [[nodiscard]] friend constexpr auto is_valid_const_trait_cast(const trait_ref& ref) -> bool {
+    [[nodiscard]] friend constexpr auto is_valid_const_trait_cast(const dyn_trait_ref& ref) -> bool {
         if constexpr (supertrait_of<U, Trait>) {
             return true;
         } else {
@@ -491,52 +486,53 @@ private:
             } else if constexpr (std::is_volatile_v<U>) {
                 return ref.vtable_ptr_->cv_quals.has_volatile;
             }
+            // otherwise U has to be a supertrait of Trait
         }
     }
     template<any_trait U>
         requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
-    [[nodiscard]] friend constexpr auto const_trait_cast(const trait_ref& ref) -> trait_ref<U> {
+    [[nodiscard]] friend constexpr auto const_trait_cast(const dyn_trait_ref& ref) -> dyn_trait_ref<U> {
         return {ref.vtable_ptr_, ref.obj_ptr_};
     }
 
 
-    trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
-    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(vptr, optr) {};
+    dyn_trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
+    : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(vptr, optr) {};
 
     template<implements_trait<Trait> Impl>
-    explicit trait_ref(Impl* obj)
-    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(&detail::trait_vtable_for<Trait, Impl>,
-                                                                obj){};
+    explicit dyn_trait_ref(Impl* obj)
+    : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(&detail::trait_vtable_for<Trait, Impl>,
+                                                                    obj){};
 
 public:
     template<any_trait U>
         requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
-    trait_ref(const trait_ref<U>& ref)    // NOLINT(*-explicit-*)
-    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(
-          get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(ref.trait_ref_impl::vtable_ptr_),
-          ref.trait_ref_impl::obj_ptr_){};
+    dyn_trait_ref(const dyn_trait_ref<U>& ref)    // NOLINT(*-explicit-*)
+    : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(
+          get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(ref.dyn_trait_ref_impl::vtable_ptr_),
+          ref.dyn_trait_ref_impl::obj_ptr_){};
 
     template<implements_trait<Trait> Impl>
-        requires(not detail::any_trait_ref<Impl>)
-    explicit trait_ref(Impl& obj)
-    : decltype(detail::trait_ref_identity<Trait>::type_v)::type(
+        requires(not detail::any_dyn_trait_ref<Impl>)
+    explicit dyn_trait_ref(Impl& obj)
+    : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, Impl>, &obj){};
 
-    trait_ref(const trait_ref&)            = default;
-    trait_ref(trait_ref&&)                 = default;
-    trait_ref& operator=(const trait_ref&) = delete;
-    trait_ref& operator=(trait_ref&&)      = delete;
-    ~trait_ref()                           = default;
+    dyn_trait_ref(const dyn_trait_ref&)            = default;
+    dyn_trait_ref(dyn_trait_ref&&)                 = default;
+    dyn_trait_ref& operator=(const dyn_trait_ref&) = delete;
+    dyn_trait_ref& operator=(dyn_trait_ref&&)      = delete;
+    ~dyn_trait_ref()                               = default;
 };
 
 template<any_trait U, any_trait T>
     requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<T>>
-[[nodiscard]] static constexpr auto is_valid_const_trait_cast(trait_ref<T> ref) -> bool {
+[[nodiscard]] static constexpr auto is_valid_const_trait_cast(dyn_trait_ref<T> ref) -> bool {
     return is_valid_const_trait_cast<U>(ref);
 }
 template<any_trait U, any_trait T>
     requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<T>>
-[[nodiscard]] static constexpr auto const_trait_cast(trait_ref<T> ref) {
+[[nodiscard]] static constexpr auto const_trait_cast(dyn_trait_ref<T> ref) {
     return const_trait_cast<U>(ref);
 }
 

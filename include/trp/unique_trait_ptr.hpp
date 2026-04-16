@@ -1,7 +1,7 @@
 #pragma once
 #ifndef TRP_GODBOLT
 #include "allocator_ctrl_block.hpp"
-#include "trait_impl.hpp"
+#include "dyn_trait_ref.hpp"
 #endif
 
 #include <memory>
@@ -11,8 +11,8 @@ namespace trp {
 template<any_trait Trait>
 class alloc_unique_trait_ptr {
     using ctrl_header = detail::ctrl_header<>;
-    mutable trait_ref<Trait> trait_ref_{};
-    ctrl_header*             ctrl_ptr_{};
+    mutable dyn_trait_ref<Trait> dyn_trait_ref_{};
+    ctrl_header*                 ctrl_ptr_{};
 
     [[nodiscard]] auto get_ctrl_ptr() const -> ctrl_header* {
         return ctrl_ptr_;
@@ -20,11 +20,11 @@ class alloc_unique_trait_ptr {
 
     template<implements_trait<Trait> Impl>
     alloc_unique_trait_ptr(Impl* obj_ptr, ctrl_header* ctrl_ptr)
-    : trait_ref_(*obj_ptr)
+    : dyn_trait_ref_(*obj_ptr)
     , ctrl_ptr_(ctrl_ptr){};
 
-    explicit alloc_unique_trait_ptr(trait_ref<Trait> trait_ref, ctrl_header* ctrl_ptr = nullptr)
-    : trait_ref_(trait_ref)
+    explicit alloc_unique_trait_ptr(dyn_trait_ref<Trait> dyn_trait_ref, ctrl_header* ctrl_ptr = nullptr)
+    : dyn_trait_ref_(dyn_trait_ref)
     , ctrl_ptr_(ctrl_ptr) {}
 
     void delete_() {
@@ -33,23 +33,23 @@ class alloc_unique_trait_ptr {
         if (ctrl_ptr_ != nullptr)
             ctrl_ptr_->destructor_ptr_(ctrl_ptr_);
         else
-            detail::ref_default_delete(trait_ref_);
+            detail::ref_default_delete(dyn_trait_ref_);
         release();
     }
 
     [[nodiscard]] bool holds_value() const {
-        return detail::ref_holds_value(trait_ref_);
+        return detail::ref_holds_value(dyn_trait_ref_);
     }
 
     void release() {
-        detail::ref_release(trait_ref_);
+        detail::ref_release(dyn_trait_ref_);
         ctrl_ptr_ = nullptr;
     }
 
 public:
     alloc_unique_trait_ptr() = default;
     alloc_unique_trait_ptr(alloc_unique_trait_ptr&& other) noexcept
-    : trait_ref_{other.trait_ref_}
+    : dyn_trait_ref_{other.dyn_trait_ref_}
     , ctrl_ptr_{other.ctrl_ptr_} {
         other.release();
     }
@@ -57,7 +57,7 @@ public:
         if (this == &other)
             return *this;
         delete_();
-        detail::ref_rebind(this->trait_ref_, other.trait_ref_);
+        detail::ref_rebind(this->dyn_trait_ref_, other.dyn_trait_ref_);
         this->ctrl_ptr_ = other.ctrl_ptr_;
         other.release();
         return *this;
@@ -75,11 +75,11 @@ public:
     }
     // UB if not holding value
     auto operator->(this auto&& self) -> decltype(auto) {
-        return &self.trait_ref_;
+        return &self.dyn_trait_ref_;
     }
     // UB if not holding value
     auto operator*(this auto&& self) -> decltype(auto) {
-        return self.trait_ref_;
+        return self.dyn_trait_ref_;
     }
 
 private:
@@ -100,8 +100,8 @@ private:
     [[nodiscard]] friend auto upcast(alloc_unique_trait_ptr ptr) -> alloc_unique_trait_ptr<Supertrait> {
         if (not ptr)
             return {};
-        auto new_ptr =
-            alloc_unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_), ptr.get_ctrl_ptr());
+        auto new_ptr = alloc_unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.dyn_trait_ref_),
+                                                          ptr.get_ctrl_ptr());
         ptr.release();
         return new_ptr;
     }
@@ -146,31 +146,31 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
 
 template<any_trait Trait>
 class unique_trait_ptr {
-    mutable trait_ref<Trait> trait_ref_;
+    mutable dyn_trait_ref<Trait> dyn_trait_ref_;
 
     void release() {
-        detail::ref_release(trait_ref_);
+        detail::ref_release(dyn_trait_ref_);
     }
 
     [[nodiscard]] bool holds_value() const {
-        return detail::ref_holds_value(trait_ref_);
+        return detail::ref_holds_value(dyn_trait_ref_);
     }
 
-    explicit unique_trait_ptr(trait_ref<Trait> trait_ref)
-    : trait_ref_(trait_ref) {};
+    explicit unique_trait_ptr(dyn_trait_ref<Trait> trait_ref)
+    : dyn_trait_ref_(trait_ref) {};
 
 public:
     unique_trait_ptr() = default;
     unique_trait_ptr(unique_trait_ptr&& other) noexcept
-    : trait_ref_{other.trait_ref_} {
+    : dyn_trait_ref_{other.dyn_trait_ref_} {
         other.release();
     }
     unique_trait_ptr& operator=(unique_trait_ptr&& other) noexcept {
         if (this == &other)
             return *this;
         if (holds_value())
-            detail::ref_default_delete(trait_ref_);
-        detail::ref_rebind(trait_ref_, other.trait_ref_);
+            detail::ref_default_delete(dyn_trait_ref_);
+        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
         other.release();
         return *this;
     };
@@ -181,19 +181,19 @@ public:
     ~unique_trait_ptr() {
         if (not holds_value())
             return;
-        detail::ref_default_delete(trait_ref_);
+        detail::ref_default_delete(dyn_trait_ref_);
         release();
     }
     explicit operator bool() const {
         return holds_value();
     }
     // UB if not holding value
-    auto operator->(this auto&& self) -> trait_ref<Trait>* {
-        return &self.trait_ref_;
+    auto operator->(this auto&& self) -> dyn_trait_ref<Trait>* {
+        return &self.dyn_trait_ref_;
     }
     // UB if not holding value
-    auto operator*(this auto&& self) -> trait_ref<Trait>& {
-        return self.trait_ref_;
+    auto operator*(this auto&& self) -> dyn_trait_ref<Trait>& {
+        return self.dyn_trait_ref_;
     }
 
 private:
@@ -205,7 +205,7 @@ private:
     [[nodiscard]] friend auto upcast(unique_trait_ptr ptr) -> unique_trait_ptr<Supertrait> {
         if (not ptr)
             return {};
-        auto new_ptr = unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.trait_ref_));
+        auto new_ptr = unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.dyn_trait_ref_));
         ptr.release();
         return new_ptr;
     }
@@ -214,10 +214,10 @@ public:
     // new allocated object only
     template<implements_trait<Trait> Impl>
     explicit unique_trait_ptr(Impl* obj_ptr)
-    : trait_ref_(obj_ptr){};
+    : dyn_trait_ref_(obj_ptr){};
 
     operator alloc_unique_trait_ptr<Trait>() && {    // NOLINT(*explicit*)
-        auto new_ptr = alloc_unique_trait_ptr<Trait>(trait_ref_);
+        auto new_ptr = alloc_unique_trait_ptr<Trait>(dyn_trait_ref_);
         release();
         return new_ptr;
     }
