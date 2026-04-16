@@ -130,10 +130,16 @@ int main() {
 
     auto cvto = trp::make_shared_trait<const volatile trait_proto, some_impl>();
     cvto->foo();
+    std::println();
+
+    std::println("/* trait_ref<const volatile trait_proto> */ x.foo();");
     auto cvtoref = *cvto;
+    auto(cvtoref).foo();
     std::println("Can cast to non-const trait_proto: {}",
                  trp::is_valid_const_trait_cast<trait_proto>(cvtoref));
-    auto(cvtoref).foo();
+    std::println("const_trait_cast<trait_proto>(x).foo()");
+    trp::const_trait_cast<trait_proto>(cvtoref).foo();
+    std::println();
 
     auto cto = trp::make_shared_trait<const trait_proto, some_impl>();
     cto->foo();

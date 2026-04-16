@@ -493,6 +493,12 @@ private:
             }
         }
     }
+    template<any_trait U>
+        requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
+    [[nodiscard]] friend constexpr auto const_trait_cast(const trait_ref& ref) -> trait_ref<U> {
+        return {ref.vtable_ptr_, ref.obj_ptr_};
+    }
+
 
     trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
     : decltype(detail::trait_ref_identity<Trait>::type_v)::type(vptr, optr) {};
@@ -527,6 +533,11 @@ template<any_trait U, any_trait T>
     requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<T>>
 [[nodiscard]] static constexpr auto is_valid_const_trait_cast(trait_ref<T> ref) -> bool {
     return is_valid_const_trait_cast<U>(ref);
+}
+template<any_trait U, any_trait T>
+    requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<T>>
+[[nodiscard]] static constexpr auto const_trait_cast(trait_ref<T> ref) {
+    return const_trait_cast<U>(ref);
 }
 
 template<non_cv_trait Trait>
