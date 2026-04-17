@@ -1,6 +1,7 @@
 #pragma once
 #include <meta>
 #ifndef TRP_GODBOLT
+#include "static_trait_ref.hpp"
 #include "trp_concepts.hpp"
 #endif
 #include <algorithm>
@@ -162,11 +163,10 @@ private:
 
 template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
-    using return_type    = MethodId::return_type;
-    using erased_obj_ptr = [:meta::add_pointer(MethodId::add_obj_cv(^^void)):];
-    using obj_ptr        = [:meta::add_pointer(MethodId::add_obj_cv(^^Impl)):];
+    using return_type = MethodId::return_type;
+    using obj_ptr     = [:meta::add_pointer(MethodId::add_obj_cv(^^Impl)):];
 
-    static auto invoke(erased_obj_ptr ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
+    static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
         auto&& impl = *static_cast<obj_ptr>(ptr);
         if constexpr (std::meta::is_template(ImplMethod)) {
             return impl.template[:ImplMethod:](std::forward<Params>(params)...);
@@ -234,21 +234,11 @@ consteval auto fill_vtable() {
     auto quals                 = vtable_cv_quals{};
     using ttt                  = trait_traits<Trait>;
     const auto get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
-        using trait_method_idt_t           = [:trait_method_idt:];
-        constexpr auto matched_impl_method = [=] {
-            for (auto m: matching_id_public_members<std::remove_cv_t<Impl>, trait_method_idt_t::identifier>) {
-                auto matches = meta::substitute(^^strictly_matches,
-                                                {^^Impl, meta::reflect_constant(m), ^^trait_method_idt_t});
-                if (meta::extract<bool>(matches))
-                    return m;
-            }
-            return info{};
-        }();
-
+        using trait_method_idt_t = [:trait_method_idt:];
         // Common vtable is used for any combination of cv-qualification of trait.
         // Implementation is checked by externally.
         // Fill the missing vtable elements with nullptr.
-        if constexpr (matched_impl_method == info{}) {
+        if constexpr (matching_impl_method<Impl, trait_method_idt_t> == info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
             if (trait_method_idt_t::is_volatile)
@@ -258,9 +248,11 @@ consteval auto fill_vtable() {
         } else {
             constexpr auto wrapper_struct_info = [=] {
                 auto [... infos] = trait_method_idt_t::param_infos;
-                return substitute(
-                    ^^invoke_wrapper_struct,
-                    {^^Impl, reflect_constant(matched_impl_method), trait_method_idt, infos...});
+                return substitute(^^invoke_wrapper_struct,
+                                  {^^Impl,
+                                   reflect_constant(matching_impl_method<Impl, trait_method_idt_t>),
+                                   trait_method_idt,
+                                   infos...});
             }();
             using wrapper_struct = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
@@ -354,14 +346,14 @@ consteval auto maybe_define_cv_trait() {
     uZ i = 0;
     template for (constexpr auto mem: ttt::all_methods) {
         using method_idt = [:mem:];
-        auto add_holder  = [](auto& method_holders_specs, auto& dyn_trait_ref_args, auto trait_info, auto i) {
-            const auto spec = substitute(^^overload_spec, {reflect_constant(i), mem});
-            auto       it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
+        const auto spec  = substitute(^^overload_spec, {reflect_constant(i), mem});
+        auto add_holder  = [=](auto& method_holders_specs, auto& trait_ref_args, auto trait_info, auto i) {
+            auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
             if (it == method_holders_specs.end()) {
                 const auto holder_info = substitute(^^method_holder, {trait_info, reflect_constant(i)});
                 method_holders_specs.push_back(
                     {.id = method_idt::identifier, .holder_info = holder_info, .cvm_invoker_targs = {spec}});
-                dyn_trait_ref_args.push_back(holder_info);
+                trait_ref_args.push_back(holder_info);
             } else {
                 it->cvm_invoker_targs.push_back(spec);
             }
@@ -376,8 +368,8 @@ consteval auto maybe_define_cv_trait() {
         ++i;
     }
 
-    constexpr auto define = [](auto& method_holders_specs, auto& dyn_trait_ref_args, info trait_inf) {
-        const auto ref_info = substitute(^^dyn_trait_ref_impl, dyn_trait_ref_args);
+    constexpr auto define = [](auto& method_holders_specs, auto& trait_ref_args, info trait_inf) {
+        const auto ref_info = substitute(^^dyn_trait_ref_impl, trait_ref_args);
         for (auto& [name, holder_info, cvm_invoker_targs]: method_holders_specs) {
             const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
             const auto invoker_type = substitute(^^method_invoker, {ref_info, holder_info, cvm_invoker_info});

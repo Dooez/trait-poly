@@ -130,18 +130,7 @@ struct method_identity_t {
         return inf;
     };
 
-private:
-    using wrapper_obj_ptr = [:[] {
-        auto ptr_info = ^^void;
-        if (Const)
-            ptr_info = meta::add_const(ptr_info);
-        if (Volatile)
-            ptr_info = meta::add_volatile(ptr_info);
-        return meta::add_pointer(ptr_info);
-    }():];
-
-public:
-    using wrapper_fptr_type = auto (*)(wrapper_obj_ptr, Params...) noexcept(Noexcept) -> Ret;
+    using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(Noexcept) -> Ret;
 };
 consteval auto method_identity(meta::info method_info) -> meta::info {
     using namespace meta;
@@ -353,19 +342,21 @@ inline constexpr bool strictly_matches = [] {
     }
 }();
 
+template<non_ref Impl, any_method_idt TraitMethod>
+inline constexpr auto matching_impl_method = [] {
+    for (auto m: matching_id_public_members<std::remove_cv_t<Impl>, TraitMethod::identifier>) {
+        auto matches =
+            meta::substitute(^^strictly_matches, {^^Impl, meta::reflect_constant(m), ^^TraitMethod});
+        if (meta::extract<bool>(matches))
+            return m;
+    }
+    return meta::info{};
+}();
+
 template<typename Impl, typename MethodIdt>
-concept implements_method =
-    non_ref<Impl>                    //
-    and any_method_idt<MethodIdt>    //
-    and ([] {
-            for (auto m: matching_id_public_members<std::remove_cv_t<Impl>, MethodIdt::identifier>) {
-                auto matches =
-                    meta::substitute(^^strictly_matches, {^^Impl, meta::reflect_constant(m), ^^MethodIdt});
-                if (meta::extract<bool>(matches))
-                    return true;
-            }
-            return false;
-        }());
+concept implements_method = non_ref<Impl>                    //
+                            and any_method_idt<MethodIdt>    //
+                            and (matching_impl_method<Impl, MethodIdt> != meta::info{});
 
 
 template<meta::info Self, typename Impl, typename Trait, uZ I = 0>
