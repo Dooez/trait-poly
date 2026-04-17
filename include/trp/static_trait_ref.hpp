@@ -135,7 +135,6 @@ consteval void define_cvts_ref() {
         string_view  id;
         vector<info> cvm_invoker_targs;
     };
-    using ttt = trait_traits<Trait>;
     template for (constexpr auto supertrait: direct_base_types<Trait>) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         define_cvts_ref<supertrait_t, Impl>();
@@ -144,10 +143,10 @@ consteval void define_cvts_ref() {
     auto method_holders_specs_c  = vector<method_holder_spec>{};
     auto method_holders_specs_v  = vector<method_holder_spec>{};
     auto method_holders_specs_cv = vector<method_holder_spec>{};
-    method_holders_specs.reserve(ttt::all_methods.size());
-    method_holders_specs_c.reserve(ttt::all_methods.size());
-    method_holders_specs_v.reserve(ttt::all_methods.size());
-    method_holders_specs_cv.reserve(ttt::all_methods.size());
+    method_holders_specs.reserve(all_trait_methods<Trait>.size());
+    method_holders_specs_c.reserve(all_trait_methods<Trait>.size());
+    method_holders_specs_v.reserve(all_trait_methods<Trait>.size());
+    method_holders_specs_cv.reserve(all_trait_methods<Trait>.size());
 
     auto trait_ref_args    = vector<info>{^^Trait, ^^Impl};
     auto trait_ref_args_c  = vector<info>{^^Trait, ^^Impl};
@@ -155,7 +154,7 @@ consteval void define_cvts_ref() {
     auto trait_ref_args_cv = vector<info>{^^Trait, ^^Impl};
 
     uZ i = 0;
-    template for (constexpr auto mem: ttt::all_methods) {
+    template for (constexpr auto mem: all_trait_methods<Trait>) {
         using method_idt    = [:mem:];
         constexpr auto spec = substitute(^^cvts_overload_spec,
                                          {^^Impl,    //

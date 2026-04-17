@@ -46,7 +46,7 @@ consteval auto default_impl_to_method_identity(meta::info fn) {
 
 template<any_trait Trait>
 consteval bool maps_to_a_trait_method_of(meta::info fn) {
-    return stdr::contains(trait_traits<Trait>::all_methods, default_impl_to_method_identity(fn));
+    return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(fn));
 };
 
 template<template<typename> typename DefaultImpl, typename Trait>
@@ -301,7 +301,7 @@ consteval void define_vtable() {
 
     auto vtable_elements = std::vector<info>{};
     auto method_spec = get_info_to_member("m_", [](info m) { return substitute(^^wrapper_fptr_for, {m}); });
-    for (auto method_idt: trait_traits<Trait>::all_methods) {
+    for (auto method_idt: all_trait_methods<Trait>) {
         vtable_elements.push_back(method_spec(method_idt));
     }
     using default_delete_fptr = void (*)(void*);
@@ -328,8 +328,7 @@ inline constexpr auto trait_vtable_for = fill_vtable<Trait, Impl>();
 template<non_cv_trait Trait, non_ref Impl>
 consteval auto fill_vtable() {
     using namespace meta;
-    auto quals                 = vtable_cv_quals{};
-    using ttt                  = trait_traits<Trait>;
+    auto       quals           = vtable_cv_quals{};
     const auto get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
         // Common vtable is used for any combination of cv-qualification of trait.
@@ -357,10 +356,10 @@ consteval auto fill_vtable() {
     };
 
     // use constexpr binding when it becomes available
-    auto [... Is] = make_cw_idxs<ttt::all_methods.size()>();
+    auto [... Is] = make_cw_idxs<all_trait_methods<Trait>.size()>();
     auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
     return vtable<Trait>{
-        get_wrapper_ptr(cw<ttt::all_methods[Is]>)...,
+        get_wrapper_ptr(cw<all_trait_methods<Trait>[Is]>)...,
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
         quals,
@@ -392,10 +391,10 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
         static constexpr auto mems = std::define_static_array(
             meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
-            stdv::drop(stdr::size(trait_traits<Trait>::all_methods)    //
-                       + 1                                             // default_deleter
-                       + 1                                             // id_ptr
-                       + 1                                             // cv_quals
+            stdv::drop(stdr::size(all_trait_methods<Trait>)    //
+                       + 1                                     // default_deleter
+                       + 1                                     // id_ptr
+                       + 1                                     // cv_quals
                        ));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
@@ -472,7 +471,6 @@ consteval auto maybe_define_cv_trait() {
         info         holder_info{};
         vector<info> cvm_invoker_targs;
     };
-    using ttt = trait_traits<Trait>;
     template for (constexpr auto supertrait: direct_base_types<Trait>) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         maybe_define_cv_trait<supertrait_t, DefaultImpl>();
@@ -482,10 +480,10 @@ consteval auto maybe_define_cv_trait() {
     auto method_holders_specs_c  = vector<method_holder_spec>{};
     auto method_holders_specs_v  = vector<method_holder_spec>{};
     auto method_holders_specs_cv = vector<method_holder_spec>{};
-    method_holders_specs.reserve(ttt::all_methods.size());
-    method_holders_specs_c.reserve(ttt::all_methods.size());
-    method_holders_specs_v.reserve(ttt::all_methods.size());
-    method_holders_specs_cv.reserve(ttt::all_methods.size());
+    method_holders_specs.reserve(all_trait_methods<Trait>.size());
+    method_holders_specs_c.reserve(all_trait_methods<Trait>.size());
+    method_holders_specs_v.reserve(all_trait_methods<Trait>.size());
+    method_holders_specs_cv.reserve(all_trait_methods<Trait>.size());
 
     auto dyn_trait_ref_args    = vector<info>{^^Trait};
     auto dyn_trait_ref_args_c  = vector<info>{^^Trait};
@@ -493,7 +491,7 @@ consteval auto maybe_define_cv_trait() {
     auto dyn_trait_ref_args_cv = vector<info>{^^Trait};
 
     uZ i = 0;
-    template for (constexpr auto mem: ttt::all_methods) {
+    template for (constexpr auto mem: all_trait_methods<Trait>) {
         using method_idt = [:mem:];
         const auto spec  = substitute(^^overload_spec, {reflect_constant(i), mem});
         auto add_holder  = [=](auto& method_holders_specs, auto& trait_ref_args, auto trait_info, auto i) {

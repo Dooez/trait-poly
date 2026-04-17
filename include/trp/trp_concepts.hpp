@@ -288,40 +288,14 @@ inline constexpr auto all_trait_methods = [] {
     return define_static_array(result);
 }();
 
-template<typename T>
-struct trait_traits {
-    static constexpr auto all_methods = [] {
-        using namespace meta;
-        constexpr auto is_valid_method = [](auto method) static {
-            return is_function(method)                                 //
-                   and not meta::is_special_member_function(method)    //
-                   and (is_const(method) or not is_const(^^T))         //
-                   and (is_volatile(method) or not is_volatile(^^T));
-        };
-        auto result = meta::members_of(^^T, ctx_unchecked)    //
-                      | stdv::filter(is_valid_method)         //
-                      | stdv::transform(method_identity)      //
-                      | stdr::to<std::vector<info>>();
-        auto append_unique = [&](auto&& method_idts) {
-            for (auto m: method_idts)
-                if (not stdr::contains(result, m))
-                    result.push_back(m);
-        };
-        template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
-            using base_t = [:copy_cv_to(^^T, base):];
-            append_unique(trait_traits<base_t>::all_methods);
-        }
-        return std::define_static_array(result);
-    }();
-};
 }    // namespace detail
 
 template<typename Supertrait, typename Trait>
 concept supertrait_of = any_trait<Supertrait>    //
                         and any_trait<Trait>     //
                         and ([] {
-                                for (auto m: detail::trait_traits<Supertrait>::all_methods) {
-                                    if (not stdr::contains(detail::trait_traits<Trait>::all_methods, m))
+                                for (auto m: detail::all_trait_methods<Supertrait>) {
+                                    if (not stdr::contains(detail::all_trait_methods<Trait>, m))
                                         return false;
                                 }
                                 return true;
