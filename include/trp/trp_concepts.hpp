@@ -187,6 +187,11 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
 template<typename T>
 concept any_method_idt = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^method_identity_t;
 
+
+template<typename T>
+inline constexpr auto nonspecial_members = std::define_static_array(
+    meta::members_of(^^T, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function)));
+
 consteval auto nonspecial_members_of(meta::info inf) {
     return meta::members_of(inf, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function));
 }
@@ -258,6 +263,31 @@ template<typename Trait>
 concept non_cv_trait = any_trait<Trait> and non_cvref<Trait>;
 
 namespace detail {
+template<typename T>
+inline constexpr auto all_trait_methods = [] {
+    using namespace meta;
+    constexpr auto is_valid_method = [](auto method) static {
+        return is_function(method)                                 //
+               and not meta::is_special_member_function(method)    //
+               and (is_const(method) or not is_const(^^T))         //
+               and (is_volatile(method) or not is_volatile(^^T));
+    };
+    auto result = meta::members_of(^^T, ctx_unchecked)    //
+                  | stdv::filter(is_valid_method)         //
+                  | stdv::transform(method_identity)      //
+                  | stdr::to<std::vector<info>>();
+    auto append_unique = [&](auto&& method_idts) {
+        for (auto m: method_idts)
+            if (not stdr::contains(result, m))
+                result.push_back(m);
+    };
+    template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
+        using base_t = [:copy_cv_to(^^T, base):];
+        append_unique(all_trait_methods<base_t>);
+    }
+    return define_static_array(result);
+}();
+
 template<typename T>
 struct trait_traits {
     static constexpr auto all_methods = [] {
@@ -359,18 +389,6 @@ concept implements_method = non_ref<Impl>                    //
                             and (matching_impl_method<Impl, MethodIdt> != meta::info{});
 
 
-template<meta::info Self, typename Impl, typename Trait, uZ I = 0>
-concept implements_methods =
-    requires { requires I == trait_traits<Trait>::all_methods.size(); }                             //
-    or ([:meta::substitute(^^implements_method, {^^Impl, trait_traits<Trait>::all_methods[I]}):]    //
-        and
-           [:meta::substitute(
-                 Self, {meta::reflect_constant(Self), ^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
-
 }    // namespace detail
-
-template<typename Impl, typename Trait>
-concept implements_trait = any_trait<Trait> and std::is_class_v<Impl> and
-                           detail::implements_methods<^^detail::implements_methods, Impl, Trait>;
 
 }    // namespace trp
