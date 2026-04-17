@@ -123,12 +123,25 @@ static_assert(not compare_structs(vt01, vt2));
 consteval {
     trp::detail::define_cvts_ref<trait_proto, some_impl>();
 }
+
+template<typename T, typename V = void>
+struct some_default_impl {
+    static void foo(const T&) {
+        std::println("default foo impl");
+    };
+    static void foo(T&) {
+        std::println("default foo impl");
+    };
+    // static void bazinga(T&) {} // not part of a trait, cannot be used
+};
+static_assert(trp::detail::default_impl_for<some_default_impl, trait_proto>);
 int main() {
     auto       simpl    = some_impl{};
     auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     ts_ref.foo();
     ts_ref_c.foo();
+
 
     // std::println("make_shared:");
     // const auto to    = trp::make_shared_trait<trait_proto, some_impl>();
