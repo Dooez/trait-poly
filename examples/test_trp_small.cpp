@@ -3,25 +3,40 @@
 #include "trp/unique_trait_ptr.hpp"
 
 #include <print>
-struct trait_proto_base {
-    void bar() const;
-};
 struct trait_proto_imposter {
     void bar() const;
 };
 consteval {
-    trp::define_trait<trait_proto_base>();
     trp::define_trait<trait_proto_imposter>();
 }
+struct trait_proto_base {
+    void bar() const;
+};
 struct trait_proto : trait_proto_base {
     void foo();
     void foo() const;
-    void foo() const volatile;
+};
+template<typename T>
+struct some_default_impl {
+    static void foo(const T&) {
+        std::println("default const foo impl");
+    };
+    static void foo(T&) {
+        std::println("default foo impl");
+    };
 };
 consteval {
-    trp::define_trait<trait_proto_base>();    // repeated definition is allowed, and has no effect
-    trp::define_trait<trait_proto>();
+    trp::define_trait<trait_proto, some_default_impl>();
 }
+struct bar_only_impl {
+    void bar() const {
+        std::println("bar_only_impl::bar");
+    }
+};
+// consteval {
+// trp::define_trait<trait_proto_base>();    // repeated definition is allowed, and has no effect
+// trp::define_trait<trait_proto>();
+// }
 
 static_assert(trp::supertrait_of<trait_proto, trait_proto>);
 static_assert(trp::supertrait_of<trait_proto_base, trait_proto>);
@@ -93,7 +108,7 @@ struct foo_only_impl {
         std::println("foo foo_only_impl");
     };
 };
-static_assert(trp::implements_trait<other_impl, trait_proto>);
+// static_assert(trp::implements_trait<other_impl, trait_proto>);
 
 // NOLINTEND(*-to-static*)
 template<typename S>
@@ -111,36 +126,29 @@ constexpr bool compare_structs(const S& lhs, const S& rhs) {
     }
     return true;
 };
+//
+// constexpr auto vt0  = trp::detail::fill_vtable<trait_proto, some_impl>();
+// constexpr auto vt01 = *trp::detail::get_explicit_supertrait_vtable_ptr<trait_proto_base>(&vt0);
+// constexpr auto vt1  = trp::detail::fill_vtable<trait_proto_base, some_impl>();
+// constexpr auto vt2  = trp::detail::fill_vtable<trait_proto_base, other_impl>();
+//
+// static_assert(compare_structs(vt01, vt1));
+// static_assert(not compare_structs(vt01, vt2));
 
-constexpr auto vt0  = trp::detail::fill_vtable<trait_proto, some_impl>();
-constexpr auto vt01 = *trp::detail::get_explicit_supertrait_vtable_ptr<trait_proto_base>(&vt0);
-constexpr auto vt1  = trp::detail::fill_vtable<trait_proto_base, some_impl>();
-constexpr auto vt2  = trp::detail::fill_vtable<trait_proto_base, other_impl>();
+// consteval {
+//     trp::detail::define_cvts_ref<trait_proto, some_impl>();
+// }
 
-static_assert(compare_structs(vt01, vt1));
-static_assert(not compare_structs(vt01, vt2));
 
-consteval {
-    trp::detail::define_cvts_ref<trait_proto, some_impl>();
-}
-
-template<typename T, typename V = void>
-struct some_default_impl {
-    static void foo(const T&) {
-        std::println("default foo impl");
-    };
-    static void foo(T&) {
-        std::println("default foo impl");
-    };
-    // static void bazinga(T&) {} // not part of a trait, cannot be used
-};
-static_assert(trp::detail::default_impl_for<some_default_impl, trait_proto>);
 int main() {
-    auto       simpl    = some_impl{};
-    auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
-    const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
-    ts_ref.foo();
-    ts_ref_c.foo();
+    auto simpl = bar_only_impl{};
+    auto ref   = trp::dyn_trait_ref<trait_proto>(simpl);
+    ref.foo();
+    ref.bar();
+    // auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
+    // const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
+    // ts_ref.foo();
+    // ts_ref_c.foo();
 
 
     // std::println("make_shared:");

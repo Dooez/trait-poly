@@ -1,4 +1,5 @@
 #pragma once
+#include <ranges>
 #ifndef TRP_GODBOLT
 #include "trp_concepts.hpp"
 #endif
@@ -19,8 +20,6 @@ using cvts_trait_ref = decltype(cvts_trait_ref_identity<Trait, Impl>::type_v)::t
 template<typename T>
 concept any_cvts_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^cvts_trait_ref;
 
-template<typename Trait, uZ StartIdx>
-struct cvts_method_holder;    // holds `mehod_invoker **method_name**;`
 
 template<typename TRef,
          typename MethodHolder,
@@ -106,110 +105,88 @@ struct cvts_overload_spec {
     static constexpr auto impl_method = Method;
     using id                          = MethodId;
 };
+template<typename... OvSpecs>
+struct ovspec_holder {};
+
+template<typename TRef, typename MethodHolder, typename OvSpecHolder>
+struct cvts_cvm_invoker;
+
 template<typename TRef, typename MethodHolder, typename... OvSpecs>
-struct cvts_cvm_invoker
+struct cvts_cvm_invoker<TRef, MethodHolder, ovspec_holder<OvSpecs...>>
 : cvts_cvo_invoker<TRef,
                    MethodHolder,
-                   cvts_cvm_invoker<TRef, MethodHolder, OvSpecs...>,
+                   cvts_cvm_invoker<TRef, MethodHolder, ovspec_holder<OvSpecs...>>,
                    typename OvSpecs::impl_t,
                    OvSpecs::impl_method,
                    typename OvSpecs::id>... {
     using cvts_cvo_invoker<TRef,
                            MethodHolder,
-                           cvts_cvm_invoker<TRef, MethodHolder, OvSpecs...>,
+                           cvts_cvm_invoker<TRef, MethodHolder, ovspec_holder<OvSpecs...>>,
                            typename OvSpecs::impl_t,
                            OvSpecs::impl_method,
                            typename OvSpecs::id>::operator()...;
 };
 
-template<typename Trait, uZ StartIdx>
-struct cvts_cvm_holder;    // holds `mehod_invoker **method_name**;`
+template<typename Ref, auto HolderSpec>
+consteval auto def_spc() {
+    struct cvts_method_holder;
+    using invoker_t = [:substitute(^^cvts_cvm_invoker,
+                                   {^^Ref, ^^cvts_method_holder, HolderSpec.ovspec_holder}):];
+    consteval {
+        meta::define_aggregate(^^cvts_method_holder,
+                               {meta::data_member_spec(^^invoker_t,
+                                                       meta::data_member_options{
+                                                           .name              = HolderSpec.id,
+                                                           .no_unique_address = true,
+                                                           //  .attributes = {^^[[no_unique_address]] },
+                                                       })});
+    }
+    return ^^cvts_method_holder;
+}
 
 template<typename Trait, typename Impl>
-consteval void define_cvts_ref() {
+consteval auto define_cvts_ref() {
     using namespace std;
     using namespace meta;
-    if (is_complete_type(substitute(^^cvts_trait_ref_identity, {^^Trait, ^^Impl})))
-        return;
-    struct method_holder_spec {
-        string_view  id;
-        vector<info> cvm_invoker_targs;
-    };
-    template for (constexpr auto supertrait: direct_base_types<Trait>) {
-        using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
-        define_cvts_ref<supertrait_t, Impl>();
-    }
-    auto method_holders_specs    = vector<method_holder_spec>{};
-    auto method_holders_specs_c  = vector<method_holder_spec>{};
-    auto method_holders_specs_v  = vector<method_holder_spec>{};
-    auto method_holders_specs_cv = vector<method_holder_spec>{};
-    method_holders_specs.reserve(all_trait_methods<Trait>.size());
-    method_holders_specs_c.reserve(all_trait_methods<Trait>.size());
-    method_holders_specs_v.reserve(all_trait_methods<Trait>.size());
-    method_holders_specs_cv.reserve(all_trait_methods<Trait>.size());
 
-    auto trait_ref_args    = vector<info>{^^Trait, ^^Impl};
-    auto trait_ref_args_c  = vector<info>{^^Trait, ^^Impl};
-    auto trait_ref_args_v  = vector<info>{^^Trait, ^^Impl};
-    auto trait_ref_args_cv = vector<info>{^^Trait, ^^Impl};
+    struct ref;
 
-    uZ i = 0;
-    template for (constexpr auto mem: all_trait_methods<Trait>) {
-        using method_idt    = [:mem:];
-        constexpr auto spec = substitute(^^cvts_overload_spec,
-                                         {^^Impl,    //
-                                          reflect_constant(matching_impl_method<Impl, method_idt>),
-                                          mem});
-        auto add_holder     = [&](auto& method_holders_specs, auto& trait_ref_args, auto trait_info, auto i) {
+    constexpr auto method_holders_specs = [] {
+        struct method_holder_spec {
+            const char*  id;
+            vector<info> ov_specs;
+        };
+        auto method_holders_specs = vector<method_holder_spec>{};
+
+        template for (constexpr auto mem: all_trait_methods<Trait>) {
+            using method_idt    = [:mem:];
+            constexpr auto spec = substitute(^^cvts_overload_spec,
+                                             {^^Impl,    //
+                                              reflect_constant(matching_impl_method<Impl, method_idt>),
+                                              mem});
             auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
             if (it == method_holders_specs.end()) {
-                const auto holder_info = substitute(^^cvts_method_holder, {trait_info, reflect_constant(i)});
-                method_holders_specs.push_back({
-                        .id = method_idt::identifier, .cvm_invoker_targs = {meta::info{}, holder_info, spec}
-                });
-                trait_ref_args.push_back(holder_info);
+                method_holders_specs.push_back({.id       = method_idt::identifier,    //
+                                                .ov_specs = {spec}});
             } else {
-                it->cvm_invoker_targs.push_back(spec);
+                it->ov_specs.push_back(spec);
             }
+        }
+        struct method_holder_prep {
+            const char* id;
+            info        ovspec_holder;
         };
-        add_holder(method_holders_specs, trait_ref_args, ^^Trait, i);
-        if (method_idt::is_const)
-            add_holder(method_holders_specs_c, trait_ref_args_c, meta::add_const(^^Trait), i);
-        if (method_idt::is_volatile)
-            add_holder(method_holders_specs_v, trait_ref_args_v, meta::add_volatile(^^Trait), i);
-        if (method_idt::is_const and method_idt::is_volatile)
-            add_holder(method_holders_specs_cv, trait_ref_args_cv, meta::add_cv(^^Trait), i);
-        ++i;
-    }
+        return std::define_static_array(method_holders_specs | stdv::transform([](auto spec) {
+                                            return method_holder_prep{
+                                                spec.id, substitute(^^ovspec_holder, spec.ov_specs)};
+                                        }));
+    }();
 
-    constexpr auto define = [](auto& method_holders_specs, auto& trait_ref_args, info trait_inf) {
-        const auto ref_info = substitute(^^cvts_trait_ref_impl, trait_ref_args);
-        for (auto& [name, cvm_invoker_targs]: method_holders_specs) {
-            cvm_invoker_targs[0]    = ref_info;
-            const auto invoker_type = substitute(^^cvts_cvm_invoker, cvm_invoker_targs);
-            define_aggregate(cvm_invoker_targs[1],
-                             {data_member_spec(invoker_type,
-                                               data_member_options{
-                                                   .name              = name,
-                                                   .no_unique_address = true,
-                                                   //  .attributes = {^^[[no_unique_address]] },
-                                               })});
-        }
-        {
-            const auto type_v_info = substitute(^^type_identity, {ref_info});
-            define_aggregate(substitute(^^cvts_trait_ref_identity, {trait_inf, ^^Impl}),
-                             {data_member_spec(type_v_info,
-                                               data_member_options{
-                                                   .name              = "type_v",
-                                                   .no_unique_address = true,
-                                                   //  .attributes = {^^[[no_unique_address]] },
-                                               })});
-        }
-    };
-    define(method_holders_specs, trait_ref_args, ^^Trait);
-    define(method_holders_specs_c, trait_ref_args_c, meta::add_const(^^Trait));
-    define(method_holders_specs_v, trait_ref_args_v, meta::add_volatile(^^Trait));
-    define(method_holders_specs_cv, trait_ref_args_cv, meta::add_cv(^^Trait));
+    auto trait_ref_args = vector<info>{^^Trait, ^^Impl};
+    template for (constexpr auto holder_spec: method_holders_specs) {
+        trait_ref_args.push_back(def_spc<ref, holder_spec>());
+    }
+    return substitute(^^cvts_trait_ref_impl, trait_ref_args);
 };
 
 template<any_trait Trait, typename Impl, typename... MethodHolders>

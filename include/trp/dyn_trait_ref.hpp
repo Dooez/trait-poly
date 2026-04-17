@@ -241,20 +241,20 @@ private:
 };
 
 template<any_trait Trait, non_ref Impl, any_method_idt MethodId, typename... Params>
-struct defaul_invoke_wrapper_struct {
+struct default_invoke_wrapper_struct {
     using return_type = MethodId::return_type;
-    using ref_t       = [:MethodId::add_obj_cv(^^cvts_trait_ref<Trait, Impl>):];
 
     static constexpr meta::info default_impl_template =
-        default_trait_impl_identity<Trait>::template_info::value;
+        decltype(default_trait_impl_identity<Trait>::template_info)::value;
 
-    using default_trait_impl = [:meta::substitute(default_impl_template, {^^Impl}):];
+    using cvts_ref           = [:define_cvts_ref<Trait, Impl>():];
+    using default_trait_impl = [:meta::substitute(default_impl_template, {^^cvts_ref}):];
 
     static constexpr auto default_method =
         *stdr::find(nonspecial_members<default_trait_impl>, ^^MethodId, default_impl_to_method_identity);
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
-        ref_t ref(*static_cast<Impl*>(ptr));
+        cvts_ref ref(*static_cast<Impl*>(ptr));
         return [:default_method:](ref, std::forward<Params>(params)...);
     }
 };
@@ -335,6 +335,18 @@ consteval auto fill_vtable() {
         // Implementation is checked by externally.
         // Fill the missing vtable elements with nullptr.
         if constexpr (matching_impl_method<Impl, trait_method_idt_t> == info{}) {
+            if (not stdr::contains(mandatory_trait_methods<Trait>, ^^trait_method_idt_t)) {
+                constexpr auto wrapper_struct_info = [=] {
+                    auto [... infos] = trait_method_idt_t::param_infos;
+                    return substitute(^^default_invoke_wrapper_struct,
+                                      {^^Trait,    //
+                                       ^^Impl,
+                                       trait_method_idt,
+                                       infos...});
+                }();
+                using wrapper_struct = [:wrapper_struct_info:];
+                return &wrapper_struct::invoke;
+            }
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
             if (trait_method_idt_t::is_volatile)
