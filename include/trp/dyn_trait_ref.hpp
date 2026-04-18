@@ -1,8 +1,8 @@
 #pragma once
 #include <meta>
 #ifndef TRP_GODBOLT
-#include "static_trait_ref.hpp"
-#include "trp_concepts.hpp"
+#include "cvtmock_trait_ref.hpp"
+#include "cvts_trait_ref.hpp"
 #endif
 #include <algorithm>
 #include <type_traits>
@@ -10,6 +10,7 @@
 namespace trp {
 template<any_trait Trait>
 struct dyn_trait_ref;
+
 namespace detail {
 template<any_trait Trait, typename... MethodHolders>
 class dyn_trait_ref_impl;
@@ -35,17 +36,17 @@ consteval bool maps_to_a_trait_method_of(meta::info fn) {
 template<template<typename> typename DefaultImpl, typename Trait>
 concept default_impl_for =
     non_cv_trait<Trait>                                                                           //
-    and stdr::all_of(nonspecial_members<DefaultImpl<mock_ref<Trait>>>, meta::is_static_member)    //
-    and stdr::all_of(nonspecial_members<DefaultImpl<mock_ref<Trait>>>, meta::is_function)         //
-    and stdr::all_of(nonspecial_members<DefaultImpl<mock_ref<Trait>>>,
-                     first_parameter_is_cvref_of<mock_ref<Trait>>)    //
+    and stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>, meta::is_static_member)    //
+    and stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>, meta::is_function)         //
+    and stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>,
+                     first_parameter_is_cvref_of<mock_trait_ref<Trait>>)    //
     ;
 
-// template<template<typename> typename DefaultImpl, typename Trait>
-// concept strict_default_impl_for = default_impl_for<DefaultImpl, Trait>    //
-// and
-// stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>, maps_to_a_trait_method_of<Trait>)//
-// ;
+template<template<typename> typename DefaultImpl, typename Trait>
+concept strict_default_impl_for = default_impl_for<DefaultImpl, Trait>    //
+and
+stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>, maps_to_a_trait_method_of<Trait>)//
+;
 
 
 template<any_trait Trait>
@@ -226,7 +227,7 @@ struct default_invoke_wrapper_struct {
         decltype(default_trait_impl_identity<Trait>::template_info)::value;
 
     consteval {}
-    using cvts_ref           = [:defined_cvts_ref_info<Trait, Impl>:];
+    using cvts_ref           = cvts_trait_ref<Trait, Impl>;
     using default_trait_impl = [:meta::substitute(default_impl_template, {^^cvts_ref}):];
 
     static constexpr auto default_method =
@@ -620,9 +621,8 @@ template<any_trait U, any_trait T>
 }
 
 template<non_cv_trait Trait, template<typename> typename DefaultImpl = detail::empty_default_implementation>
-    requires detail::default_impl_for<DefaultImpl, Trait>
+    requires detail::strict_default_impl_for<DefaultImpl, Trait>
 consteval void define_trait() {
     detail::maybe_define_cv_trait<Trait, DefaultImpl>();
-    // detail::valid_default_impl_for(^^DefaultImpl, ^^Trait);
 };
 }    // namespace trp

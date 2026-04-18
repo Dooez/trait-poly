@@ -362,6 +362,24 @@ concept implements_method = non_ref<Impl>                    //
                             and any_method_idt<MethodIdt>    //
                             and (matching_impl_method<Impl, MethodIdt> != meta::info{});
 
+template<non_cv_trait Trait>
+struct default_trait_impl_identity;
+
+consteval auto default_impl_to_method_identity(meta::info fn) {
+    using namespace meta;
+    auto params    = parameters_of(fn);
+    auto impl      = remove_reference(type_of(params[0]));
+    auto idt_targs = std::vector{reflect_constant_string(identifier_of(fn)),
+                                 reflect_constant(is_const(impl)),
+                                 reflect_constant(is_volatile(impl)),
+                                 reflect_constant(false),
+                                 reflect_constant(false),
+                                 reflect_constant(false),
+                                 reflect_constant(is_noexcept(fn)),
+                                 return_type_of(fn)};
+    idt_targs.append_range(params | stdv::drop(1));
+    return substitute(^^method_identity_t, idt_targs);
+}
 
 }    // namespace detail
 

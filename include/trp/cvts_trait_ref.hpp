@@ -8,131 +8,22 @@
 #include <type_traits>
 
 namespace trp::detail {
-template<non_cv_trait Trait>
-struct default_trait_impl_identity;
 
-consteval auto default_impl_to_method_identity(meta::info fn) {
-    using namespace meta;
-    auto params    = parameters_of(fn);
-    auto impl      = remove_reference(type_of(params[0]));
-    auto idt_targs = std::vector{reflect_constant_string(identifier_of(fn)),
-                                 reflect_constant(is_const(impl)),
-                                 reflect_constant(is_volatile(impl)),
-                                 reflect_constant(false),
-                                 reflect_constant(false),
-                                 reflect_constant(false),
-                                 reflect_constant(is_noexcept(fn)),
-                                 return_type_of(fn)};
-    idt_targs.append_range(params | stdv::drop(1));
-    return substitute(^^method_identity_t, idt_targs);
-}
 
-namespace trait_mock {
-
-template<any_method_idt>
-struct cvtmock_cvo_invoker;
-
-template<auto Identifier,
-         bool Const,
-         bool Volatile,
-         bool LVRef,
-         bool RVRef,
-         bool Value,
-         bool Noexcept,
-         typename Ret,
-         typename... Args>
-    requires(not(LVRef or RVRef or Value))    // not supported
-struct cvtmock_cvo_invoker<
-    method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
-    auto operator()(Args... args) noexcept(Noexcept) -> Ret
-        requires(not Const and not Volatile)
-    {}
-    auto operator()(Args... args) const noexcept(Noexcept) -> Ret
-        requires(Const and not Volatile)
-    {}
-    auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
-        requires(not Const and Volatile)
-    {}
-    auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
-        requires(Const and Volatile)
-    {}
-};
-
-template<any_method_idt... MethodIds>
-struct cvtmock_cvm_invoker : cvtmock_cvo_invoker<MethodIds>... {
-    using cvtmock_cvo_invoker<MethodIds>::operator()...;
-};
-
-template<auto HolderSpec>
-consteval auto get_cvtmock_holder() {
-    struct cvtmock_method_holder;
-    consteval {
-        meta::define_aggregate(^^cvtmock_method_holder,
-                               {meta::data_member_spec(HolderSpec.invoker_info,
-                                                       meta::data_member_options{
-                                                           .name              = HolderSpec.id,
-                                                           .no_unique_address = true,
-                                                           //  .attributes = {^^[[no_unique_address]] },
-                                                       })});
-    }
-    return ^^cvtmock_method_holder;
-}
-
-template<typename... MethodHolders>
-struct mock_ref_impl : public MethodHolders... {};
-
-template<non_cv_trait Trait>
-consteval auto define_cvtmock_ref() {
-    using namespace std;
-    using namespace meta;
-
-    static constexpr auto method_holders_specs = [] {
-        struct method_holder_spec {
-            const char*  id;
-            vector<info> method_idts;
-        };
-        auto method_holders_specs = vector<method_holder_spec>{};
-
-        template for (constexpr auto mem: all_trait_methods<Trait>) {
-            using method_idt = [:mem:];
-            auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
-            if (it == method_holders_specs.end()) {
-                method_holders_specs.push_back({.id          = method_idt::identifier,    //
-                                                .method_idts = {mem}});
-            } else {
-                it->method_idts.push_back(mem);
-            }
-        }
-        struct method_holder_prep {
-            const char* id;
-            info        invoker_info;
-        };
-        return std::define_static_array(method_holders_specs | stdv::transform([](auto spec) {
-                                            return method_holder_prep{
-                                                spec.id, substitute(^^cvtmock_cvm_invoker, spec.method_idts)};
-                                        }));
-    }();
-
-    auto trait_ref_args = vector<info>{};
-    template for (constexpr auto spec: method_holders_specs) {
-        trait_ref_args.push_back(get_cvtmock_holder<spec>());
-    }
-    return substitute(^^mock_ref_impl, trait_ref_args);
-};
-template<non_cv_trait Trait>
-inline constexpr auto mock_ref_info = define_cvtmock_ref<Trait>();
-
-}    // namespace trait_mock
-
-template<non_cv_trait Trait>
-using mock_ref = [:trait_mock::mock_ref_info<Trait>:];
-
-template<any_trait Trait, typename Impl>
-struct cvts_trait_ref_identity;
+namespace cvts_trait {
 
 template<any_trait Trait, typename Impl, typename... MethodHolders>
-class cvts_trait_ref_impl;
+class cvts_trait_ref_impl : public MethodHolders... {
+    Impl* obj_ptr_{};
 
+    template<typename, typename, typename, typename, meta::info, any_method_idt>
+    friend struct cvts_cvo_invoker;
+
+public:
+    cvts_trait_ref_impl() = default;
+    explicit cvts_trait_ref_impl(Impl& optr)
+    : obj_ptr_(&optr) {};
+};
 
 template<typename TRef,
          typename MethodHolder,
@@ -344,23 +235,12 @@ consteval auto define_cvts_ref() {
     return ^^ref;
 };
 
-template<typename Trait, typename Impl>
-inline constexpr auto defined_cvts_ref_info = define_cvts_ref<Trait, Impl>();
+template<any_trait Trait, typename Impl>
+inline constexpr auto cvts_ref_info = define_cvts_ref<Trait, Impl>();
 
-template<any_trait Trait, typename Impl, typename... MethodHolders>
-class cvts_trait_ref_impl : public MethodHolders... {
-    Impl* obj_ptr_{};
-
-    template<typename, typename, typename, typename, meta::info, any_method_idt>
-    friend struct cvts_cvo_invoker;
-
-public:
-    cvts_trait_ref_impl() = default;
-    explicit cvts_trait_ref_impl(Impl& optr)
-    : obj_ptr_(&optr) {};
-};
+}    // namespace cvts_trait
 
 // cv-transient static trait reference
 template<any_trait Trait, typename Impl>
-using cvts_trait_ref = decltype(cvts_trait_ref_identity<Trait, Impl>::type_v)::type;
+using cvts_trait_ref = [:cvts_trait::cvts_ref_info<Trait, Impl>:];
 }    // namespace trp::detail
