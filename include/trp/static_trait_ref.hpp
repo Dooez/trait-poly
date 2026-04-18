@@ -143,8 +143,8 @@ private:
             method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
         static constexpr meta::info default_impl_template =
             decltype(default_trait_impl_identity<trait_t>::template_info)::value;
-        using cvts_ref           = [:define_cvts_ref<trait_t, Impl>():];
-        using default_trait_impl = [:meta::substitute(default_impl_template, {^^cvts_ref}):];
+        // using cvts_ref           = [:defined_cvts_ref_info<trait_t, Impl>:];
+        using default_trait_impl = [:meta::substitute(default_impl_template, {^^TRef}):];
         return *stdr::find(
             nonspecial_members<default_trait_impl>, ^^method_idt, default_impl_to_method_identity);
     }();
@@ -250,7 +250,7 @@ consteval auto define_cvtmock_ref() {
     using namespace std;
     using namespace meta;
 
-    constexpr auto method_holders_specs = [] {
+    static constexpr auto method_holders_specs = [] {
         struct method_holder_spec {
             const char*  id;
             vector<info> method_idts;
@@ -296,7 +296,7 @@ consteval auto define_cvts_ref() {
 
     struct ref;
 
-    constexpr auto method_holders_specs = [] {
+    static constexpr auto method_holders_specs = [] {
         struct method_holder_spec {
             const char*  id;
             vector<info> ov_specs;
