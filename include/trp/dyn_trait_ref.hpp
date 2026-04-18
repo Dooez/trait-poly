@@ -8,6 +8,8 @@
 #include <type_traits>
 
 namespace trp {
+template<any_trait Trait>
+struct dyn_trait_ref;
 namespace detail {
 template<any_trait Trait, typename... MethodHolders>
 class dyn_trait_ref_impl;
@@ -18,8 +20,8 @@ struct dyn_trait_ref_identity;
 template<typename T>
 struct empty_default_implementation {};
 
-template<any_trait T>
-struct trait_impl_mock : public T {};
+template<non_cv_trait T>
+struct trait_impl_mock;
 
 template<typename ParamType>
 consteval bool first_parameter_is_cvref_of(meta::info fn) {
@@ -28,22 +30,6 @@ consteval bool first_parameter_is_cvref_of(meta::info fn) {
            and meta::is_reference_type(meta::type_of(params[0]))    //
            and meta::remove_cvref(meta::type_of(params[0])) == ^^ParamType;
 }
-consteval auto default_impl_to_method_identity(meta::info fn) {
-    using namespace meta;
-    auto params    = parameters_of(fn);
-    auto impl      = remove_reference(type_of(params[0]));
-    auto idt_targs = std::vector{reflect_constant_string(identifier_of(fn)),
-                                 reflect_constant(is_const(impl)),
-                                 reflect_constant(is_volatile(impl)),
-                                 reflect_constant(false),
-                                 reflect_constant(false),
-                                 reflect_constant(false),
-                                 reflect_constant(is_noexcept(fn)),
-                                 return_type_of(fn)};
-    idt_targs.append_range(params | stdv::drop(1));
-    return substitute(^^method_identity_t, idt_targs);
-}
-
 template<any_trait Trait>
 consteval bool maps_to_a_trait_method_of(meta::info fn) {
     return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(fn));
@@ -51,28 +37,25 @@ consteval bool maps_to_a_trait_method_of(meta::info fn) {
 
 template<template<typename> typename DefaultImpl, typename Trait>
 concept default_impl_for =
-    any_trait<Trait>                                                                                //
-    and stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>,                       //
-                     meta::is_static_member)                                                        //
-    and stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>, meta::is_function)    //
-    and stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>, meta::is_function)    //
-    and stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>,
-                     first_parameter_is_cvref_of<trait_impl_mock<Trait>>)    //
+    non_cv_trait<Trait>                                                                           //
+    and stdr::all_of(nonspecial_members<DefaultImpl<mock_ref<Trait>>>, meta::is_static_member)    //
+    and stdr::all_of(nonspecial_members<DefaultImpl<mock_ref<Trait>>>, meta::is_function)         //
+    and stdr::all_of(nonspecial_members<DefaultImpl<mock_ref<Trait>>>,
+                     first_parameter_is_cvref_of<mock_ref<Trait>>)    //
     ;
-template<template<typename> typename DefaultImpl, typename Trait>
-concept strict_default_impl_for =
-    default_impl_for<DefaultImpl, Trait>    //
-    and
-    stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>, maps_to_a_trait_method_of<Trait>);
 
-template<non_cv_trait Trait>
-struct default_trait_impl_identity;
+// template<template<typename> typename DefaultImpl, typename Trait>
+// concept strict_default_impl_for = default_impl_for<DefaultImpl, Trait>    //
+// and
+// stdr::all_of(nonspecial_members<DefaultImpl<trait_impl_mock<Trait>>>, maps_to_a_trait_method_of<Trait>)//
+// ;
+
 
 template<any_trait Trait>
 inline constexpr auto mandatory_trait_methods = [] {
     static constexpr meta::info default_impl_template =
         decltype(default_trait_impl_identity<std::remove_cv_t<Trait>>::template_info)::value;
-    using default_trait_impl_mock = [:meta::substitute(default_impl_template, {^^Trait}):];
+    using default_trait_impl_mock = [:meta::substitute(default_impl_template, {^^dyn_trait_ref<Trait>}):];
     auto methods                  = std::vector(std::from_range, all_trait_methods<Trait>);
     for (auto m: nonspecial_members<default_trait_impl_mock>    //
                      | stdv::transform(default_impl_to_method_identity)) {
@@ -96,8 +79,6 @@ concept implements_methods =
 template<typename Impl, typename Trait>
 concept implements_trait = any_trait<Trait> and std::is_class_v<Impl> and
                            detail::implements_methods<^^detail::implements_methods, Impl, Trait>;
-template<any_trait Trait>
-struct dyn_trait_ref;
 
 template<typename Supertrait, any_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
@@ -247,7 +228,8 @@ struct default_invoke_wrapper_struct {
     static constexpr meta::info default_impl_template =
         decltype(default_trait_impl_identity<Trait>::template_info)::value;
 
-    using cvts_ref           = [:define_cvts_ref<Trait, Impl>():];
+    consteval {}
+    using cvts_ref           = [:defined_cvts_ref_info<Trait, Impl>:];
     using default_trait_impl = [:meta::substitute(default_impl_template, {^^cvts_ref}):];
 
     static constexpr auto default_method =
@@ -468,7 +450,6 @@ class dyn_trait_ref_impl : public MethodHolders... {
 };
 
 template<non_cv_trait Trait, template<typename> typename DefaultImpl>
-    requires default_impl_for<DefaultImpl, Trait>
 consteval auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
@@ -642,8 +623,9 @@ template<any_trait U, any_trait T>
 }
 
 template<non_cv_trait Trait, template<typename> typename DefaultImpl = detail::empty_default_implementation>
-    requires detail::strict_default_impl_for<DefaultImpl, Trait>
+    requires detail::default_impl_for<DefaultImpl, Trait>
 consteval void define_trait() {
     detail::maybe_define_cv_trait<Trait, DefaultImpl>();
+    // detail::valid_default_impl_for(^^DefaultImpl, ^^Trait);
 };
 }    // namespace trp

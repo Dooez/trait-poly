@@ -3,14 +3,20 @@
 #include "trp/unique_trait_ptr.hpp"
 
 #include <print>
+
+struct no_def_ctor {
+    no_def_ctor() = delete;
+    explicit no_def_ctor(int) {};
+};
+
 struct trait_proto_imposter {
-    void bar() const;
+    auto bar() const -> no_def_ctor;
 };
 consteval {
     trp::define_trait<trait_proto_imposter>();
 }
 struct trait_proto_base {
-    void bar() const;
+    auto bar() const -> no_def_ctor;
 };
 struct trait_proto : trait_proto_base {
     void foo();
@@ -18,19 +24,24 @@ struct trait_proto : trait_proto_base {
 };
 template<typename T>
 struct some_default_impl {
-    static void foo(const T&) {
-        std::println("default const foo impl");
+    static void foo(const T& v) {
+        std::print("[default const foo impl]");
+        v.bar();
+        std::println();
     };
-    static void foo(T&) {
-        std::println("default foo impl");
+    static void foo(T& v) {
+        std::print("[default foo impl]");
+        // v.bar();
+        std::println();
     };
 };
 consteval {
     trp::define_trait<trait_proto, some_default_impl>();
 }
 struct bar_only_impl {
-    void bar() const {
-        std::println("bar_only_impl::bar");
+    auto bar() const -> no_def_ctor {
+        std::print("[bar_only_impl::bar]");
+        return no_def_ctor{1};
     }
 };
 // consteval {
@@ -142,9 +153,10 @@ constexpr bool compare_structs(const S& lhs, const S& rhs) {
 
 int main() {
     auto simpl = bar_only_impl{};
-    auto ref   = trp::dyn_trait_ref<trait_proto>(simpl);
+    auto ref   = trp::dyn_trait_ref<const trait_proto>(simpl);
     ref.foo();
     ref.bar();
+    // ref.bar();
     // auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     // const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     // ts_ref.foo();
