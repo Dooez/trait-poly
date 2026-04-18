@@ -100,7 +100,6 @@ private:
             method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
         static constexpr meta::info default_impl_template =
             decltype(default_trait_impl_identity<trait_t>::template_info)::value;
-        // using cvts_ref           = [:defined_cvts_ref_info<trait_t, Impl>:];
         using default_trait_impl = [:meta::substitute(default_impl_template, {^^TRef}):];
         return *stdr::find(
             nonspecial_members<default_trait_impl>, ^^method_idt, default_impl_to_method_identity);
