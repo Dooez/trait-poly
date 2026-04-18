@@ -20,9 +20,6 @@ struct dyn_trait_ref_identity;
 template<typename T>
 struct empty_default_implementation {};
 
-template<non_cv_trait T>
-struct trait_impl_mock;
-
 template<typename ParamType>
 consteval bool first_parameter_is_cvref_of(meta::info fn) {
     auto params = meta::parameters_of(fn);
