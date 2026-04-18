@@ -1,5 +1,4 @@
 #include "trp/shared_trait_ptr.hpp"
-#include "trp/static_trait_ref.hpp"
 #include "trp/unique_trait_ptr.hpp"
 
 #include <print>
@@ -27,11 +26,12 @@ struct some_default_impl {
     static void foo(const T& v) {
         std::print("[default const foo impl]");
         v.bar();
+        // v.baz();
         std::println();
     };
     static void foo(T& v) {
         std::print("[default foo impl]");
-        // v.bar();
+        v.bar();
         std::println();
     };
 };
@@ -155,7 +155,13 @@ int main() {
     auto simpl = bar_only_impl{};
     auto ref   = trp::dyn_trait_ref<const trait_proto>(simpl);
     ref.foo();
+    std::println("\n---");
     ref.bar();
+    std::println("\n---");
+
+    const auto ref2 = trp::dyn_trait_ref<trait_proto>(simpl);
+    ref2.foo();
+    std::println("\n---");
     // ref.bar();
     // auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     // const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
