@@ -381,6 +381,11 @@ consteval auto default_impl_to_method_identity(meta::info fn) {
     return substitute(^^method_identity_t, idt_targs);
 }
 
+
+template<non_ref T>
+struct unique_id_struct {
+    static inline char value{};
+};
 }    // namespace detail
 
 }    // namespace trp
