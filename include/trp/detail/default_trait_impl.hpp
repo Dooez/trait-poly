@@ -1,13 +1,30 @@
 #pragma once
-#include <meta>
 #ifndef TRP_GODBOLT
 #include "cvtmock_trait_ref.hpp"
 #endif
-#include <algorithm>
-#include <type_traits>
 
 namespace trp {
 namespace detail {
+
+template<non_cv_trait Trait>
+struct default_trait_impl_identity;
+
+consteval auto default_impl_to_method_identity(meta::info fn) {
+    using namespace meta;
+    auto params    = parameters_of(fn);
+    auto impl      = remove_reference(type_of(params[0]));
+    auto idt_targs = std::vector{reflect_constant_string(identifier_of(fn)),
+                                 reflect_constant(is_const(impl)),
+                                 reflect_constant(is_volatile(impl)),
+                                 reflect_constant(false),
+                                 reflect_constant(false),
+                                 reflect_constant(false),
+                                 reflect_constant(is_noexcept(fn)),
+                                 return_type_of(fn)};
+    idt_targs.append_range(params | stdv::drop(1));
+    return substitute(^^method_identity_t, idt_targs);
+}
+
 template<typename T>
 struct empty_default_implementation {};
 

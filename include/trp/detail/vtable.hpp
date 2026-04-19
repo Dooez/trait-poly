@@ -1,11 +1,7 @@
-
 #pragma once
-#include <meta>
 #ifndef TRP_GODBOLT
 #include "default_trait_impl.hpp"
 #endif
-#include <algorithm>
-#include <type_traits>
 
 namespace trp {
 namespace detail {

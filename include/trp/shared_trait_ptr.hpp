@@ -1,6 +1,6 @@
 #pragma once
 #ifndef TRP_GODBOLT
-#include "allocator_ctrl_block.hpp"
+#include "detail/allocator_ctrl_block.hpp"
 #include "dyn_trait_ref.hpp"
 #endif
 

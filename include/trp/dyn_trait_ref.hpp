@@ -1,11 +1,8 @@
 #pragma once
-#include <meta>
 #ifndef TRP_GODBOLT
-#include "cvts_trait_ref.hpp"
-#include "vtable.hpp"
+#include "detail/cvts_trait_ref.hpp"
+#include "detail/vtable.hpp"
 #endif
-#include <algorithm>
-#include <type_traits>
 
 namespace trp {
 template<any_trait Trait>

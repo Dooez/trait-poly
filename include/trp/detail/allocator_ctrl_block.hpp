@@ -1,8 +1,8 @@
 #pragma once
-
 #ifndef TRP_GODBOLT
 #include "trp_concepts.hpp"
 #endif
+
 namespace trp::detail {
 struct empty_0 {};
 

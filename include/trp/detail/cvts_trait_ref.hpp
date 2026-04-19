@@ -1,11 +1,7 @@
 #pragma once
-#include <meta>
-#include <ranges>
 #ifndef TRP_GODBOLT
-#include "trp_concepts.hpp"
+#include "default_trait_impl.hpp"
 #endif
-#include <algorithm>
-#include <type_traits>
 
 namespace trp::detail {
 namespace cvts_trait {
