@@ -12,17 +12,16 @@ namespace trp::detail {
 
 namespace cvts_trait {
 
-template<any_trait Trait, typename Impl, typename... MethodHolders>
+template<typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
-    Impl* obj_ptr_{};
+    Impl* _obj_ptr_{};
 
     template<typename, typename, typename, typename, meta::info, any_method_idt>
     friend struct cvts_cvo_invoker;
 
 public:
-    cvts_trait_ref_impl() = default;
     explicit cvts_trait_ref_impl(Impl& optr)
-    : obj_ptr_(&optr) {};
+    : _obj_ptr_(&optr) {};
 };
 
 template<typename TRef,
@@ -58,36 +57,36 @@ struct cvts_cvo_invoker<
         requires(not Const and not Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
+            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
-            return get_trait_ref().obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
     }
     auto operator()(Args... args) const noexcept(Noexcept) -> Ret
         requires(Const and not Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
+            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
-            return get_trait_ref().obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
     }
     auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
         requires(not Const and Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
+            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
-            return get_trait_ref().obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
     }
     auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
         requires(Const and Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
+            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
-            return get_trait_ref().obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
     }
 
@@ -163,32 +162,28 @@ struct cvts_cvm_invoker<TRef, MethodHolder, ovspec_holder<OvSpecs...>>
 };
 
 
-template<typename Ref, auto HolderSpec>
-consteval auto get_cvts_holder() {
+template<typename Ref, const char* id, typename OvSpecHolder>
+inline constexpr auto cvts_holder = [] {
     struct cvts_method_holder;
-    using invoker_t = [:substitute(^^cvts_cvm_invoker,
-                                   {^^Ref, ^^cvts_method_holder, HolderSpec.ovspec_holder}):];
-
+    using invoker_t = cvts_cvm_invoker<Ref, cvts_method_holder, OvSpecHolder>;
     consteval {
         meta::define_aggregate(^^cvts_method_holder,
                                {meta::data_member_spec(^^invoker_t,
                                                        meta::data_member_options{
-                                                           .name              = HolderSpec.id,
+                                                           .name              = id,
                                                            .no_unique_address = true,
                                                            //  .attributes = {^^[[no_unique_address]] },
                                                        })});
     }
     return ^^cvts_method_holder;
-}
+}();
 
 template<typename Trait, typename Impl>
 consteval auto define_cvts_ref() {
     using namespace std;
     using namespace meta;
-
     struct ref;
-
-    static constexpr auto method_holders_specs = [] {
+    constexpr auto method_holders = [] {
         struct method_holder_spec {
             const char*  id;
             vector<info> ov_specs;
@@ -209,24 +204,17 @@ consteval auto define_cvts_ref() {
                 it->ov_specs.push_back(spec);
             }
         }
-        struct method_holder_prep {
-            const char* id;
-            info        ovspec_holder;
-        };
-        return std::define_static_array(method_holders_specs | stdv::transform([](auto spec) {
-                                            return method_holder_prep{
-                                                spec.id, substitute(^^ovspec_holder, spec.ov_specs)};
-                                        }));
+        return std::define_static_array(
+            method_holders_specs    //
+            | stdv::transform([](auto spec) {
+                  return extract<info>(substitute(
+                      ^^cvts_holder,
+                      {^^ref, reflect_constant(spec.id), substitute(^^ovspec_holder, spec.ov_specs)}));
+              }));
     }();
-
-    constexpr auto ref_impl = [=] {
-        auto trait_ref_args = vector<info>{^^Trait, ^^Impl};
-        template for (constexpr auto holder_spec: method_holders_specs) {
-            trait_ref_args.push_back(get_cvts_holder<ref, holder_spec>());
-        }
-        return substitute(^^cvts_trait_ref_impl, trait_ref_args);
-    }();
-    using ref_impl_t = [:ref_impl:];
+    auto [... is]           = make_cw_idxs<method_holders.size()>();
+    constexpr auto ref_impl = substitute(^^cvts_trait_ref_impl, {^^Impl, method_holders[is]...});
+    using ref_impl_t        = [:ref_impl:];
     struct ref : public ref_impl_t {
         ref(Impl& impl)
         : ref_impl_t(impl) {};
@@ -236,7 +224,6 @@ consteval auto define_cvts_ref() {
 
 template<any_trait Trait, typename Impl>
 inline constexpr auto cvts_ref_info = define_cvts_ref<Trait, Impl>();
-
 }    // namespace cvts_trait
 
 // cv-transient static trait reference

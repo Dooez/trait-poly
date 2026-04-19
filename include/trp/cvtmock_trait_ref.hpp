@@ -44,30 +44,30 @@ struct cvtmock_cvm_invoker : cvtmock_cvo_invoker<MethodIds>... {
     using cvtmock_cvo_invoker<MethodIds>::operator()...;
 };
 
-template<auto HolderSpec>
-consteval auto get_cvtmock_holder() {
+template<const char* id, typename Invoker>
+inline constexpr auto cvtmock_holder = [] {
     struct cvtmock_method_holder;
     consteval {
         meta::define_aggregate(^^cvtmock_method_holder,
-                               {meta::data_member_spec(HolderSpec.invoker_info,
+                               {meta::data_member_spec(^^Invoker,
                                                        meta::data_member_options{
-                                                           .name              = HolderSpec.id,
+                                                           .name              = id,
                                                            .no_unique_address = true,
                                                            //  .attributes = {^^[[no_unique_address]] },
                                                        })});
     }
     return ^^cvtmock_method_holder;
-}
+}();
 
 template<typename... MethodHolders>
 struct mock_ref_impl : public MethodHolders... {};
 
 template<non_cv_trait Trait>
-consteval auto define_cvtmock_ref() {
+consteval auto get_cvtmock_ref() {
     using namespace std;
     using namespace meta;
 
-    static constexpr auto method_holders_specs = [] {
+    constexpr auto method_holders = [] {
         struct method_holder_spec {
             const char*  id;
             vector<info> method_idts;
@@ -84,27 +84,19 @@ consteval auto define_cvtmock_ref() {
                 it->method_idts.push_back(mem);
             }
         }
-        struct method_holder_prep {
-            const char* id;
-            info        invoker_info;
-        };
-        return std::define_static_array(method_holders_specs | stdv::transform([](auto spec) {
-                                            return method_holder_prep{
-                                                spec.id, substitute(^^cvtmock_cvm_invoker, spec.method_idts)};
-                                        }));
+        return std::define_static_array(
+            method_holders_specs | stdv::transform([](auto spec) {
+                return extract<info>(substitute(
+                    ^^cvtmock_holder,
+                    {reflect_constant(spec.id), substitute(^^cvtmock_cvm_invoker, spec.method_idts)}));
+            }));
     }();
 
-    auto trait_ref_args = vector<info>{};
-    template for (constexpr auto spec: method_holders_specs) {
-        trait_ref_args.push_back(get_cvtmock_holder<spec>());
-    }
-    return substitute(^^mock_ref_impl, trait_ref_args);
+    return substitute(^^mock_ref_impl, method_holders);
 };
-template<non_cv_trait Trait>
-inline constexpr auto mock_ref_info = define_cvtmock_ref<Trait>();
 }    // namespace cvtmock_trait
 
 // cv-transient trait reference mock
 template<non_cv_trait Trait>
-using mock_trait_ref = [:cvtmock_trait::mock_ref_info<Trait>:];
-}
+using mock_trait_ref = [:cvtmock_trait::get_cvtmock_ref<Trait>():];
+}    // namespace trp::detail
