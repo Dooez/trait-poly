@@ -17,10 +17,6 @@ consteval {
 struct trait_proto_base {
     auto bar() const -> no_def_ctor;
 };
-struct trait_proto : trait_proto_base {
-    void foo();
-    void foo() const;
-};
 template<typename T>
 struct some_default_impl {
     static void foo(const T& v) {
@@ -35,8 +31,12 @@ struct some_default_impl {
         std::println();
     };
 };
+struct[[= trp::use_default_impl<some_default_impl>]] trait_proto : trait_proto_base {
+    void foo();
+    void foo() const;
+};
 consteval {
-    trp::define_trait<trait_proto, some_default_impl>();
+    trp::define_trait<trait_proto>();
 }
 struct bar_only_impl {
     auto bar() const -> no_def_ctor {

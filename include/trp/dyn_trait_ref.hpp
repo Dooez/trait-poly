@@ -1,6 +1,5 @@
 #pragma once
 #ifndef TRP_GODBOLT
-#include "detail/cvts_trait_ref.hpp"
 #include "detail/vtable.hpp"
 #endif
 
@@ -8,8 +7,7 @@ namespace trp {
 template<any_trait Trait>
 struct dyn_trait_ref;
 
-namespace detail {
-}
+namespace detail {}
 
 template<typename Supertrait, any_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
@@ -185,15 +183,12 @@ void ref_default_delete(const dyn_trait_ref_impl<Trait, MethodHolders...>& ref) 
 template<any_trait Trait>
 struct dyn_trait_ref_identity;
 
-template<non_cv_trait Trait, template<typename> typename DefaultImpl>
+template<non_cv_trait Trait>
 consteval auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
-    if (meta::is_complete_type(^^default_trait_impl_identity<std::remove_cv_t<Trait>>))
+    if (meta::is_complete_type(^^vtable<std::remove_cv_t<Trait>>))
         return;
-    define_aggregate(^^default_trait_impl_identity<Trait>,
-                     {data_member_spec(substitute(^^constant_wrapper, {reflect_constant(^^DefaultImpl)}),
-                                       {.name = "template_info"})});
 
     struct method_holder_spec {
         string_view  id;
@@ -202,7 +197,7 @@ consteval auto maybe_define_cv_trait() {
     };
     template for (constexpr auto supertrait: direct_base_types<Trait>) {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
-        maybe_define_cv_trait<supertrait_t, DefaultImpl>();
+        maybe_define_cv_trait<supertrait_t>();
     }
     define_vtable<Trait>();
     auto method_holders_specs    = vector<method_holder_spec>{};
@@ -358,9 +353,8 @@ template<any_trait U, any_trait T>
     return const_trait_cast<U>(ref);
 }
 
-template<non_cv_trait Trait, template<typename> typename DefaultImpl = detail::empty_default_implementation>
-    requires detail::strict_default_impl_for<DefaultImpl, Trait>
+template<non_cv_trait Trait>
 consteval void define_trait() {
-    detail::maybe_define_cv_trait<Trait, DefaultImpl>();
+    detail::maybe_define_cv_trait<Trait>();
 };
 }    // namespace trp

@@ -205,6 +205,13 @@ consteval bool check_constexpr_static_data_member() {
 #endif
 }
 
+template<template<typename> typename DefaultImpl>
+struct default_impl_annotation_t {};
+
+consteval bool is_default_impl_annotation(meta::info r) {
+    return meta::is_annotation(r) and meta::template_of(meta::type_of(r)) == ^^default_impl_annotation_t;
+}
+
 template<non_cvref T>
 inline constexpr auto direct_base_types = std::define_static_array(
     meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
@@ -231,7 +238,9 @@ concept any_immediate_trait =
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function)             //
     and stdr::none_of(detail::nonspecial_members_of(^^Trait), meta::is_operator_function_template)    //
     and (stdr::size(direct_base_types<std::remove_cv_t<Trait>>) ==
-         stdr::size(meta::bases_of(^^Trait, meta::access_context::unchecked())));
+         stdr::size(meta::bases_of(^^Trait, meta::access_context::unchecked())))         //
+    and (stdr::count_if(meta::annotations_of(^^Trait), is_default_impl_annotation) <= 1)    //
+    ;
 
 template<meta::info Self, typename... Traits>
 concept any_traits =
