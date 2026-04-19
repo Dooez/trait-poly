@@ -8,8 +8,6 @@
 #include <type_traits>
 
 namespace trp::detail {
-
-
 namespace cvts_trait {
 
 template<typename Impl, typename... MethodHolders>
@@ -183,7 +181,8 @@ consteval auto define_cvts_ref() {
     using namespace std;
     using namespace meta;
     struct ref;
-    constexpr auto method_holders = [] {
+
+    constexpr auto ref_impl = [] {
         struct method_holder_spec {
             const char*  id;
             vector<info> ov_specs;
@@ -204,17 +203,18 @@ consteval auto define_cvts_ref() {
                 it->ov_specs.push_back(spec);
             }
         }
-        return std::define_static_array(
+        auto impl_targs = vector<info>{^^Impl};
+        impl_targs.append_range(
             method_holders_specs    //
             | stdv::transform([](auto spec) {
                   return extract<info>(substitute(
                       ^^cvts_holder,
                       {^^ref, reflect_constant(spec.id), substitute(^^ovspec_holder, spec.ov_specs)}));
               }));
+
+        return substitute(^^cvts_trait_ref_impl, impl_targs);
     }();
-    auto [... is]           = make_cw_idxs<method_holders.size()>();
-    constexpr auto ref_impl = substitute(^^cvts_trait_ref_impl, {^^Impl, method_holders[is]...});
-    using ref_impl_t        = [:ref_impl:];
+    using ref_impl_t = [:ref_impl:];
     struct ref : public ref_impl_t {
         ref(Impl& impl)
         : ref_impl_t(impl) {};

@@ -67,32 +67,30 @@ consteval auto get_cvtmock_ref() {
     using namespace std;
     using namespace meta;
 
-    constexpr auto method_holders = [] {
-        struct method_holder_spec {
-            const char*  id;
-            vector<info> method_idts;
-        };
-        auto method_holders_specs = vector<method_holder_spec>{};
+    struct method_holder_spec {
+        const char*  id;
+        vector<info> method_idts;
+    };
+    auto method_holders_specs = vector<method_holder_spec>{};
 
-        template for (constexpr auto mem: all_trait_methods<Trait>) {
-            using method_idt = [:mem:];
-            auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
-            if (it == method_holders_specs.end()) {
-                method_holders_specs.push_back({.id          = method_idt::identifier,    //
-                                                .method_idts = {mem}});
-            } else {
-                it->method_idts.push_back(mem);
-            }
+    template for (constexpr auto mem: all_trait_methods<Trait>) {
+        using method_idt = [:mem:];
+        auto it          = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
+        if (it == method_holders_specs.end()) {
+            method_holders_specs.push_back({.id          = method_idt::identifier,    //
+                                            .method_idts = {mem}});
+        } else {
+            it->method_idts.push_back(mem);
         }
-        return std::define_static_array(
-            method_holders_specs | stdv::transform([](auto spec) {
-                return extract<info>(substitute(
-                    ^^cvtmock_holder,
-                    {reflect_constant(spec.id), substitute(^^cvtmock_cvm_invoker, spec.method_idts)}));
-            }));
-    }();
-
-    return substitute(^^mock_ref_impl, method_holders);
+    }
+    return substitute(
+        ^^mock_ref_impl,
+        method_holders_specs    //
+            | stdv::transform([](auto spec) {
+                  return extract<info>(substitute(
+                      ^^cvtmock_holder,
+                      {reflect_constant(spec.id), substitute(^^cvtmock_cvm_invoker, spec.method_idts)}));
+              }));
 };
 }    // namespace cvtmock_trait
 
