@@ -23,16 +23,24 @@ struct cvtmock_cvo_invoker<
     method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
     auto operator()(Args... args) noexcept(Noexcept) -> Ret
         requires(not Const and not Volatile)
-    {}
+    {
+        std::unreachable();
+    }
     auto operator()(Args... args) const noexcept(Noexcept) -> Ret
         requires(Const and not Volatile)
-    {}
+    {
+        std::unreachable();
+    }
     auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
         requires(not Const and Volatile)
-    {}
+    {
+        std::unreachable();
+    }
     auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
         requires(Const and Volatile)
-    {}
+    {
+        std::unreachable();
+    }
 };
 
 template<any_method_idt... MethodIds>

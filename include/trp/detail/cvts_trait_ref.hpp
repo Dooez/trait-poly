@@ -91,9 +91,7 @@ private:
                               meta::bases_of(^^TRef, meta::access_context::unprivileged())[0])[0]:];
         using method_idt =
             method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
-        static constexpr meta::info default_impl_template =
-            decltype(default_trait_impl_identity<trait_t>::template_info)::value;
-        using default_trait_impl = [:meta::substitute(default_impl_template, {^^TRef}):];
+        using default_trait_impl = default_trait_impl_for<trait_t, TRef>;
         return *stdr::find(
             nonspecial_members<default_trait_impl>, ^^method_idt, default_impl_to_method_identity);
     }();

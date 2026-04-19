@@ -1,5 +1,6 @@
 #pragma once
 #ifndef TRP_GODBOLT
+#include "cvts_trait_ref.hpp"
 #include "default_trait_impl.hpp"
 #endif
 
@@ -65,13 +66,8 @@ consteval void define_vtable() {
 template<any_trait Trait, non_ref Impl, any_method_idt MethodId, typename... Params>
 struct default_invoke_wrapper_struct {
     using return_type = MethodId::return_type;
-
-    static constexpr meta::info default_impl_template =
-        decltype(default_trait_impl_identity<Trait>::template_info)::value;
-
-    consteval {}
     using cvts_ref           = cvts_trait_ref<Trait, Impl>;
-    using default_trait_impl = [:meta::substitute(default_impl_template, {^^cvts_ref}):];
+    using default_trait_impl = default_trait_impl_for<Trait, cvts_ref>;
 
     static constexpr auto default_method =
         *stdr::find(nonspecial_members<default_trait_impl>, ^^MethodId, default_impl_to_method_identity);

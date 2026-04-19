@@ -9,6 +9,11 @@ namespace detail {
 template<non_cv_trait Trait>
 struct default_trait_impl_identity;
 
+template<non_cv_trait Trait, non_ref Impl>
+using default_trait_impl_for = [:substitute(
+                                     decltype(default_trait_impl_identity<Trait>::template_info)::value,
+                                     {^^Impl}):];
+
 consteval auto default_impl_to_method_identity(meta::info fn) {
     using namespace meta;
     auto params    = parameters_of(fn);
