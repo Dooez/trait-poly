@@ -17,21 +17,18 @@ consteval {
 struct trait_proto_base {
     auto bar() const -> no_def_ctor;
 };
-template<typename T>
-struct some_default_impl {
-    static void foo(const T& v) {
+struct trait_proto : trait_proto_base {
+    static void foo(const auto& v) {
         std::print("[default const foo impl]");
         v.bar();
         // v.baz();
         std::println();
     };
-    static void foo(T& v) {
+    static void foo(auto& v) {
         std::print("[default foo impl]");
         v.bar();
         std::println();
     };
-};
-struct[[= trp::use_default_impl<some_default_impl>]] trait_proto : trait_proto_base {
     void foo();
     void foo() const;
 };
@@ -153,7 +150,7 @@ constexpr bool compare_structs(const S& lhs, const S& rhs) {
 
 int main() {
     auto simpl = bar_only_impl{};
-    auto ref   = trp::dyn_trait_ref<const trait_proto>(simpl);
+    auto ref = trp::dyn_trait_ref<const trait_proto>(simpl);
     ref.foo();
     std::println("\n---");
     ref.bar();

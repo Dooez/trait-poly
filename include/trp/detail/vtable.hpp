@@ -21,7 +21,7 @@ struct vtable_cv_quals {
     // bool has_cv=true; not needed since this is a biggest supertrait
 };
 
-template<any_method_idt Method>
+template<trait_method_idt Method>
 using wrapper_fptr_for = Method::wrapper_fptr_type;
 
 template<non_cv_trait Trait>
@@ -63,21 +63,20 @@ consteval void define_vtable() {
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
 
-template<any_trait Trait, non_ref Impl, any_method_idt MethodId, typename... Params>
+template<any_trait Trait, non_cv_trait Subtrait, non_ref Impl, trait_method_idt MethodId, typename... Params>
 struct default_invoke_wrapper_struct {
     using return_type = MethodId::return_type;
-    using cvts_ref           = cvts_trait_ref<Trait, Impl>;
-    using default_trait_impl = default_trait_impl_for<Trait, cvts_ref>;
+    using cvts_ref    = cvts_trait_ref<Trait, Impl>;
 
-    static constexpr auto default_method =
-        *stdr::find(nonspecial_members<default_trait_impl>, ^^MethodId, default_impl_to_method_identity);
+    static constexpr auto default_method = meta::substitute(
+        stdr::find(all_default_impls<Subtrait>, ^^MethodId, &default_impl_method::idt)->fn, {^^cvts_ref});
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
         cvts_ref ref(*static_cast<Impl*>(ptr));
         return [:default_method:](ref, std::forward<Params>(params)...);
     }
 };
-template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodId, typename... Params>
+template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
     using return_type = MethodId::return_type;
     using obj_ptr     = [:meta::add_pointer(MethodId::add_obj_cv(^^Impl)):];
@@ -93,13 +92,15 @@ struct invoke_wrapper_struct {
 };
 
 
-template<non_cv_trait Trait, non_ref Impl>
+template<non_cv_trait Trait, non_cv_trait Subtrait, non_ref Impl>
+    requires explicit_supertrait_of<Trait, Subtrait>
 consteval auto fill_vtable();
 
-template<non_cv_trait Trait, non_ref Impl>
-inline constexpr auto trait_vtable_for = fill_vtable<Trait, Impl>();
+template<non_cv_trait Trait, non_cv_trait Subtrait, non_ref Impl>
+inline constexpr auto trait_vtable_for = fill_vtable<Trait, Subtrait, Impl>();
 
-template<non_cv_trait Trait, non_ref Impl>
+template<non_cv_trait Trait, non_cv_trait Subtrait, non_ref Impl>
+    requires explicit_supertrait_of<Trait, Subtrait>
 consteval auto fill_vtable() {
     using namespace meta;
     auto       quals           = vtable_cv_quals{};
@@ -114,6 +115,7 @@ consteval auto fill_vtable() {
                     auto [... infos] = trait_method_idt_t::param_infos;
                     return substitute(^^default_invoke_wrapper_struct,
                                       {^^Trait,    //
+                                       ^^Subtrait,
                                        ^^Impl,
                                        trait_method_idt,
                                        infos...});
@@ -149,8 +151,7 @@ consteval auto fill_vtable() {
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
         quals,
-        [:meta::substitute(^^trait_vtable_for,
-                           {copy_cv_to(^^Trait, direct_base_types<Trait>[Js]), ^^Impl}):]...,
+        [:meta::substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^Trait, ^^Impl}):]...,
     };
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>

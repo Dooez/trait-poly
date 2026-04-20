@@ -27,7 +27,7 @@ concept any_dyn_trait_ref = meta::has_template_arguments(^^T) and meta::template
 template<typename Trait, uZ StartIdx>
 struct method_holder;    // holds `mehod_invoker **method_name**;`
 
-template<uZ Index, any_method_idt MethodId>
+template<uZ Index, trait_method_idt MethodId>
 struct cvo_invoker;
 template<uZ   Index,
          auto Identifier,
@@ -72,7 +72,7 @@ private:
         return vt->[:m:];
     }
 };
-template<uZ I, any_method_idt MethodId>
+template<uZ I, trait_method_idt MethodId>
 struct overload_spec {
     using id                  = MethodId;
     static constexpr uZ index = I;
@@ -318,8 +318,8 @@ class dyn_trait_ref : public decltype(detail::dyn_trait_ref_identity<Trait>::typ
 
     template<implements_trait<Trait> Impl>
     explicit dyn_trait_ref(Impl* obj)
-    : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(&detail::trait_vtable_for<Trait, Impl>,
-                                                                    obj){};
+    : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(
+          &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, obj){};
 
 public:
     template<any_trait U>
@@ -333,7 +333,7 @@ public:
         requires(not detail::any_dyn_trait_ref<Impl>)
     explicit dyn_trait_ref(Impl& obj)
     : decltype(detail::dyn_trait_ref_identity<Trait>::type_v)::type(
-          &detail::trait_vtable_for<std::remove_cv_t<Trait>, Impl>, &obj){};
+          &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, &obj){};
 
     dyn_trait_ref(const dyn_trait_ref&)            = default;
     dyn_trait_ref(dyn_trait_ref&&)                 = default;

@@ -10,7 +10,7 @@ template<typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
     Impl* _obj_ptr_{};
 
-    template<typename, typename, typename, typename, meta::info, any_method_idt>
+    template<typename, typename, typename, typename, meta::info, trait_method_idt>
     friend struct cvts_cvo_invoker;
 
 public:
@@ -23,7 +23,7 @@ template<typename TRef,
          typename MethodInvoker,
          typename Impl,
          meta::info,
-         any_method_idt>
+         trait_method_idt>
 struct cvts_cvo_invoker;
 template<typename TRef,
          typename MethodHolder,
@@ -124,7 +124,7 @@ private:
     }
 };
 
-template<typename Impl, meta::info Method, any_method_idt MethodId>
+template<typename Impl, meta::info Method, trait_method_idt MethodId>
 struct cvts_overload_spec {
     using impl_t                      = Impl;
     static constexpr auto impl_method = Method;

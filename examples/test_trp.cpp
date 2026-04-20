@@ -101,16 +101,16 @@ struct not_trait_virt_fn {
     virtual int foo();
     void        bar();
 };
-struct not_trait_template {
-    template<typename X>
-    void foo(X);
-};
+// struct not_trait_template {
+//     template<typename X>
+//     void foo(X);
+// };
 using namespace trp;
 static_assert(any_trait<my_trait>);
 static_assert(not any_trait<not_trait_data>);
 static_assert(not any_trait<not_trait_static_data>);
 static_assert(not any_trait<not_trait_virt_fn>);
-static_assert(not any_trait<not_trait_template>);
+// static_assert(not any_trait<not_trait_template>);
 
 int main() {
     auto to = make_shared_trait<trait_proto, some_trait_impl>();

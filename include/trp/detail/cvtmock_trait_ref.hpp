@@ -1,12 +1,12 @@
 #pragma once
 #ifndef TRP_GODBOLT
-#include "trp_concepts.hpp"
+#include "alias_and_helpers.hpp"
 #endif
 
 namespace trp::detail {
 namespace cvtmock_trait {
 
-template<any_method_idt>
+template<trait_method_idt>
 struct cvtmock_cvo_invoker;
 
 template<auto Identifier,
@@ -43,7 +43,7 @@ struct cvtmock_cvo_invoker<
     }
 };
 
-template<any_method_idt... MethodIds>
+template<trait_method_idt... MethodIds>
 struct cvtmock_cvm_invoker : cvtmock_cvo_invoker<MethodIds>... {
     using cvtmock_cvo_invoker<MethodIds>::operator()...;
 };
@@ -66,7 +66,7 @@ inline constexpr auto cvtmock_holder = [] {
 template<typename... MethodHolders>
 struct mock_ref_impl : public MethodHolders... {};
 
-template<non_cv_trait Trait>
+template<non_cvref Trait>
 consteval auto get_cvtmock_ref() {
     using namespace std;
     using namespace meta;
@@ -99,6 +99,6 @@ consteval auto get_cvtmock_ref() {
 }    // namespace cvtmock_trait
 
 // cv-transient trait reference mock
-template<non_cv_trait Trait>
+template<non_cvref Trait>
 using mock_trait_ref = [:cvtmock_trait::get_cvtmock_ref<Trait>():];
 }    // namespace trp::detail
