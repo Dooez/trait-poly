@@ -5,10 +5,7 @@
 #include <array>
 
 namespace trp {
-
 namespace detail {
-
-namespace concepts {}
 
 consteval auto default_impl_to_method_identity(meta::info fn) {
     using namespace meta;
@@ -140,8 +137,6 @@ concept any_trait =
 template<typename Trait>
 concept non_cv_trait = any_trait<Trait> and non_cvref<Trait>;
 
-namespace detail {}    // namespace detail
-
 template<typename Supertrait, typename Trait>
 concept supertrait_of = any_trait<Supertrait>    //
                         and any_trait<Trait>     //
@@ -219,5 +214,4 @@ struct unique_id_struct {
     static inline char value{};
 };
 }    // namespace detail
-
 }    // namespace trp
