@@ -30,6 +30,7 @@ As reasoned, this chain of casts avoids undefined behavior. Please open an issue
     - [x] cv-qualified methods
     - [x] Noexcept qualification
     - [x] Trait inheritance
+    - [x] Default implementations
     - [x] Concepts
         - `any_trait` - checks if a type is valid for trait definition
         - `implements_trait` - checks if a type implements all methods of the trait

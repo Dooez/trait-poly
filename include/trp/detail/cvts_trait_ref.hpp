@@ -18,6 +18,8 @@ public:
     : _obj_ptr_(&optr) {};
 };
 
+
+// cv-transient static cv-overload invoker
 template<typename TRef,
          typename MethodHolder,
          typename MethodInvoker,
@@ -25,6 +27,7 @@ template<typename TRef,
          meta::info,
          trait_method_idt>
 struct cvts_cvo_invoker;
+
 template<typename TRef,
          typename MethodHolder,
          typename MethodInvoker,
@@ -140,6 +143,7 @@ struct cvts_overload_spec {
 template<typename... OvSpecs>
 struct ovspec_holder {};
 
+// cv-transient static cv-method invoker
 template<typename TRef, typename MethodHolder, typename OvSpecHolder>
 struct cvts_cvm_invoker;
 
