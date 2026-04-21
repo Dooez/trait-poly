@@ -1,8 +1,8 @@
 #pragma once
+#ifndef TRP_GODBOLT
 #include "alias_and_helpers.hpp"
 #include "cvtmock_trait_ref.hpp"
-
-#include <array>
+#endif
 
 namespace trp {
 namespace detail {
