@@ -8,22 +8,6 @@ namespace trp {
 
 namespace detail {
 
-template<typename T, meta::info M>
-consteval bool check_constexpr_static_data_member() {
-#ifdef TRP_CHECK_CESDM
-    return requires { cw<([:M:])>; };
-#else
-    return false;
-#endif
-}
-
-template<typename T>
-consteval bool static_data_members_are_constexpr() {
-    constexpr auto mems = std::define_static_array(meta::static_data_members_of(^^T, ctx_unchecked));
-    auto [... Is]       = make_cw_idxs<mems.size()>();
-    return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
-}
-
 namespace concepts {}
 
 consteval auto default_impl_to_method_identity(meta::info fn) {
@@ -53,57 +37,105 @@ consteval auto default_impl_to_method_identity(meta::info fn) {
     return substitute(^^method_identity_t, idt_targs);
 }
 
-template<template<typename> typename DefaultImpl>
-struct default_impl_annotation_t {};
+namespace concepts {
 
-consteval bool is_default_impl_annotation(meta::info r) {
-    return meta::is_annotation(r) and meta::template_of(meta::type_of(r)) == ^^default_impl_annotation_t;
+template<typename T, meta::info M>
+consteval bool check_constexpr_static_data_member() {
+#if defined(__GNUC__) && !defined(__clang__)
+#define TRP_CHECK_CESDM
+#endif
+
+#ifdef TRP_CHECK_CESDM
+    return requires { cw<([:M:])>; };
+#else
+    return false;
+#endif
 }
 
-// consteval bool valid_default_method(meta::info r) {
-//     using namespace meta;
-//     const bool precheck = is_static_member(r) and is_template(r);
-//     if (not precheck)
-//         return false;
-// }
+template<typename Trait>
+concept no_private_members =
+    non_cvref<Trait> and stdr::size(meta::members_of(^^Trait, meta::access_context::unchecked())) ==
+                             stdr::size(meta::members_of(^^Trait, meta::access_context::unprivileged()));
+template<typename Trait>
+concept no_private_bases =
+    non_cvref<Trait> and stdr::size(direct_base_types<Trait>) ==
+                             stdr::size(meta::bases_of(^^Trait, meta::access_context::unprivileged()));
+template<typename Trait>
+concept no_nonstatic_data_members =
+    non_cvref<Trait> and
+    stdr::empty(meta::nonstatic_data_members_of(^^Trait, meta::access_context::unprivileged()));
 
 template<typename Trait>
-concept any_immediate_trait =
-    non_ref<Trait>                                                              //
-    and stdr::empty(meta::nonstatic_data_members_of(^^Trait, ctx_unchecked))    //
-    and detail::static_data_members_are_constexpr<Trait>()                      // only in gcc atm
-    and stdr::none_of(meta::members_of(^^Trait, ctx_unchecked),
-                      [](auto m) {
-                          return meta::is_special_member_function(m)    //
-                                 and not meta::is_defaulted(m);
-                      })                                                                        //
-    and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_virtual)    //
-    // and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_template)             //
-    and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_operator_function)    //
-    and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>,
-                      meta::is_operator_function_template)    //
-    and (stdr::size(direct_base_types<std::remove_cv_t<Trait>>) ==
-         stdr::size(meta::bases_of(^^Trait, meta::access_context::unchecked())))            //
-    and (stdr::count_if(meta::annotations_of(^^Trait), is_default_impl_annotation) <= 1)    //
+concept no_explicit_special_members =
+    non_cvref<Trait>    //
+    and stdr::none_of(meta::members_of(^^Trait, meta::access_context::unprivileged()), [](auto m) {
+            return meta::is_special_member_function(m)    //
+                   and not meta::is_defaulted(m);
+        });    //
+//
+template<typename Trait>
+concept no_operators = non_cvref<Trait>    //
+                       and stdr::none_of(nonspecial_members<Trait>, [](auto m) {
+                               return meta::is_operator_function(m)    //
+                                      or meta::is_operator_function_template(m);
+                           });    //
+template<typename Trait>
+concept no_virtual = non_cvref<Trait>                                                  //
+                     and stdr::none_of(nonspecial_members<Trait>, meta::is_virtual)    //
+                     and stdr::none_of(direct_base_types<Trait>, meta::is_virtual);
+
+template<typename Trait>
+concept nonstatic_methods_are_not_templates =
+    non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, [](auto r) {
+        return meta::is_function_template(r) and not meta::is_static_member(r);
+    });
+
+template<typename T>
+concept static_data_members_are_constexpr = [] {
+    constexpr auto mems = std::define_static_array(meta::static_data_members_of(^^T, ctx_unchecked));
+    auto [... Is]       = make_cw_idxs<mems.size()>();
+    return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
+}();
+
+template<typename Trait>
+concept static_methods_are_default_impl =
+    non_cvref<Trait> and
+    stdr::all_of(
+        nonspecial_members<Trait> |
+            stdv::filter([](auto r) { return meta::is_static_member(r) and meta::is_function_template(r); }),
+        [](auto r) { return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(r)); });
+
+
+template<typename Trait>
+concept any_immediate_trait = non_cvref<Trait>                                  //
+                              and no_private_members<Trait>                     //
+                              and no_private_bases<Trait>                       //
+                              and no_virtual<Trait>                             //
+                              and no_nonstatic_data_members<Trait>              //
+                              and no_explicit_special_members<Trait>            //
+                              and static_data_members_are_constexpr<Trait>      // only in gcc atm
+                              and no_operators<Trait>                           //
+                              and nonstatic_methods_are_not_templates<Trait>    //
+                              and static_methods_are_default_impl<Trait>        //
     ;
 
 template<meta::info Self, typename... Traits>
 concept any_traits =
-    (... and
-     (any_immediate_trait<Traits> and [:meta::substitute(Self,
-                                                         [] {
-                                                             auto args =
-                                                                 std::vector{meta::reflect_constant(Self)};
-                                                             args.append_range(
-                                                                 direct_base_types<std::remove_cv_t<Traits>>);
-                                                             return args;
-                                                         }()):])    //
+    (... and (any_immediate_trait<std::remove_cv_t<Traits>> and
+              [:meta::substitute(Self,
+                                 [] {
+                                     auto args = std::vector{meta::reflect_constant(Self)};
+                                     args.append_range(direct_base_types<std::remove_cv_t<Traits>>);
+                                     return args;
+                                 }()):])    //
     );
 
+}    // namespace concepts
 }    // namespace detail
 
 template<typename Trait>
-concept any_trait = std::is_class_v<Trait> and detail::any_traits<^^detail::any_traits, Trait>;
+concept any_trait =
+    std::is_class_v<Trait> and detail::concepts::any_traits<^^detail::concepts::any_traits, Trait>;
 
 template<typename Trait>
 concept non_cv_trait = any_trait<Trait> and non_cvref<Trait>;

@@ -17,7 +17,7 @@ consteval {
 struct trait_proto_base {
     auto        bar() const -> no_def_ctor;
     static auto bar(const auto& v) -> no_def_ctor {
-        std::println("Default trait_proto_base::bar");
+        std::println("[default trait_proto_base::bar]");
         return no_def_ctor{1};
     };
 };
@@ -32,6 +32,10 @@ struct trait_proto : trait_proto_base {
         std::print("[default foo impl]");
         v.bar();
         std::println();
+    };
+    static auto bar(const auto& v) -> no_def_ctor {
+        std::println("[default trait_proto::bar]");
+        return no_def_ctor{1};
     };
     void foo();
     void foo() const;
@@ -151,6 +155,14 @@ constexpr bool compare_structs(const S& lhs, const S& rhs) {
 //     trp::detail::define_cvts_ref<trait_proto, some_impl>();
 // }
 
+template<>
+struct trp::default_impl_spec<trait_proto> {
+    static auto bar(const auto& v) -> no_def_ctor {
+        std::println("[default specialization for trait_proto::bar]");
+        return no_def_ctor{1};
+    };
+};
+static_assert(trp::implements_trait<bar_only_impl, trait_proto>);
 
 int main() {
     auto simpl = bar_only_impl{};

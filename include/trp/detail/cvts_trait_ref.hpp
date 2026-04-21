@@ -85,10 +85,12 @@ struct cvts_cvo_invoker<
     }
 
 private:
-    static auto mockfn(void*, Args&&...) -> Ret {};    // required to make splic
-    template<
-        typename T =
-            void>    // template because TRef is incomplete at the point of cvts_cvo_invoker instantiation
+    static auto mockfn(void*, Args&&...) -> Ret {
+        std::unreachable();
+    };    // required to make splic
+
+    // template because TRef is incomplete at the point of cvts_cvo_invoker instantiation
+    template<typename T = void>
     static constexpr auto default_method = [] {
         if (Method == meta::info{})
             return ^^mockfn;

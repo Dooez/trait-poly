@@ -9,15 +9,7 @@ namespace trp {
 template<non_cv_trait Trait>
 struct default_impl_spec {};
 
-template<non_cv_trait Trait>
-struct default_impl_info {
-    static constexpr meta::info value = meta::info{};
-};
-
 namespace detail {
-
-template<typename T>
-struct empty_default_implementation {};
 
 template<typename ParamType>
 consteval bool first_parameter_is_cvref_of(meta::info fn) {
@@ -42,9 +34,6 @@ template<typename DefaultImpl, typename Trait>
 concept default_impl_for =
     non_cv_trait<Trait>                                                               //
     and stdr::all_of(nonspecial_members<DefaultImpl>, is_default_impl_fn_template)    //
-    and stdr::all_of(nonspecial_members<DefaultImpl>, meta::is_function)              //
-    and stdr::all_of(nonspecial_members<DefaultImpl>,
-                     first_parameter_is_cvref_of<mock_trait_ref<Trait>>)    //
     ;
 
 template<typename DefaultImpl, typename Trait>
@@ -52,7 +41,6 @@ concept strict_default_impl_for = default_impl_for<DefaultImpl, Trait>    //
                                   and stdr::all_of(nonspecial_members<DefaultImpl>,
                                                    maps_to_a_trait_method_of<Trait>)    //
     ;
-
 
 struct default_impl_method {
     meta::info fn;
@@ -103,9 +91,6 @@ concept implements_methods =
                  Self, {meta::reflect_constant(Self), ^^Impl, ^^Trait, meta::reflect_constant(I + 1)}):]);
 
 }    // namespace detail
-
-template<template<typename> typename DefaultImpl>
-inline constexpr auto use_default_impl = detail::default_impl_annotation_t<DefaultImpl>{};
 
 template<typename Impl, typename Trait>
 concept implements_trait = any_trait<Trait> and std::is_class_v<Impl> and
