@@ -76,8 +76,8 @@ concept any_immediate_trait =
                       [](auto m) {
                           return meta::is_special_member_function(m)    //
                                  and not meta::is_defaulted(m);
-                      })                                                                                  //
-    and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_virtual)              //
+                      })                                                                        //
+    and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_virtual)    //
     // and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_template)             //
     and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>, meta::is_operator_function)    //
     and stdr::none_of(detail::nonspecial_members<std::remove_cv_t<Trait>>,
@@ -178,7 +178,7 @@ inline constexpr auto matching_impl_method = [] {
 }();
 
 template<typename Impl, typename MethodIdt>
-concept implements_method = non_ref<Impl>                    //
+concept implements_method = non_ref<Impl>                      //
                             and trait_method_idt<MethodIdt>    //
                             and (matching_impl_method<Impl, MethodIdt> != meta::info{});
 

@@ -19,7 +19,6 @@ namespace detail {
 template<typename T>
 struct empty_default_implementation {};
 
-
 template<typename ParamType>
 consteval bool first_parameter_is_cvref_of(meta::info fn) {
     auto params = meta::parameters_of(fn);
@@ -39,19 +38,18 @@ consteval bool is_default_impl_fn_template(meta::info fn) {
            and first_parameter_is_cvref_of<mock_trait_ref<Trait>>(substitute(fn, {^^mock_trait_ref<Trait>}));
 }
 
-template<template<typename> typename DefaultImpl, typename Trait>
+template<typename DefaultImpl, typename Trait>
 concept default_impl_for =
-    non_cv_trait<Trait>    //
-    and
-    stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>, is_default_impl_fn_template)    //
-    and stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>, meta::is_function)          //
-    and stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>,
+    non_cv_trait<Trait>                                                               //
+    and stdr::all_of(nonspecial_members<DefaultImpl>, is_default_impl_fn_template)    //
+    and stdr::all_of(nonspecial_members<DefaultImpl>, meta::is_function)              //
+    and stdr::all_of(nonspecial_members<DefaultImpl>,
                      first_parameter_is_cvref_of<mock_trait_ref<Trait>>)    //
     ;
 
-template<template<typename> typename DefaultImpl, typename Trait>
+template<typename DefaultImpl, typename Trait>
 concept strict_default_impl_for = default_impl_for<DefaultImpl, Trait>    //
-                                  and stdr::all_of(nonspecial_members<DefaultImpl<mock_trait_ref<Trait>>>,
+                                  and stdr::all_of(nonspecial_members<DefaultImpl>,
                                                    maps_to_a_trait_method_of<Trait>)    //
     ;
 
@@ -86,24 +84,6 @@ inline constexpr auto all_default_impls = [] {
     return std::define_static_array(impls);
 }();
 
-
-template<non_cv_trait Trait, non_ref Impl>
-using default_trait_impl_for = [:[] {
-    // array<info>
-    if (default_impl_info<Trait>::value != meta::info{}) {
-        const bool valid_specialization =
-            extract<bool>(meta::substitute(^^default_impl_for, {default_impl_info<Trait>::value, ^^Trait}));
-        if (not valid_specialization)
-            throw "Invalid specialization of trp::default_impl_for<Trait>";
-        return meta::substitute(default_impl_info<Trait>::value, {^^Impl});
-    }
-    auto trait_anns = meta::annotations_of(^^Trait);
-    auto it         = stdr::find_if(trait_anns, is_default_impl_annotation);
-    if (it != trait_anns.end())
-        return substitute(meta::template_arguments_of(meta::type_of(*it))[0], {^^Impl});
-    return substitute(^^empty_default_implementation, {^^Impl});
-}():];
-
 template<any_trait Trait>
 inline constexpr auto mandatory_trait_methods = [] {
     auto methods = std::vector(std::from_range, all_trait_methods<Trait>);
@@ -113,7 +93,6 @@ inline constexpr auto mandatory_trait_methods = [] {
     }
     return std::define_static_array(methods);
 }();
-
 
 template<meta::info Self, typename Impl, typename Trait, uZ I = 0>
 concept implements_methods =

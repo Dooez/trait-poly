@@ -6,7 +6,7 @@
 namespace trp::detail {
 namespace cvts_trait {
 
-template<typename Impl, typename... MethodHolders>
+template<typename Trait, typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
     Impl* _obj_ptr_{};
 
@@ -51,7 +51,7 @@ struct cvts_cvo_invoker<
         requires(not Const and not Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -60,7 +60,7 @@ struct cvts_cvo_invoker<
         requires(Const and not Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -69,7 +69,7 @@ struct cvts_cvo_invoker<
         requires(not Const and Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -78,22 +78,26 @@ struct cvts_cvo_invoker<
         requires(Const and Volatile)
     {
         if constexpr (Method == meta::info{}) {
-            [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
     }
 
 private:
-    template<typename T = void>
+    static auto mockfn(void*, Args&&...) -> Ret {};    // required to make splic
+    template<
+        typename T =
+            void>    // template because TRef is incomplete at the point of cvts_cvo_invoker instantiation
     static constexpr auto default_method = [] {
-        using trait_t = [:meta::template_arguments_of(
-                              meta::bases_of(^^TRef, meta::access_context::unprivileged())[0])[0]:];
+        if (Method == meta::info{})
+            return ^^mockfn;
+        using trait_t = [:meta::remove_cv(meta::template_arguments_of(meta::type_of(
+                              meta::bases_of(^^TRef, meta::access_context::unprivileged())[0]))[0]):];
         using method_idt =
             method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
-        using default_trait_impl = default_trait_impl_for<trait_t, TRef>;
-        return *stdr::find(
-            nonspecial_members<default_trait_impl>, ^^method_idt, default_impl_to_method_identity);
+        auto it = stdr::find(all_default_impls<trait_t>, ^^method_idt, &default_impl_method::idt);
+        return meta::substitute(it->fn, {^^TRef});
     }();
 
     auto get_trait_ref(this auto&& self) -> decltype(auto) {
@@ -197,7 +201,7 @@ consteval auto define_cvts_ref() {
                 it->ov_specs.push_back(spec);
             }
         }
-        auto impl_targs = vector<info>{^^Impl};
+        auto impl_targs = vector<info>{^^Trait, ^^Impl};
         impl_targs.append_range(
             method_holders_specs    //
             | stdv::transform([](auto spec) {

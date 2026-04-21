@@ -15,7 +15,11 @@ consteval {
     trp::define_trait<trait_proto_imposter>();
 }
 struct trait_proto_base {
-    auto bar() const -> no_def_ctor;
+    auto        bar() const -> no_def_ctor;
+    static auto bar(const auto& v) -> no_def_ctor {
+        std::println("Default trait_proto_base::bar");
+        return no_def_ctor{1};
+    };
 };
 struct trait_proto : trait_proto_base {
     static void foo(const auto& v) {
@@ -150,6 +154,7 @@ constexpr bool compare_structs(const S& lhs, const S& rhs) {
 
 int main() {
     auto simpl = bar_only_impl{};
+
     auto ref = trp::dyn_trait_ref<const trait_proto>(simpl);
     ref.foo();
     std::println("\n---");
@@ -159,6 +164,12 @@ int main() {
     const auto ref2 = trp::dyn_trait_ref<trait_proto>(simpl);
     ref2.foo();
     std::println("\n---");
+
+
+    struct {
+    } no_methods_at_all{};
+    auto defref = trp::dyn_trait_ref<const trait_proto>(no_methods_at_all);
+    defref.bar();
     // ref.bar();
     // auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     // const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
