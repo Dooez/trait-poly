@@ -9,13 +9,6 @@ struct default_impl_spec {};
 
 namespace detail {
 
-template<typename ParamType>
-consteval bool first_parameter_is_cvref_of(meta::info fn) {
-    auto params = meta::parameters_of(fn);
-    return stdr::size(params) > 0                                   //
-           and meta::is_reference_type(meta::type_of(params[0]))    //
-           and meta::remove_cvref(meta::type_of(params[0])) == ^^ParamType;
-}
 template<any_trait Trait>
 consteval bool maps_to_a_trait_method_of(meta::info fn) {
     return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(fn));

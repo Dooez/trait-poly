@@ -86,6 +86,11 @@ concept nonstatic_methods_are_not_templates =
     non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, [](auto r) {
         return meta::is_function_template(r) and not meta::is_static_member(r);
     });
+template<typename Trait>
+concept static_methods_are_templates =
+    non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, [](auto r) {
+        return meta::is_static_member(r) and not meta::is_function_template(r);
+    });
 
 template<typename T>
 concept static_data_members_are_constexpr = [] {
@@ -94,26 +99,32 @@ concept static_data_members_are_constexpr = [] {
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }();
 
-template<typename Trait>
-concept static_methods_are_default_impl =
-    non_cvref<Trait> and
-    stdr::all_of(
-        nonspecial_members<Trait> |
-            stdv::filter([](auto r) { return meta::is_static_member(r) and meta::is_function_template(r); }),
-        [](auto r) { return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(r)); });
+template<typename T, typename Trait>
+concept static_methods_are_default_impl_for =
+    non_cvref<T>            //
+    and non_cvref<Trait>    //
+    and stdr::all_of(nonspecial_members<T> | stdv::filter([](auto r) {
+                         return meta::is_static_member(r)             //
+                                and (meta::is_function_template(r)    //
+                                     or meta::is_function(r));
+                     }),
+                     [](auto r) {
+                         return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(r));
+                     });
 
 
 template<typename Trait>
-concept any_immediate_trait = non_cvref<Trait>                                  //
-                              and no_private_members<Trait>                     //
-                              and no_private_bases<Trait>                       //
-                              and no_virtual<Trait>                             //
-                              and no_nonstatic_data_members<Trait>              //
-                              and no_explicit_special_members<Trait>            //
-                              and static_data_members_are_constexpr<Trait>      // only in gcc atm
-                              and no_operators<Trait>                           //
-                              and nonstatic_methods_are_not_templates<Trait>    //
-                              and static_methods_are_default_impl<Trait>        //
+concept any_immediate_trait = non_cvref<Trait>                                         //
+                              and no_private_members<Trait>                            //
+                              and no_private_bases<Trait>                              //
+                              and no_virtual<Trait>                                    //
+                              and no_nonstatic_data_members<Trait>                     //
+                              and no_explicit_special_members<Trait>                   //
+                              and static_data_members_are_constexpr<Trait>             // only in gcc atm
+                              and no_operators<Trait>                                  //
+                              and nonstatic_methods_are_not_templates<Trait>           //
+                              and static_methods_are_templates<Trait>                  //
+                              and static_methods_are_default_impl_for<Trait, Trait>    //
     ;
 
 template<meta::info Self, typename... Traits>
@@ -209,9 +220,12 @@ concept implements_method = non_ref<Impl>                      //
                             and trait_method_idt<MethodIdt>    //
                             and (matching_impl_method<Impl, MethodIdt> != meta::info{});
 
-template<non_ref T>
-struct unique_id_struct {
-    static inline char value{};
-};
+template<typename ParamType>
+consteval bool first_parameter_is_cvref_of(meta::info fn) {
+    auto params = meta::parameters_of(fn);
+    return stdr::size(params) > 0                                   //
+           and meta::is_reference_type(meta::type_of(params[0]))    //
+           and meta::remove_cvref(meta::type_of(params[0])) == ^^ParamType;
+}
 }    // namespace detail
 }    // namespace trp

@@ -192,7 +192,6 @@ template<typename T>
 concept trait_method_idt = any_method_idt<T> and not(T::is_lvalue) and not(T::is_rvalue) and not(T::is_value);
 
 
-
 consteval auto copy_cv_to(meta::info proto, meta::info type) {
     if (meta::is_const(proto))
         type = meta::add_const(type);
@@ -233,5 +232,10 @@ inline constexpr auto all_trait_methods = [] {
     }
     return define_static_array(result);
 }();
+
+template<non_ref T>
+struct unique_id_struct {
+    static inline char value{};
+};
 }    // namespace detail
 }    // namespace trp
