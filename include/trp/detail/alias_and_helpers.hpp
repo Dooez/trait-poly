@@ -191,6 +191,24 @@ concept any_method_idt = meta::has_template_arguments(^^T) and meta::template_of
 template<typename T>
 concept trait_method_idt = any_method_idt<T> and not(T::is_lvalue) and not(T::is_rvalue) and not(T::is_value);
 
+namespace concepts {
+template<typename MethodIdt>
+concept is_const_idt = any_method_idt<MethodIdt> && MethodIdt::is_const;
+template<typename MethodIdt>
+concept is_volatile_idt = any_method_idt<MethodIdt> && MethodIdt::is_volatile;
+template<typename MethodIdt>
+concept is_cv_idt = any_method_idt<MethodIdt> && MethodIdt::is_cv;
+}    // namespace concepts
+
+consteval bool is_const_idt(meta::info idt) {
+    return meta::extract<bool>(meta::substitute(^^concepts::is_const_idt, {idt}));
+}
+consteval bool is_volatile_idt(meta::info idt) {
+    return meta::extract<bool>(meta::substitute(^^concepts::is_volatile_idt, {idt}));
+}
+consteval bool is_cv_idt(meta::info idt) {
+    return meta::extract<bool>(meta::substitute(^^concepts::is_cv_idt, {idt}));
+}
 
 consteval auto copy_cv_to(meta::info proto, meta::info type) {
     if (meta::is_const(proto))
@@ -209,6 +227,19 @@ inline constexpr auto direct_base_types = std::define_static_array(
     meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
 
 template<typename T>
+inline constexpr auto direct_trait_methods = [] {
+    using namespace meta;
+    constexpr auto is_valid_method = [](auto method) static {
+        return is_function(method)                                 //
+               and not meta::is_special_member_function(method)    //
+               and (is_const(method) or not is_const(^^T))         //
+               and (is_volatile(method) or not is_volatile(^^T));
+    };
+    return define_static_array(members_of(^^T, std::meta::access_context::unprivileged())    //
+                               | stdv::filter(is_valid_method)                               //
+                               | stdv::transform(method_identity));
+}();
+template<typename T>
 inline constexpr auto all_trait_methods = [] {
     using namespace meta;
     constexpr auto is_valid_method = [](auto method) static {
@@ -217,10 +248,7 @@ inline constexpr auto all_trait_methods = [] {
                and (is_const(method) or not is_const(^^T))         //
                and (is_volatile(method) or not is_volatile(^^T));
     };
-    auto result = meta::members_of(^^T, ctx_unchecked)    //
-                  | stdv::filter(is_valid_method)         //
-                  | stdv::transform(method_identity)      //
-                  | stdr::to<std::vector<info>>();
+    auto result        = direct_trait_methods<T> | stdr::to<std::vector<info>>();
     auto append_unique = [&](auto&& method_idts) {
         for (auto m: method_idts)
             if (not stdr::contains(result, m))

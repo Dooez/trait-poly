@@ -101,7 +101,7 @@ private:
                               meta::bases_of(^^TRef, meta::access_context::unprivileged())[0]))[0]):];
         using method_idt =
             method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
-        auto it = stdr::find(all_default_impls<trait_t>, ^^method_idt, &default_impl_method::idt);
+        auto it = stdr::find(all_default_impls<trait_t>, ^^method_idt, &impl_method_bind::idt);
         return meta::substitute(it->fn, {^^TRef});
     }();
 

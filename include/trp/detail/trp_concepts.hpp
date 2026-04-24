@@ -7,7 +7,7 @@
 namespace trp {
 namespace detail {
 
-consteval auto default_impl_to_method_identity(meta::info fn) {
+consteval auto explicit_impl_to_method_identity(meta::info fn) {
     using namespace meta;
 
     const auto identifier = reflect_constant_string(identifier_of(fn));
@@ -109,7 +109,7 @@ concept static_methods_are_default_impl_for =
                                      or meta::is_function(r));
                      }),
                      [](auto r) {
-                         return stdr::contains(all_trait_methods<Trait>, default_impl_to_method_identity(r));
+                         return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(r));
                      });
 
 
@@ -168,13 +168,15 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 namespace detail {
 template<non_cvref Impl, auto Id>
+inline constexpr auto matching_id_direct_public_members = std::define_static_array(
+    meta::members_of(^^Impl, meta::access_context::unprivileged())    //
+    | stdv::filter([](auto info) { return meta::has_identifier(info) and meta::identifier_of(info) == Id; }));
+
+template<non_cvref Impl, auto Id>
 inline constexpr auto matching_id_public_members = [] {
     using namespace meta;
-    auto result = meta::members_of(^^Impl, meta::access_context::unprivileged())    //
-                  | stdv::filter([](auto info) {
-                        return meta::has_identifier(info) and meta::identifier_of(info) == Id;
-                    })    //
-                  | stdr::to<std::vector<meta::info>>();
+    auto result = matching_id_direct_public_members<Impl, Id>    //
+                  | stdr::to<std::vector<info>>();
     template for (constexpr auto base: direct_base_types<Impl>) {
         using base_t = [:base:];
         for (auto m: matching_id_public_members<base_t, Id>)
@@ -215,10 +217,6 @@ inline constexpr auto matching_impl_method = [] {
     return meta::info{};
 }();
 
-template<typename Impl, typename MethodIdt>
-concept implements_method = non_ref<Impl>                      //
-                            and trait_method_idt<MethodIdt>    //
-                            and (matching_impl_method<Impl, MethodIdt> != meta::info{});
 
 template<typename ParamType>
 consteval bool first_parameter_is_cvref_of(meta::info fn) {

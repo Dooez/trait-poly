@@ -1,6 +1,6 @@
 #pragma once
 #ifndef TRP_GODBOLT
-#include "trp_concepts.hpp"
+#include "alias_and_helpers.hpp"
 #endif
 
 namespace trp::detail {

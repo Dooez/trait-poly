@@ -73,7 +73,7 @@ struct default_invoke_wrapper_struct {
     using cvts_ref    = cvts_trait_ref<Trait, Impl>;
 
     static constexpr auto default_method = meta::substitute(
-        stdr::find(all_default_impls<SESubtrait>, ^^MethodId, &default_impl_method::idt)->fn, {^^cvts_ref});
+        stdr::find(all_default_impls<SESubtrait>, ^^MethodId, &impl_method_bind::idt)->fn, {^^cvts_ref});
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
         cvts_ref ref(*static_cast<Impl*>(ptr));
