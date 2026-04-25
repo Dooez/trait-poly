@@ -16,10 +16,15 @@ consteval {
 }
 struct trait_proto_base {
     auto        bar() const -> no_def_ctor;
+    auto        bar(int) const -> no_def_ctor;
     static auto bar(const auto& v) -> no_def_ctor {
         std::println("[default trait_proto_base::bar]");
         return no_def_ctor{1};
     };
+    // static auto bar(const auto& v, int) -> no_def_ctor {
+    //     std::println("[default trait_proto_base::bar(int)]");
+    //     return no_def_ctor{1};
+    // };
 };
 struct trait_proto : trait_proto_base {
     static void foo(const auto& v) {
@@ -46,6 +51,17 @@ consteval {
 struct bar_only_impl {
     auto bar() const -> no_def_ctor {
         std::print("[bar_only_impl::bar]");
+        return no_def_ctor{1};
+    }
+    auto bar(int a) const -> no_def_ctor {
+        std::print("[bar_only_impl::bar(int)]");
+        return no_def_ctor{1};
+    }
+};
+template<>
+struct trp::impl_spec_for<bar_only_impl, trait_proto> {
+    static auto bar(const auto&) -> no_def_ctor {
+        std::print("[impl_spec_for<bar_only_impl, trait_proto>::bar]");
         return no_def_ctor{1};
     }
 };
@@ -178,10 +194,10 @@ int main() {
     std::println("\n---");
 
 
-    struct {
-    } no_methods_at_all{};
-    auto defref = trp::dyn_trait_ref<const trait_proto>(no_methods_at_all);
-    defref.bar();
+    // struct {
+    // } no_methods_at_all{};
+    // auto defref = trp::dyn_trait_ref<const trait_proto>(no_methods_at_all);
+    // defref.bar();
     // ref.bar();
     // auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
     // const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);

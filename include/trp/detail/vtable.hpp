@@ -62,24 +62,38 @@ consteval void define_vtable() {
     }
     define_aggregate(^^vtable<Trait>, vtable_elements);
 }
-
-template<any_trait        Trait,
-         non_cv_trait     SESubtrait,
-         non_ref          Impl,
+template<meta::info Fn,
+         non_ref    Impl,
+         typename Ref,
+         any_trait        Trait,
          trait_method_idt MethodId,
          typename... Params>
-struct default_invoke_wrapper_struct {
+struct explicit_invoke_wrapper_struct {
     using return_type = MethodId::return_type;
-    using cvts_ref    = cvts_trait_ref<Trait, Impl>;
-
-    static constexpr auto default_method = meta::substitute(
-        stdr::find(all_default_impls<SESubtrait>, ^^MethodId, &impl_method_bind::idt)->fn, {^^cvts_ref});
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
-        cvts_ref ref(*static_cast<Impl*>(ptr));
-        return [:default_method:](ref, std::forward<Params>(params)...);
+        Ref ref(*static_cast<Impl*>(ptr));
+        return [:Fn:](ref, std::forward<Params>(params)...);
     }
 };
+
+// template<any_trait        Trait,
+//          non_cv_trait     SESubtrait,
+//          non_ref          Impl,
+//          trait_method_idt MethodId,
+//          typename... Params>
+// struct default_invoke_wrapper_struct {
+//     using return_type = MethodId::return_type;
+//     using cvts_ref    = cvts_trait_ref<Trait, Impl>;
+//
+//     static constexpr auto default_method = meta::substitute(
+//         stdr::find(all_default_impls<SESubtrait>, ^^MethodId, &impl_method_bind::idt)->fn, {^^cvts_ref});
+//
+//     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
+//         cvts_ref ref(*static_cast<Impl*>(ptr));
+//         return [:default_method:](ref, std::forward<Params>(params)...);
+//     }
+// };
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
     using return_type = MethodId::return_type;
@@ -110,38 +124,48 @@ consteval auto fill_vtable() {
     auto       quals           = vtable_cv_quals{};
     const auto get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
-        // Common vtable is used for any combination of cv-qualification of trait.
-        // Implementation is checked by externally.
-        // Fill the missing vtable elements with nullptr.
-        if constexpr (matching_impl_method<Impl, trait_method_idt_t> == info{}) {
-            if (not stdr::contains(mandatory_trait_methods<Trait>, ^^trait_method_idt_t)) {
-                constexpr auto wrapper_struct_info = [=] {
-                    auto [... infos] = trait_method_idt_t::param_infos;
-                    return substitute(^^default_invoke_wrapper_struct,
-                                      {^^Trait,    //
-                                       ^^SESubtrait,
-                                       ^^Impl,
-                                       trait_method_idt,
-                                       infos...});
-                }();
-                using wrapper_struct = [:wrapper_struct_info:];
-                return &wrapper_struct::invoke;
-            }
+        constexpr auto m =
+            stdr::find(impls_for<Impl, SESubtrait>, trait_method_idt, &impl_method_bind::idt)->fn;
+        if (m == info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
             if (trait_method_idt_t::is_volatile)
                 quals.has_volatile = false;
             quals.has_full = false;
             return typename trait_method_idt_t::wrapper_fptr_type{nullptr};
-        } else {
-            constexpr auto wrapper_struct_info = [=] {
-                auto [... infos] = trait_method_idt_t::param_infos;
-                return substitute(^^invoke_wrapper_struct,
-                                  {^^Impl,
-                                   reflect_constant(matching_impl_method<Impl, trait_method_idt_t>),
-                                   trait_method_idt,
-                                   infos...});
-            }();
+        }
+
+        auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
+        if constexpr (is_template(m)) {    // default impl
+            using cvts_ref                     = cvts_trait_ref<Trait, Impl>;
+            constexpr auto method              = meta::substitute(m, {^^cvts_ref});
+            constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
+                                                            {reflect_constant(method),
+                                                             ^^Impl,
+                                                             ^^cvts_ref,
+                                                             ^^Trait,
+                                                             trait_method_idt,
+                                                             trait_method_idt_t::param_infos[is]...});
+            using wrapper_struct               = [:wrapper_struct_info:];
+            return &wrapper_struct::invoke;
+
+        }
+        // else if constexpr (first_parameter_is_cvref_of<Impl>(m)) {    // explicit spec
+        //     constexpr auto ref = type_of(parameters_of(m)[0]);
+        //     constexpr auto wrapper_struct_info =
+        //         substitute(^^explicit_invoke_wrapper_struct,    //
+        //                    {reflect_constant(m), ^^Impl, ref, ^^Trait, trait_method_idt, infos...});
+        //     using wrapper_struct = [:wrapper_struct_info:];
+        //     return &wrapper_struct::invoke;
+        //
+        // }
+        else {
+            if (parent_of(m) != ^^Impl)
+                throw "Not parent";
+            constexpr auto cm                  = reflect_constant(m);
+            constexpr auto wrapper_struct_info = substitute(
+                ^^invoke_wrapper_struct,
+                {^^Impl, reflect_constant(m), trait_method_idt, trait_method_idt_t::param_infos[is]...});
             using wrapper_struct = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
         }
