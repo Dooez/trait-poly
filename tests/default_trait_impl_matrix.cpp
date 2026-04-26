@@ -175,12 +175,7 @@ void run_case() {
     template<>                                                                                     \
     struct trp::default_impl_spec<ns_name::derived_trait> {                                        \
         TRP_DERIVED_SPECIALIZED_DECL(derived_kind)                                                 \
-    };                                                                                             \
-                                                                                                   \
-    consteval {                                                                                    \
-        trp::define_trait<ns_name::base_trait>();                                                  \
-        trp::define_trait<ns_name::derived_trait>();                                               \
-    }
+    };
 
 TRP_DEFINE_CASE(case_none_none, NONE, definition_state::none, NONE, definition_state::none)
 TRP_DEFINE_CASE(case_none_inline, NONE, definition_state::none, INLINE, definition_state::inline_only)
