@@ -68,7 +68,7 @@ struct cvo_invoker<
 private:
     template<typename VTable>
     static auto get_method(VTable* vt) {
-        constexpr auto m = std::meta::nonstatic_data_members_of(^^VTable, ctx_unchecked)[Index];
+        constexpr auto m = std::meta::nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
         return vt->[:m:];
     }
 };
@@ -488,9 +488,4 @@ template<any_trait U, any_trait T>
 [[nodiscard]] static constexpr auto const_trait_cast(dyn_trait_ref<T> ref) {
     return const_trait_cast<U>(ref);
 }
-
-template<non_cv_trait Trait>
-consteval void define_trait() {
-    // detail::maybe_define_cv_trait<Trait>();
-};
 }    // namespace trp

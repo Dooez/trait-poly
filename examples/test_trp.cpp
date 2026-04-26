@@ -79,10 +79,6 @@ struct trait_proto {
 
 };
 
-consteval {
-    trp::define_trait<trait_proto>();
-}
-
 // clang-format on
 
 struct my_trait {

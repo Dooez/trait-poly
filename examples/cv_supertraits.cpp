@@ -31,12 +31,6 @@ struct susp {
 };
 }    // namespace testing
 
-consteval {
-    trp::define_trait<testing::base>();
-    trp::define_trait<testing::midl>();
-    trp::define_trait<testing::leaf>();
-    trp::define_trait<testing::susp>();
-}
 namespace testing {
 
 // clang-format off
@@ -105,9 +99,6 @@ struct ping_cv {
     void cv_ping() const volatile;
 };
 }
-consteval{
-    trp::define_trait<testing::ping_cv>();
-}
 namespace testing{
 static_assert(trp::supertrait_of<ping_cv,                ping_cv>);
 static_assert(trp::supertrait_of<const ping_cv,          ping_cv>);
@@ -138,9 +129,6 @@ struct trait_touch {
     void c_touch() const;
 };
 }    // namespace testing
-consteval {
-    trp::define_trait<testing::trait_touch>();
-}
 namespace testing {
 struct impl_all_cv {
     void _ping() {}

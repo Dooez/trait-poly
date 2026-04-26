@@ -29,44 +29,47 @@ inline constexpr auto vtable_info = [] {
 
     struct vtable;
 
-    consteval{
-    constexpr auto get_info_to_member = []<uZ N>(const char (&prefix)[N], auto type_getter) {
-        auto res = std::array<char, N + 20>{};
-        stdr::copy(prefix, res.begin());
-        auto i = 0UZ;
-        return [=](auto info) mutable {
-            auto id_end = std::to_chars(&*(res.begin() + N - 1), &*res.end(), i++);
-            if (id_end.ec != std::errc{})
-                throw "Error while forming member name";
-            auto id = std::string_view(res.data(), id_end.ptr);
-            return meta::data_member_spec(type_getter(info), {.name = id});
+    consteval {
+        constexpr auto get_info_to_member = []<uZ N>(const char (&prefix)[N], auto type_getter) {
+            auto res = std::array<char, N + 20>{};
+            stdr::copy(prefix, res.begin());
+            auto i = 0UZ;
+            return [=](auto info) mutable {
+                auto id_end = std::to_chars(&*(res.begin() + N - 1), &*res.end(), i++);
+                if (id_end.ec != std::errc{})
+                    throw "Error while forming member name";
+                auto id = std::string_view(res.data(), id_end.ptr);
+                return meta::data_member_spec(type_getter(info), {.name = id});
+            };
         };
-    };
 
-    auto vtable_elements = std::vector<info>{};
-    auto method_spec = get_info_to_member("m_", [](info m) { return substitute(^^wrapper_fptr_for, {m}); });
-    for (auto method_idt: all_trait_methods<Trait>) {
-        vtable_elements.push_back(method_spec(method_idt));
-    }
-    using default_delete_fptr = void (*)(void*);
-    vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
-    using id_ptr = const char*;
-    vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
-    vtable_elements.push_back(data_member_spec(^^vtable_cv_quals, {.name = "cv_quals"}));
+        auto vtable_elements = std::vector<info>{};
+        auto method_spec =
+            get_info_to_member("m_", [](info m) { return substitute(^^wrapper_fptr_for, {m}); });
+        for (auto method_idt: all_trait_methods<Trait>) {
+            vtable_elements.push_back(method_spec(method_idt));
+        }
+        using default_delete_fptr = void (*)(void*);
+        vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
+        using id_ptr = const char*;
+        vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
+        vtable_elements.push_back(data_member_spec(^^vtable_cv_quals, {.name = "cv_quals"}));
 
-    auto supertrait_spec = get_info_to_member("supertrait_", [](info s) {
-        return extract<meta::info>(substitute(^^vtable_info, {copy_cv_to(^^Trait, s)}));
-    });
-    for (auto supertrait: direct_base_types<Trait>) {
-        // not defining supertrait vtable because maybe_define_cv_trait calls define_vtable for each trait in the hierarchy
-        vtable_elements.push_back(supertrait_spec(supertrait));
-    }
-    define_aggregate(^^vtable, vtable_elements);
+        auto supertrait_spec = get_info_to_member("supertrait_", [](info s) {
+            return extract<meta::info>(substitute(^^vtable_info, {copy_cv_to(^^Trait, s)}));
+        });
+        for (auto supertrait: direct_base_types<Trait>) {
+            // not defining supertrait vtable because maybe_define_cv_trait calls define_vtable for each trait in the hierarchy
+            vtable_elements.push_back(supertrait_spec(supertrait));
+        }
+        define_aggregate(^^vtable, vtable_elements);
     }
     return ^^vtable;
 }();
 template<non_cv_trait Trait>
-using vtable = [:vtable_info<Trait>:];
+struct vtable : public[:vtable_info<Trait>:] {
+    using vtable_impl = [:vtable_info<Trait>:];
+};
 
 template<meta::info Fn,
          non_ref    Impl,

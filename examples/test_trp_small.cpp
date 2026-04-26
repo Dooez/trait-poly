@@ -11,9 +11,6 @@ struct no_def_ctor {
 struct trait_proto_imposter {
     auto bar() const -> no_def_ctor;
 };
-consteval {
-    trp::define_trait<trait_proto_imposter>();
-}
 struct trait_proto_base {
     auto        bar() const -> no_def_ctor;
     auto        bar(int) const -> no_def_ctor;
@@ -45,9 +42,6 @@ struct trait_proto : trait_proto_base {
     void foo();
     void foo() const;
 };
-consteval {
-    trp::define_trait<trait_proto>();
-}
 struct bar_only_impl {
     auto bar() const -> no_def_ctor {
         std::print("[bar_only_impl::bar]");
@@ -57,14 +51,13 @@ struct bar_only_impl {
         std::print("[bar_only_impl::bar(int)]");
         return no_def_ctor{1};
     }
-    auto not_a_trait_foo()const {
+    auto not_a_trait_foo() const {
         std::print("[bar_only_impl::not_a_trait_foo()]");
-
     }
 };
 template<>
 struct trp::impl_spec_for<bar_only_impl, trait_proto> {
-    static auto bar(const auto&i ) -> no_def_ctor {
+    static auto bar(const auto& i) -> no_def_ctor {
         static_cast<const bar_only_impl&>(i).not_a_trait_foo();
         std::print("[impl_spec_for<bar_only_impl, trait_proto>::bar()]");
         return no_def_ctor{1};
@@ -75,10 +68,6 @@ struct trp::impl_spec_for<bar_only_impl, trait_proto> {
     //     return no_def_ctor{1};
     // }
 };
-// consteval {
-// trp::define_trait<trait_proto_base>();    // repeated definition is allowed, and has no effect
-// trp::define_trait<trait_proto>();
-// }
 
 static_assert(trp::supertrait_of<trait_proto, trait_proto>);
 static_assert(trp::supertrait_of<trait_proto_base, trait_proto>);
@@ -141,10 +130,6 @@ struct trait_fb {
     void foo() const;
     void bar();
 };
-consteval {
-    trp::define_trait<trait_foo_only>();
-    trp::define_trait<trait_fb>();
-}
 struct foo_only_impl {
     void foo() const {
         std::println("foo foo_only_impl");

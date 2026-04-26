@@ -14,11 +14,6 @@ struct derived_trait : base_trait {};
 struct empty_impl {};
 }    // namespace no_defaults
 
-consteval {
-    trp::define_trait<no_defaults::base_trait>();
-    trp::define_trait<no_defaults::derived_trait>();
-}
-
 static_assert(not trp::implements_trait<no_defaults::empty_impl, no_defaults::base_trait>);
 static_assert(not trp::implements_trait<no_defaults::empty_impl, no_defaults::derived_trait>);
 
@@ -36,11 +31,6 @@ struct derived_trait : base_trait {};
 
 struct empty_impl {};
 }    // namespace base_inline_inherited
-
-consteval {
-    trp::define_trait<base_inline_inherited::base_trait>();
-    trp::define_trait<base_inline_inherited::derived_trait>();
-}
 
 static_assert(trp::implements_trait<base_inline_inherited::empty_impl, base_inline_inherited::base_trait>);
 static_assert(trp::implements_trait<base_inline_inherited::empty_impl, base_inline_inherited::derived_trait>);
@@ -68,10 +58,6 @@ struct trp::default_impl_spec<base_specialization_wins::base_trait> {
     }
 };
 
-consteval {
-    trp::define_trait<base_specialization_wins::base_trait>();
-    trp::define_trait<base_specialization_wins::derived_trait>();
-}
 
 static_assert(trp::implements_trait<base_specialization_wins::empty_impl, base_specialization_wins::base_trait>);
 static_assert(trp::implements_trait<base_specialization_wins::empty_impl, base_specialization_wins::derived_trait>);
@@ -99,10 +85,6 @@ struct trp::default_impl_spec<derived_inline_wins::base_trait> {
     }
 };
 
-consteval {
-    trp::define_trait<derived_inline_wins::base_trait>();
-    trp::define_trait<derived_inline_wins::derived_trait>();
-}
 
 static_assert(trp::implements_trait<derived_inline_wins::empty_impl, derived_inline_wins::base_trait>);
 static_assert(trp::implements_trait<derived_inline_wins::empty_impl, derived_inline_wins::derived_trait>);
@@ -134,10 +116,6 @@ struct trp::default_impl_spec<derived_specialization_wins::derived_trait> {
     }
 };
 
-consteval {
-    trp::define_trait<derived_specialization_wins::base_trait>();
-    trp::define_trait<derived_specialization_wins::derived_trait>();
-}
 
 static_assert(trp::implements_trait<derived_specialization_wins::empty_impl,
                                     derived_specialization_wins::base_trait>);
