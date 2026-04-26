@@ -63,17 +63,16 @@ consteval auto make_aggregate(Ts&&... vs) {
         constexpr auto agg_info = ^^aggregate;
         if (meta::is_complete_type(agg_info))
             return;
-        auto cnt            = 0UZ;
-        auto id_storage     = std::array<char, 21>{"m"};
-        auto info_to_member = [&](auto info) mutable {
-            auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
-            if (id_end.ec != std::errc{})
-                throw "Error while forming member name";
-            auto id = std::string_view(id_storage.data(), id_end.ptr);
-            return meta::data_member_spec(info, {.name = id});
+        constexpr auto info_to_member = [](auto info) {
+#if defined(__clang__)
+            return meta::data_member_spec(info, {});
+#else
+            return meta::data_member_spec(info, {.name = "_"});
+#endif
         };
-        meta::define_aggregate(
-            agg_info, std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(info_to_member));
+        meta::define_aggregate(agg_info,
+                               std::array<meta::info, sizeof...(Ts)>{^^std::remove_cvref_t<Ts>...} |
+                                   stdv::transform(info_to_member));
     }
     return aggregate{std::forward<Ts>(vs)...};
 };
