@@ -96,9 +96,9 @@ private:
     // template because TRef is incomplete at the point of cvts_cvo_invoker instantiation
     template<typename T = void>
     static constexpr auto explicit_method = [] {
-        if constexpr (is_template(Method)) {    // default impl
+        if constexpr (is_template(Method)) {
             return meta::substitute(Method, {^^TRef});
-        } else if constexpr (first_parameter_is_non_eop_cvref_of<Impl>(Method)) {    // explicit spec
+        } else if constexpr (concepts::explicit_method_impl_for<Method, Impl>) {
             return Method;
         } else {
             return meta::info{};

@@ -119,7 +119,7 @@ consteval auto fill_vtable() {
         }
 
         auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
-        if constexpr (is_explicit_method_impl_template<Trait>(m)) {    // default impl
+        if constexpr (concepts::explicit_template_method_impl_of<m, Trait>) {    // default impl
             using cvts_ref                     = cvts_trait_ref<Trait, Impl>;
             constexpr auto method              = meta::substitute(m, {^^cvts_ref});
             constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
@@ -132,7 +132,7 @@ consteval auto fill_vtable() {
             using wrapper_struct               = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
 
-        } else if constexpr (is_explicit_method_impl<Impl>(m)) {    // explicit spec
+        } else if constexpr (concepts::explicit_method_impl_for<m, Impl>) {    // explicit spec
             constexpr auto ref                 = type_of(parameters_of(m)[0]);
             constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
                                                             {reflect_constant(m),
