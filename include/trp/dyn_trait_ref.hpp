@@ -24,9 +24,6 @@ namespace detail {
 template<typename T>
 concept any_dyn_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^dyn_trait_ref;
 
-template<typename Trait, uZ StartIdx>
-struct method_holder;    // holds `mehod_invoker **method_name**;`
-
 template<uZ Index, trait_method_idt MethodId>
 struct cvo_invoker;
 template<uZ   Index,

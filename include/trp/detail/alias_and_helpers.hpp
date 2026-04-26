@@ -56,13 +56,11 @@ concept cw_info = meta::has_template_arguments(^^T)                     //
                   and
 [:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
 
-template<typename... Ts>
-consteval auto make_aggregate(Ts&&... vs) {
+template<non_cvref... Ts>
+struct aggregate_definer {
     struct aggregate;
     consteval {
-        constexpr auto agg_info = ^^aggregate;
-        if (meta::is_complete_type(agg_info))
-            return;
+        constexpr auto agg_info       = ^^aggregate;
         constexpr auto info_to_member = [](auto info) {
 #if defined(__clang__)
             return meta::data_member_spec(info, {});
@@ -70,10 +68,14 @@ consteval auto make_aggregate(Ts&&... vs) {
             return meta::data_member_spec(info, {.name = "_"});
 #endif
         };
-        meta::define_aggregate(agg_info,
-                               std::array<meta::info, sizeof...(Ts)>{^^std::remove_cvref_t<Ts>...} |
-                                   stdv::transform(info_to_member));
+        meta::define_aggregate(
+            agg_info, std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(info_to_member));
     }
+};
+
+template<typename... Ts>
+consteval auto make_aggregate(Ts&&... vs) {
+    using aggregate = aggregate_definer<std::remove_cvref_t<Ts>...>::aggregate;
     return aggregate{std::forward<Ts>(vs)...};
 };
 
