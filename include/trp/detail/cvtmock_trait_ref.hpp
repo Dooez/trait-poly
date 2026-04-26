@@ -47,9 +47,8 @@ template<trait_method_idt... MethodIds>
 struct cvtmock_cvm_invoker : cvtmock_cvo_invoker<MethodIds>... {
     using cvtmock_cvo_invoker<MethodIds>::operator()...;
 };
-
 template<const char* id, typename Invoker>
-inline constexpr auto cvtmock_holder = [] {
+struct cvtmock_holder_definer {
     struct cvtmock_method_holder;
     consteval {
         meta::define_aggregate(^^cvtmock_method_holder,
@@ -60,8 +59,10 @@ inline constexpr auto cvtmock_holder = [] {
                                                            //  .attributes = {^^[[no_unique_address]] },
                                                        })});
     }
-    return ^^cvtmock_method_holder;
-}();
+};
+
+template<const char* id, typename Invoker>
+inline constexpr auto cvtmock_holder = ^^typename cvtmock_holder_definer<id, Invoker>::cvtmock_method_holder;
 
 template<typename... MethodHolders>
 struct mock_ref_impl : public MethodHolders... {};
