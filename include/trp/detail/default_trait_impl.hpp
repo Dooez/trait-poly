@@ -15,16 +15,23 @@ consteval bool maps_to_a_trait_method_of(meta::info fn) {
 };
 
 template<any_trait Trait>
-consteval bool is_default_impl_fn_template(meta::info fn) {
+consteval bool is_explicit_method_impl_template(meta::info fn) {
     return is_static_member(fn)            //
            and is_function_template(fn)    //
-           and first_parameter_is_cvref_of<mock_trait_ref<Trait>>(substitute(fn, {^^mock_trait_ref<Trait>}));
+           and first_parameter_is_non_eop_cvref_of<mock_trait_ref<Trait>>(
+                   substitute(fn, {^^mock_trait_ref<Trait>}));
+}
+template<typename Impl>
+consteval bool is_explicit_method_impl(meta::info fn) {
+    return is_static_member(fn)    //
+           and is_function(fn)     //
+           and first_parameter_is_non_eop_cvref_of<Impl>(fn);
 }
 
 template<typename DefaultImpl, typename Trait>
 concept default_impl_for =
-    non_cv_trait<Trait>                                                               //
-    and stdr::all_of(nonspecial_members<DefaultImpl>, is_default_impl_fn_template)    //
+    non_cv_trait<Trait>                                                                    //
+    and stdr::all_of(nonspecial_members<DefaultImpl>, is_explicit_method_impl_template)    //
     ;
 
 template<typename DefaultImpl, typename Trait>
@@ -45,7 +52,7 @@ inline constexpr auto all_default_impls = [] {
     auto impls = std::vector<impl_method_bind>{};
 
     for (auto m:
-         nonspecial_members<default_impl_spec<Trait>> | stdv::filter(is_default_impl_fn_template<Trait>))
+         nonspecial_members<default_impl_spec<Trait>> | stdv::filter(is_explicit_method_impl_template<Trait>))
         impls.emplace_back(m, explicit_impl_to_method_identity(m));
 
     const auto append_unique = [&](auto&& method_impls) {
@@ -54,8 +61,8 @@ inline constexpr auto all_default_impls = [] {
                 impls.push_back(m);
     };
     append_unique(
-        nonspecial_members<Trait>                             //
-        | stdv::filter(is_default_impl_fn_template<Trait>)    //
+        nonspecial_members<Trait>                                  //
+        | stdv::filter(is_explicit_method_impl_template<Trait>)    //
         | stdv::transform([](auto m) { return impl_method_bind{m, explicit_impl_to_method_identity(m)}; }));
     template for (constexpr auto base: direct_base_types<Trait>) {
         using base_t = [:base:];

@@ -98,7 +98,7 @@ private:
     static constexpr auto explicit_method = [] {
         if constexpr (is_template(Method)) {    // default impl
             return meta::substitute(Method, {^^TRef});
-        } else if constexpr (first_parameter_is_cvref_of<Impl>(Method)) {    // explicit spec
+        } else if constexpr (first_parameter_is_non_eop_cvref_of<Impl>(Method)) {    // explicit spec
             return Method;
         } else {
             return meta::info{};
