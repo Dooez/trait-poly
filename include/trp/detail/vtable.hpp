@@ -132,17 +132,19 @@ consteval auto fill_vtable() {
             using wrapper_struct               = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
 
-        }
-        else if constexpr (first_parameter_is_cvref_of<Impl>(m)) {    // explicit spec
-            constexpr auto ref = type_of(parameters_of(m)[0]);
-            constexpr auto wrapper_struct_info =
-                substitute(^^explicit_invoke_wrapper_struct,    //
-                           {reflect_constant(m), ^^Impl, ref, ^^Trait, trait_method_idt, trait_method_idt_t::param_infos[is]...});
-            using wrapper_struct = [:wrapper_struct_info:];
+        } else if constexpr (first_parameter_is_cvref_of<Impl>(m)) {    // explicit spec
+            constexpr auto ref                 = type_of(parameters_of(m)[0]);
+            constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
+                                                            {reflect_constant(m),
+                                                             ^^Impl,
+                                                             ref,
+                                                             ^^Trait,
+                                                             trait_method_idt,
+                                                             trait_method_idt_t::param_infos[is]...});
+            using wrapper_struct               = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
 
-        }
-        else {
+        } else {
             if (parent_of(m) != ^^Impl)
                 throw "Not parent";
             constexpr auto cm                  = reflect_constant(m);

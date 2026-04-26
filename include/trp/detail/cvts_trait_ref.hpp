@@ -8,7 +8,7 @@ namespace cvts_trait {
 
 template<typename Trait, typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
-protected: 
+protected:
     Impl* _obj_ptr_{};
 
     template<typename, typename, typename, typename, meta::info, trait_method_idt>
@@ -227,7 +227,9 @@ consteval auto define_cvts_ref() {
     struct ref : public ref_impl_t {
         ref(Impl& impl)
         : ref_impl_t(impl) {};
-        operator Impl&() const volatile {return *this->_obj_ptr_;}
+        operator Impl&() const volatile {
+            return *this->_obj_ptr_;
+        }
     };
     return ^^ref;
 };
