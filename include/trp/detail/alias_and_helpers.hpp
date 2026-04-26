@@ -77,6 +77,19 @@ consteval auto make_aggregate(Ts&&... vs) {
     }
     return aggregate{std::forward<Ts>(vs)...};
 };
+template<meta::info... DMSpecs>
+inline constexpr meta::info define_new_aggregate_impl = [] {
+    struct aggregate;
+    meta::define_aggregate(^^aggregate, {DMSpecs...});
+    return ^^aggregate;
+}();
+
+template<std::meta::reflection_range R = std::initializer_list<meta::info>>
+consteval auto define_new_aggregate(R&& r) -> meta::info {
+    return meta::extract<meta::info>(
+        meta::substitute(^^define_new_aggregate_impl, std::forward<R>(r)));
+}
+
 
 template<uZ End>
 consteval auto make_cw_idxs() {

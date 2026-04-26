@@ -187,7 +187,7 @@ template<non_cv_trait Trait>
 consteval auto maybe_define_cv_trait() {
     using namespace std;
     using namespace meta;
-    if (meta::is_complete_type(^^vtable<std::remove_cv_t<Trait>>))
+    if (meta::is_complete_type(^^dyn_trait_ref_identity<Trait>))
         return;
 
     struct method_holder_spec {
@@ -199,7 +199,7 @@ consteval auto maybe_define_cv_trait() {
         using supertrait_t = [:copy_cv_to(^^Trait, supertrait):];
         maybe_define_cv_trait<supertrait_t>();
     }
-    define_vtable<Trait>();
+    // define_vtable<Trait>();
     auto method_holders_specs    = vector<method_holder_spec>{};
     auto method_holders_specs_c  = vector<method_holder_spec>{};
     auto method_holders_specs_v  = vector<method_holder_spec>{};

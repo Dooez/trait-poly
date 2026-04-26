@@ -12,8 +12,6 @@ void default_delete(void* ptr) {
     delete static_cast<Impl*>(ptr);
 }
 
-template<non_cv_trait Trait>
-struct vtable;
 struct vtable_cv_quals {
     bool has_full     = true;
     bool has_const    = true;
@@ -24,12 +22,14 @@ struct vtable_cv_quals {
 template<trait_method_idt Method>
 using wrapper_fptr_for = Method::wrapper_fptr_type;
 
-template<non_cv_trait Trait>
-consteval void define_vtable() {
-    using namespace meta;
-    if (is_complete_type(^^vtable<Trait>))
-        return;
 
+template<non_cv_trait Trait>
+inline constexpr auto vtable_info = [] {
+    using namespace meta;
+
+    struct vtable;
+
+    consteval{
     constexpr auto get_info_to_member = []<uZ N>(const char (&prefix)[N], auto type_getter) {
         auto res = std::array<char, N + 20>{};
         stdr::copy(prefix, res.begin());
@@ -54,14 +54,20 @@ consteval void define_vtable() {
     vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
     vtable_elements.push_back(data_member_spec(^^vtable_cv_quals, {.name = "cv_quals"}));
 
-    auto supertrait_spec = get_info_to_member(
-        "supertrait_", [](info s) { return substitute(^^vtable, {copy_cv_to(^^Trait, s)}); });
+    auto supertrait_spec = get_info_to_member("supertrait_", [](info s) {
+        return extract<meta::info>(substitute(^^vtable_info, {copy_cv_to(^^Trait, s)}));
+    });
     for (auto supertrait: direct_base_types<Trait>) {
         // not defining supertrait vtable because maybe_define_cv_trait calls define_vtable for each trait in the hierarchy
         vtable_elements.push_back(supertrait_spec(supertrait));
     }
-    define_aggregate(^^vtable<Trait>, vtable_elements);
-}
+    define_aggregate(^^vtable, vtable_elements);
+    }
+    return ^^vtable;
+}();
+template<non_cv_trait Trait>
+using vtable = [:vtable_info<Trait>:];
+
 template<meta::info Fn,
          non_ref    Impl,
          typename Ref,
