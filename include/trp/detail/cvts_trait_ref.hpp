@@ -8,6 +8,7 @@ namespace cvts_trait {
 
 template<typename Trait, typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
+protected: 
     Impl* _obj_ptr_{};
 
     template<typename, typename, typename, typename, meta::info, trait_method_idt>
@@ -53,8 +54,8 @@ struct cvts_cvo_invoker<
     auto operator()(Args... args) noexcept(Noexcept) -> Ret
         requires(not Const and not Volatile)
     {
-        if constexpr (Method == meta::info{}) {
-            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+        if constexpr (explicit_method<> != meta::info{}) {
+            return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -62,8 +63,8 @@ struct cvts_cvo_invoker<
     auto operator()(Args... args) const noexcept(Noexcept) -> Ret
         requires(Const and not Volatile)
     {
-        if constexpr (Method == meta::info{}) {
-            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+        if constexpr (explicit_method<> != meta::info{}) {
+            return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -71,8 +72,8 @@ struct cvts_cvo_invoker<
     auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
         requires(not Const and Volatile)
     {
-        if constexpr (Method == meta::info{}) {
-            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+        if constexpr (explicit_method<> != meta::info{}) {
+            return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -80,8 +81,8 @@ struct cvts_cvo_invoker<
     auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
         requires(Const and Volatile)
     {
-        if constexpr (Method == meta::info{}) {
-            return [:default_method<>:](get_trait_ref()._obj_ptr_, std::forward<Args>(args)...);
+        if constexpr (explicit_method<> != meta::info{}) {
+            return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
             return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
         }
@@ -94,15 +95,14 @@ private:
 
     // template because TRef is incomplete at the point of cvts_cvo_invoker instantiation
     template<typename T = void>
-    static constexpr auto default_method = [] {
-        if (Method == meta::info{})
-            return ^^mockfn;
-        using trait_t = [:meta::remove_cv(meta::template_arguments_of(meta::type_of(
-                              meta::bases_of(^^TRef, meta::access_context::unprivileged())[0]))[0]):];
-        using method_idt =
-            method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>;
-        auto it = stdr::find(all_default_impls<trait_t>, ^^method_idt, &impl_method_bind::idt);
-        return meta::substitute(it->fn, {^^TRef});
+    static constexpr auto explicit_method = [] {
+        if constexpr (is_template(Method)) {    // default impl
+            return meta::substitute(Method, {^^TRef});
+        } else if constexpr (first_parameter_is_cvref_of<Impl>(Method)) {    // explicit spec
+            return Method;
+        } else {
+            return meta::info{};
+        }
     }();
 
     auto get_trait_ref(this auto&& self) -> decltype(auto) {
@@ -194,10 +194,15 @@ consteval auto define_cvts_ref() {
         auto method_holders_specs = vector<method_holder_spec>{};
 
         template for (constexpr auto mem: all_trait_methods<Trait>) {
-            using method_idt    = [:mem:];
+            using method_idt = [:mem:];
+            constexpr auto m = [] {
+                auto m = stdr::find(impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
+
+                return m;
+            }();
             constexpr auto spec = substitute(^^cvts_overload_spec,
                                              {^^Impl,    //
-                                              reflect_constant(matching_impl_method<Impl, method_idt>),
+                                              reflect_constant(m),
                                               mem});
             auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
             if (it == method_holders_specs.end()) {
@@ -222,6 +227,7 @@ consteval auto define_cvts_ref() {
     struct ref : public ref_impl_t {
         ref(Impl& impl)
         : ref_impl_t(impl) {};
+        operator Impl&() const volatile {return *this->_obj_ptr_;}
     };
     return ^^ref;
 };

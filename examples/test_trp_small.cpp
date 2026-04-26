@@ -21,10 +21,10 @@ struct trait_proto_base {
         std::println("[default trait_proto_base::bar]");
         return no_def_ctor{1};
     };
-    // static auto bar(const auto& v, int) -> no_def_ctor {
-    //     std::println("[default trait_proto_base::bar(int)]");
-    //     return no_def_ctor{1};
-    // };
+    static auto bar(const auto& v, int) -> no_def_ctor {
+        std::println("[default trait_proto_base::bar(int)]");
+        return no_def_ctor{1};
+    };
 };
 struct trait_proto : trait_proto_base {
     static void foo(const auto& v) {
@@ -57,13 +57,23 @@ struct bar_only_impl {
         std::print("[bar_only_impl::bar(int)]");
         return no_def_ctor{1};
     }
+    auto not_a_trait_foo()const {
+        std::print("[bar_only_impl::not_a_trait_foo()]");
+
+    }
 };
 template<>
 struct trp::impl_spec_for<bar_only_impl, trait_proto> {
-    static auto bar(const auto&) -> no_def_ctor {
-        std::print("[impl_spec_for<bar_only_impl, trait_proto>::bar]");
+    static auto bar(const auto&i ) -> no_def_ctor {
+        static_cast<const bar_only_impl&>(i).not_a_trait_foo();
+        std::print("[impl_spec_for<bar_only_impl, trait_proto>::bar()]");
         return no_def_ctor{1};
     }
+    // static auto bar(const bar_only_impl& i) -> no_def_ctor {
+    //     i.not_a_trait_foo();
+    //     std::print("[impl_spec_for<bar_only_impl, trait_proto>::bar()]");
+    //     return no_def_ctor{1};
+    // }
 };
 // consteval {
 // trp::define_trait<trait_proto_base>();    // repeated definition is allowed, and has no effect

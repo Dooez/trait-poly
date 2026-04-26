@@ -77,23 +77,6 @@ struct explicit_invoke_wrapper_struct {
     }
 };
 
-// template<any_trait        Trait,
-//          non_cv_trait     SESubtrait,
-//          non_ref          Impl,
-//          trait_method_idt MethodId,
-//          typename... Params>
-// struct default_invoke_wrapper_struct {
-//     using return_type = MethodId::return_type;
-//     using cvts_ref    = cvts_trait_ref<Trait, Impl>;
-//
-//     static constexpr auto default_method = meta::substitute(
-//         stdr::find(all_default_impls<SESubtrait>, ^^MethodId, &impl_method_bind::idt)->fn, {^^cvts_ref});
-//
-//     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
-//         cvts_ref ref(*static_cast<Impl*>(ptr));
-//         return [:default_method:](ref, std::forward<Params>(params)...);
-//     }
-// };
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
     using return_type = MethodId::return_type;
@@ -150,15 +133,15 @@ consteval auto fill_vtable() {
             return &wrapper_struct::invoke;
 
         }
-        // else if constexpr (first_parameter_is_cvref_of<Impl>(m)) {    // explicit spec
-        //     constexpr auto ref = type_of(parameters_of(m)[0]);
-        //     constexpr auto wrapper_struct_info =
-        //         substitute(^^explicit_invoke_wrapper_struct,    //
-        //                    {reflect_constant(m), ^^Impl, ref, ^^Trait, trait_method_idt, infos...});
-        //     using wrapper_struct = [:wrapper_struct_info:];
-        //     return &wrapper_struct::invoke;
-        //
-        // }
+        else if constexpr (first_parameter_is_cvref_of<Impl>(m)) {    // explicit spec
+            constexpr auto ref = type_of(parameters_of(m)[0]);
+            constexpr auto wrapper_struct_info =
+                substitute(^^explicit_invoke_wrapper_struct,    //
+                           {reflect_constant(m), ^^Impl, ref, ^^Trait, trait_method_idt, trait_method_idt_t::param_infos[is]...});
+            using wrapper_struct = [:wrapper_struct_info:];
+            return &wrapper_struct::invoke;
+
+        }
         else {
             if (parent_of(m) != ^^Impl)
                 throw "Not parent";
