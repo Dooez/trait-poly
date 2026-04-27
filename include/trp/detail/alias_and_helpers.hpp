@@ -91,9 +91,16 @@ consteval auto make_cw_idxs() {
                                            stdv::iota(0UZ, End) | stdv::transform(value_to_cw_member)):];
     return cw_index_sequence{};
 };
+template<meta::info RefInfo>
+inline constexpr auto extract_size = stdr::size([:RefInfo:]);
+template<meta::info RefInfo>
+inline constexpr auto extract_ptr = stdr::data([:RefInfo:]);
+
 template<meta::reflection_range R = std::initializer_list<meta::info>>
 consteval auto subextract_info_span(meta::info r, const R& targs) -> std::span<const meta::info> {
-    return extract<std::span<const meta::info>>(meta::substitute(r, targs));
+    const auto src_span = meta::reflect_constant(meta::substitute(r, targs));
+    return std::span<const meta::info>{extract<const meta::info*>(substitute(^^extract_ptr, {src_span})),
+                                       extract<uZ>(substitute(^^extract_size, {src_span}))};
 }
 
 template<auto Identifier,

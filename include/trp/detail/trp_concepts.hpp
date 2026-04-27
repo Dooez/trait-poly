@@ -86,9 +86,8 @@ concept nonstatic_methods_are_not_templates =
     });
 template<typename Trait>
 concept static_methods_are_templates =
-    non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, [](auto r) {
-        return is_static_member(r) and not is_function_template(r);
-    });
+    non_cvref<Trait> and
+    stdr::none_of(nonspecial_members<Trait>, [](auto r) { return is_static_member(r) and is_function(r); });
 
 template<typename T>
 concept static_data_members_are_constexpr = [] {

@@ -62,8 +62,7 @@ struct cvo_invoker<
 private:
     template<typename VTable>
     static auto get_method(VTable* vt) {
-        constexpr auto m =
-            nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
+        constexpr auto m = nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
         return vt->[:m:];
     }
 };

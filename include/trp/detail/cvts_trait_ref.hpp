@@ -5,15 +5,15 @@
 
 namespace trp::detail {
 
-inline constexpr struct {
+inline constexpr struct asd {
 } vtable_ptr_anno;
-inline constexpr struct {
+inline constexpr struct asdf {
 } obj_ptr_anno;
 
 consteval auto find_annotated_member(meta::info type, meta::info annotation) -> meta::info {
     for (auto m: nonstatic_data_members_of(type, meta::access_context::unchecked())) {
         for (auto ann: annotations_of(m))
-            if (type_of(ann) == remove_cv(type_of(annotation)))
+            if (remove_cv(type_of(ann)) == remove_cv(type_of(annotation)))
                 return m;
     };
     for (auto base: subextract_info_span(^^direct_base_types, {type})) {
@@ -41,12 +41,12 @@ inline constexpr auto obj_member_info = [] {
 }();
 
 auto extract_vtable_ptr(auto&& ref) -> auto&&
-    requires(vtable_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
+// requires(vtable_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
 {
     return ref.[:vtable_member_info<std::remove_cvref_t<decltype(ref)>>:];
 }
 auto extract_obj_ptr(auto&& ref) -> auto&&
-    requires(obj_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
+// requires(obj_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
 {
     return ref.[:obj_member_info<std::remove_cvref_t<decltype(ref)>>:];
 }
@@ -213,12 +213,12 @@ struct cvts_holder_definer {
     using invoker_t = cvts_cvm_invoker<Ref, cvts_method_holder, OvSpecHolder>;
     consteval {
         define_aggregate(^^cvts_method_holder,
-                               {data_member_spec(^^invoker_t,
-                                                       {
-                                                           .name              = id,
-                                                           .no_unique_address = true,
-                                                           //  .attributes = {^^[[no_unique_address]] },
-                                                       })});
+                         {data_member_spec(^^invoker_t,
+                                           {
+                                               .name              = id,
+                                               .no_unique_address = true,
+                                               //  .attributes = {^^[[no_unique_address]] },
+                                           })});
     }
 };
 
@@ -262,11 +262,10 @@ struct cvts_ref_definer {
                                       }));
             return substitute(^^cvts_trait_ref_impl, impl_targs);
         }();
-        define_aggregate(
-            ^^ref_idt_holder,
-            {
-                data_member_spec(substitute(^^std::type_identity, {ref_impl}), {.name = "ref"}),
-            });
+        define_aggregate(^^ref_idt_holder,
+                         {
+                             data_member_spec(substitute(^^std::type_identity, {ref_impl}), {.name = "ref"}),
+                         });
     }
     using ref_impl_t = decltype(ref_idt_holder::ref)::type;
     struct ref : public ref_impl_t {
