@@ -53,7 +53,6 @@ struct impl_method_bind {
 
 template<non_cv_trait Trait>
 inline constexpr auto all_default_impls = [] {
-    using namespace meta;
     auto impls = std::vector<impl_method_bind>{};
 
     for (auto m: nonspecial_members<default_impl_spec<Trait>> |
@@ -73,7 +72,7 @@ inline constexpr auto all_default_impls = [] {
         using base_t = [:base:];
         append_unique(all_default_impls<base_t>);
     }
-    return std::define_static_array(impls);
+    return define_static_array(impls);
 }();
 
 template<non_cvref Impl, any_method_idt MethodIdt>
@@ -83,19 +82,18 @@ inline constexpr auto matching_id_direct_public_members_for_method =
 consteval auto find_trait_method_impl(meta::info trait, meta::info impl, meta::info method_idt)
     -> meta::info {
     using namespace meta;
-    auto nsm = extract<std::span<const info>>(
-        substitute(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, trait})}));
+    auto nsm = subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, trait})});
     for (auto m: nsm)
         if (explicit_impl_to_method_identity(m) == method_idt)
             return m;
 
-    auto bases = extract<std::span<const info>>(substitute(^^direct_base_types, {trait}));
+    auto bases = subextract_info_span(^^direct_base_types, {trait});
     for (auto base: bases)
         if (auto m = find_trait_method_impl(copy_cv_to(trait, base), impl, method_idt); m != info{})
             return m;
 
-    auto id_mems = extract<std::span<const info>>(
-        substitute(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt}));
+    auto id_mems = subextract_info_span(^^matching_id_direct_public_members_for_method,
+                                           {remove_cv(impl), method_idt});
     for (auto m: id_mems) {
         auto matches = extract<bool>(substitute(^^strictly_matches, {impl, reflect_constant(m), method_idt}));
         if (matches)
@@ -115,15 +113,15 @@ inline constexpr auto full_impls_for = [] {
             m = [=] {
                 auto checked_bases = std::vector<meta::info>{};
                 auto next_bases    = std::vector<meta::info>{};
-                auto bases = extract<std::span<const info>>(substitute(^^direct_base_types, {^^Impl})) |
-                             stdr::to<std::vector<info>>();
+                auto bases =
+                    subextract_info_span(^^direct_base_types, {^^Impl}) | stdr::to<std::vector<info>>();
                 while (not stdr::empty(bases)) {
                     for (auto base: bases) {
                         auto m = find_trait_method_impl(^^Trait, base, method_idt);
                         if (m != info{})
                             return m;
                         checked_bases.push_back(base);
-                        auto nb = extract<std::span<const info>>(substitute(^^direct_base_types, {base}));
+                        auto nb = subextract_info_span(^^direct_base_types, {base});
                         next_bases.append_range(
                             nb | stdv::filter([&](auto r) { return not stdr::contains(checked_bases, r); }));
                     }

@@ -26,6 +26,14 @@ namespace stdr = std::ranges;
 namespace stdv = std::views;
 namespace meta = std::meta;
 
+consteval auto anon_member_spec(meta::info r) -> meta::info {
+#if defined(__clang__)
+    return data_member_spec(r, {});
+#else
+    return data_member_spec(r, {.name = "_"});
+#endif
+}
+
 template<auto V>
 struct constant_wrapper {
     using type       = constant_wrapper;
@@ -48,30 +56,25 @@ namespace detail {
 template<auto V>
 inline constexpr auto cw = constant_wrapper<V>{};
 
-static constexpr auto ctx_unchecked = std::meta::access_context::unchecked();
+static constexpr auto ctx_unchecked = meta::access_context::unchecked();
 
 template<typename T>
-concept cw_info = meta::has_template_arguments(^^T)                     //
-                  and meta::template_of(^^T) == (^^constant_wrapper)    //
+concept cw_info = has_template_arguments(^^T)                     //
+                  and template_of(^^T) == (^^constant_wrapper)    //
                   and
-[:meta::substitute(^^std::same_as, {^^meta::info, type_of(meta::template_arguments_of (^^T)[0])}):];
+[:substitute(^^std::same_as, {^^meta::info, type_of(template_arguments_of (^^T)[0])}):];
 
 template<non_cvref... Ts>
 struct aggregate_definer {
     struct aggregate;
     consteval {
-        constexpr auto agg_info       = ^^aggregate;
-        constexpr auto info_to_member = [](auto info) {
-#if defined(__clang__)
-            return meta::data_member_spec(info, {});
-#else
-            return meta::data_member_spec(info, {.name = "_"});
-#endif
-        };
-        meta::define_aggregate(
-            agg_info, std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(info_to_member));
+        constexpr auto agg_info = ^^aggregate;
+        define_aggregate(agg_info,
+                         std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(anon_member_spec));
     }
 };
+template<non_cvref... Ts>
+using anon_aggregate = aggregate_definer<Ts...>::aggregate;
 
 template<typename... Ts>
 consteval auto make_aggregate(Ts&&... vs) {
@@ -81,25 +84,17 @@ consteval auto make_aggregate(Ts&&... vs) {
 
 template<uZ End>
 consteval auto make_cw_idxs() {
-    struct cw_index_sequence;
-    consteval {
-        constexpr auto cw_seq_info = ^^cw_index_sequence;
-        if (meta::is_complete_type(cw_seq_info))
-            return;
-        auto cnt            = 0UZ;
-        auto id_storage     = std::array<char, 21>{"m"};
-        auto info_to_member = [&](auto info) mutable {
-            auto id_end = std::to_chars(&*(id_storage.begin() + 1), &*id_storage.end(), cnt++);
-            if (id_end.ec != std::errc{})
-                throw "Error while forming member name";
-            auto id = std::string_view(id_storage.data(), id_end.ptr);
-            return meta::data_member_spec(
-                meta::substitute(^^constant_wrapper, {meta::reflect_constant(info)}), {.name = id});
-        };
-        meta::define_aggregate(cw_seq_info, stdv::iota(0UZ, End) | stdv::transform(info_to_member));
-    }
+    constexpr auto value_to_cw_member = [](auto v) {
+        return substitute(^^constant_wrapper, {meta::reflect_constant(v)});
+    };
+    using cw_index_sequence = [:substitute(^^anon_aggregate,
+                                           stdv::iota(0UZ, End) | stdv::transform(value_to_cw_member)):];
     return cw_index_sequence{};
 };
+template<meta::reflection_range R = std::initializer_list<meta::info>>
+consteval auto subextract_info_span(meta::info r, const R& targs) -> std::span<const meta::info> {
+    return extract<std::span<const meta::info>>(meta::substitute(r, targs));
+}
 
 template<auto Identifier,
          bool Const,
@@ -125,16 +120,15 @@ struct method_identity_t {
 
     static consteval auto add_obj_cv(meta::info inf) {
         if (is_volatile)
-            inf = meta::add_volatile(inf);
+            inf = add_volatile(inf);
         if (is_const)
-            inf = meta::add_const(inf);
+            inf = add_const(inf);
         return inf;
     };
 
     using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(Noexcept) -> Ret;
 };
 consteval auto method_identity(meta::info method_info) -> meta::info {
-    using namespace meta;
     auto is_nsmf = is_function(method_info)                 //
                    and not is_static_member(method_info)    //
                    and not is_virtual(method_info)          //
@@ -145,19 +139,19 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     }
 
 
-    const auto identifier   = reflect_constant_string(identifier_of(method_info));
-    const auto is_noexcept_ = reflect_constant(is_noexcept(method_info));
+    const auto identifier   = meta::reflect_constant_string(identifier_of(method_info));
+    const auto is_noexcept_ = meta::reflect_constant(is_noexcept(method_info));
     const auto ret          = return_type_of(method_info);
     auto       params       = parameters_of(method_info);
     if (not params.empty() and is_explicit_object_parameter(params[0])) {
         const auto eop          = params[0];
         const auto eop_t        = type_of(eop);
-        const auto is_const_    = reflect_constant(is_const(remove_reference(eop_t)));
-        const auto is_volatile_ = reflect_constant(is_volatile(eop_t));
-        const auto is_lvref     = reflect_constant(is_lvalue_reference_type(eop_t));
-        const auto is_rvref     = reflect_constant(is_rvalue_reference_type(eop_t));
-        const auto is_value_    = reflect_constant(not is_lvalue_reference_type(eop_t)    //
-                                                and not is_rvalue_reference_type(eop_t));
+        const auto is_const_    = meta::reflect_constant(is_const(remove_reference(eop_t)));
+        const auto is_volatile_ = meta::reflect_constant(is_volatile(eop_t));
+        const auto is_lvref     = meta::reflect_constant(is_lvalue_reference_type(eop_t));
+        const auto is_rvref     = meta::reflect_constant(is_rvalue_reference_type(eop_t));
+        const auto is_value_    = meta::reflect_constant(not is_lvalue_reference_type(eop_t)    //
+                                                      and not is_rvalue_reference_type(eop_t));
         auto       arguments    = std::vector{identifier,    //
                                      is_const_,
                                      is_volatile_,
@@ -166,14 +160,14 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
                                      is_value_,
                                      is_noexcept_,
                                      ret};
-        arguments.append_range(params | stdv::drop(1) | stdv::transform(type_of));
+        arguments.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
         return substitute(^^method_identity_t, arguments);
     }
-    const auto is_const_    = reflect_constant(is_const(method_info));
-    const auto is_volatile_ = reflect_constant(is_volatile(method_info));
-    const auto is_lvref     = reflect_constant(is_lvalue_reference_qualified(method_info));
-    const auto is_rvref     = reflect_constant(is_rvalue_reference_qualified(method_info));
-    const auto is_value_    = reflect_constant(false);
+    const auto is_const_    = meta::reflect_constant(is_const(method_info));
+    const auto is_volatile_ = meta::reflect_constant(is_volatile(method_info));
+    const auto is_lvref     = meta::reflect_constant(is_lvalue_reference_qualified(method_info));
+    const auto is_rvref     = meta::reflect_constant(is_rvalue_reference_qualified(method_info));
+    const auto is_value_    = meta::reflect_constant(false);
     auto       arguments    = std::vector{identifier,    //
                                  is_const_,
                                  is_volatile_,
@@ -182,12 +176,12 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
                                  is_value_,
                                  is_noexcept_,
                                  ret};
-    arguments.append_range(params | stdv::transform(type_of));
+    arguments.append_range(params | stdv::transform(meta::type_of));
     return substitute(^^method_identity_t, arguments);
 }
 
 template<typename T>
-concept any_method_idt = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^method_identity_t;
+concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
 
 template<typename T>
 concept trait_method_idt = any_method_idt<T> and not(T::is_lvalue) and not(T::is_rvalue) and not(T::is_value);
@@ -202,38 +196,37 @@ concept is_cv_idt = any_method_idt<MethodIdt> && MethodIdt::is_cv;
 }    // namespace concepts
 
 consteval bool is_const_idt(meta::info idt) {
-    return meta::extract<bool>(meta::substitute(^^concepts::is_const_idt, {idt}));
+    return extract<bool>(substitute(^^concepts::is_const_idt, {idt}));
 }
 consteval bool is_volatile_idt(meta::info idt) {
-    return meta::extract<bool>(meta::substitute(^^concepts::is_volatile_idt, {idt}));
+    return extract<bool>(substitute(^^concepts::is_volatile_idt, {idt}));
 }
 consteval bool is_cv_idt(meta::info idt) {
-    return meta::extract<bool>(meta::substitute(^^concepts::is_cv_idt, {idt}));
+    return extract<bool>(substitute(^^concepts::is_cv_idt, {idt}));
 }
 
 consteval auto copy_cv_to(meta::info proto, meta::info type) {
-    if (meta::is_const(proto))
-        type = meta::add_const(type);
-    if (meta::is_volatile(proto))
-        type = meta::add_volatile(type);
+    if (is_const(proto))
+        type = add_const(type);
+    if (is_volatile(proto))
+        type = add_volatile(type);
     return type;
 }
 
 template<non_cvref T>
 inline constexpr auto nonspecial_members = std::define_static_array(
-    meta::members_of(^^T, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function)));
+    members_of(^^T, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function)));
 
 template<non_cvref T>
 inline constexpr auto direct_base_types = std::define_static_array(
-    meta::bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
+    bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
 
 template<typename T>
 inline constexpr auto direct_trait_methods = [] {
-    using namespace meta;
-    constexpr auto is_valid_method = [](auto method) static {
-        return is_function(method)                                 //
-               and not meta::is_special_member_function(method)    //
-               and (is_const(method) or not is_const(^^T))         //
+    constexpr auto is_valid_method = [](meta::info method) {
+        return is_function(method)                            //
+               and not is_special_member_function(method)     //
+               and (is_const(method) or not is_const(^^T))    //
                and (is_volatile(method) or not is_volatile(^^T));
     };
     return define_static_array(members_of(^^T, std::meta::access_context::unprivileged())    //
@@ -243,10 +236,10 @@ inline constexpr auto direct_trait_methods = [] {
 template<typename T>
 inline constexpr auto all_trait_methods = [] {
     using namespace meta;
-    constexpr auto is_valid_method = [](auto method) static {
-        return is_function(method)                                 //
-               and not meta::is_special_member_function(method)    //
-               and (is_const(method) or not is_const(^^T))         //
+    constexpr auto is_valid_method = [](meta::info method) {
+        return is_function(method)                            //
+               and not is_special_member_function(method)     //
+               and (is_const(method) or not is_const(^^T))    //
                and (is_volatile(method) or not is_volatile(^^T));
     };
     auto result        = direct_trait_methods<T> | stdr::to<std::vector<info>>();

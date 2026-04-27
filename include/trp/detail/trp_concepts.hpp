@@ -169,8 +169,9 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 namespace detail {
 template<non_cvref Impl, auto Id>
 inline constexpr auto matching_id_direct_public_members = std::define_static_array(
-    meta::members_of(^^Impl, meta::access_context::unprivileged())    //
-    | stdv::filter([](auto info) { return meta::has_identifier(info) and meta::identifier_of(info) == Id; }));
+    members_of(^^Impl,
+               meta::access_context::unprivileged())    //
+    | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; }));
 
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
@@ -194,11 +195,11 @@ inline constexpr bool strictly_matches = [] {
 
 template<typename ParamType>
 consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {
-    auto params = meta::parameters_of(fn);
-    return stdr::size(params) > 0                                   //
-           and meta::is_reference_type(meta::type_of(params[0]))    //
-           and not meta::is_explicit_object_parameter(params[0])    //
-           and meta::remove_cvref(meta::type_of(params[0])) == ^^ParamType;
+    const auto params = parameters_of(fn);
+    return stdr::size(params) > 0                             //
+           and is_reference_type(type_of(params[0]))          //
+           and not is_explicit_object_parameter(params[0])    //
+           and remove_cvref(type_of(params[0])) == ^^ParamType;
 }
 }    // namespace detail
 }    // namespace trp

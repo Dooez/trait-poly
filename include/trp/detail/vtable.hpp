@@ -36,38 +36,22 @@ template<non_cv_trait Trait>
 struct vtable_definer {
     struct vtable_impl;
     consteval {
-        using namespace meta;
-        constexpr auto get_info_to_member = []<uZ N>(const char (&prefix)[N], auto type_getter) {
-            auto res = std::array<char, N + 20>{};
-            stdr::copy(prefix, res.begin());
-            auto i = 0UZ;
-            return [=](auto info) mutable {
-                auto id_end = std::to_chars(&*(res.begin() + N - 1), &*res.end(), i++);
-                if (id_end.ec != std::errc{})
-                    throw "Error while forming member name";
-                auto id = std::string_view(res.data(), id_end.ptr);
-                return meta::data_member_spec(type_getter(info), {.name = id});
-            };
-        };
-
-        auto vtable_elements = std::vector<info>{};
-        auto method_spec =
-            get_info_to_member("m_", [](info m) { return substitute(^^wrapper_fptr_for, {m}); });
-        for (auto method_idt: all_trait_methods<Trait>) {
-            vtable_elements.push_back(method_spec(method_idt));
-        }
+        auto vtable_elements = all_trait_methods<Trait>    //
+                               | stdv::transform([](auto m) {
+                                     return anon_member_spec(substitute(^^wrapper_fptr_for, {m}));
+                                 })    //
+                               | stdr::to<std::vector<meta::info>>();
         using default_delete_fptr = void (*)(void*);
         vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
         using id_ptr = const char*;
         vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
         vtable_elements.push_back(data_member_spec(^^vtable_cv_quals, {.name = "cv_quals"}));
-
-        auto supertrait_spec =
-            get_info_to_member("supertrait_", [](info s) { return substitute(^^detail::vtable, {s}); });
-        for (auto supertrait: direct_base_types<Trait>) {
-            // not defining supertrait vtable because maybe_define_cv_trait calls define_vtable for each trait in the hierarchy
-            vtable_elements.push_back(supertrait_spec(supertrait));
-        }
+        auto direct_supertraits_t =
+            substitute(^^anon_aggregate, direct_base_types<Trait> | stdv::transform([](auto s) {
+                                             return substitute(^^detail::vtable, {s});
+                                         }));
+        vtable_elements.push_back(
+            data_member_spec(direct_supertraits_t, {.name = "direct_supertraits"}));
         define_aggregate(^^vtable_impl, vtable_elements);
     }
 };
@@ -174,7 +158,7 @@ consteval auto fill_vtable() {
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
         quals,
-        [:meta::substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^Trait, ^^Impl}):]...,
+        {[:meta::substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^Trait, ^^Impl}):]...},
     };
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>
@@ -198,16 +182,12 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     }():];
 
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
+        using supertraits_t        = decltype(vtable<Trait>::direct_supertraits);
         static constexpr auto mems = std::define_static_array(
-            meta::nonstatic_data_members_of(^^vtable<Trait>, meta::access_context::unprivileged()) |
-            stdv::drop(stdr::size(all_trait_methods<Trait>)    //
-                       + 1                                     // default_deleter
-                       + 1                                     // id_ptr
-                       + 1                                     // cv_quals
-                       ));
+            meta::nonstatic_data_members_of(^^supertraits_t, meta::access_context::unprivileged()));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
-                return &((*ptr).[:m:]);
+                return &(ptr->direct_supertraits.[:m:]);
         }
         std::unreachable();
     }();
