@@ -40,10 +40,14 @@ inline constexpr auto obj_member_info = [] {
     return m;
 }();
 
-auto extract_vtable_ptr(auto&& ref) -> auto&& {
+auto extract_vtable_ptr(auto&& ref) -> auto&&
+    requires(vtable_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
+{
     return ref.[:vtable_member_info<std::remove_cvref_t<decltype(ref)>>:];
 }
-auto extract_obj_ptr(auto&& ref) -> auto&& {
+auto extract_obj_ptr(auto&& ref) -> auto&&
+    requires(obj_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
+{
     return ref.[:obj_member_info<std::remove_cvref_t<decltype(ref)>>:];
 }
 
