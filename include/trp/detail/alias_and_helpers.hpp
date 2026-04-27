@@ -248,8 +248,8 @@ inline constexpr auto all_trait_methods = [] {
                and (is_const(method) or not is_const(^^T))    //
                and (is_volatile(method) or not is_volatile(^^T));
     };
-    auto result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
-    auto append_unique = [&](auto&& method_idts) {
+    auto       result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
+    const auto append_unique = [&](auto&& method_idts) {
         for (auto m: method_idts)
             if (not stdr::contains(result, m))
                 result.push_back(m);
