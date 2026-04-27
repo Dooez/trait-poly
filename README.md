@@ -1,8 +1,7 @@
 # Trait-Based Runtime Polymorphism in C++26
 This repository provides a basic implementation of runtime polymorphism through traits.  
 [Godbolt Example](https://godbolt.org/z/qxGTjYv53)  
-Traits are defined with a struct declared with non-template, non-static methods and no data members,
-using a `consteval` function `define_trait<Trait>()`.
+Traits are defined with a struct declared with non-template, non-static methods and no data members.
 
 ## Implementation Details
 C++26 reflection cannot generate types with methods; it can only generate aggregates with public data members.  
@@ -31,6 +30,7 @@ As reasoned, this chain of casts avoids undefined behavior. Please open an issue
     - [x] Noexcept qualification
     - [x] Trait inheritance
     - [x] Default implementations
+    - [x] Implementation specialization
     - [x] Concepts
         - `any_trait` - checks if a type is valid for trait definition
         - `implements_trait` - checks if a type implements all methods of the trait
@@ -51,7 +51,6 @@ Compilers may require `-fconstexpr-steps` with high number to successfully compi
 `static constexpr` trait data members are supported by GCC only.  
 `clangd` works but exhibits significant delays when handling trait objects.  
 Some patterns in the `trp` implementation could be updated to more modern and cleaner versions with additional C++26 features as compiler support matures.  
-`define_trait<Trait>()` must be called in global namespace (not sure if this is the gcc-specific beahvior or standard requires).  
 
 Given the early stage of reflection compiler and tooling development, these issues may improve over time. 
 However, current tooling challenges raise concerns about possible production usability.
