@@ -65,7 +65,8 @@ struct cvo_invoker<
 private:
     template<typename VTable>
     static auto get_method(VTable* vt) {
-        constexpr auto m = std::meta::nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
+        constexpr auto m =
+            std::meta::nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
         return vt->[:m:];
     }
 };
@@ -106,16 +107,16 @@ private:
     auto get_trait_ref(this auto&& self) -> decltype(auto) {
         constexpr auto add_cvp = [](meta::info type) {
             using this_t = std::remove_reference_t<decltype(self)>;
-            return meta::add_pointer(copy_cv_to(^^this_t, type));
+            return add_pointer(copy_cv_to(^^this_t, type));
         };
 
         constexpr auto invoker_ptr = [] {
-            auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
+            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
             if (mems.size() != 1)
                 throw "Method holder is expected to have only a single method.";
-            if (meta::type_of(mems[0]) != ^^method_invoker)
+            if (type_of(mems[0]) != ^^method_invoker)
                 throw "Method invoker type does not match method holders first member type.";
-            return meta::extract<method_invoker MethodHolder::*>(mems[0]);
+            return extract<method_invoker MethodHolder::*>(mems[0]);
         }();
 #ifdef __cpp_lib_is_pointer_interconvertible
         static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
@@ -351,7 +352,6 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
     [[nodiscard]] friend constexpr auto const_trait_cast(const dyn_trait_ref& ref) -> dyn_trait_ref<U> {
         return {ref.vtable_ptr_, ref.obj_ptr_};
     }
-
 
     dyn_trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
     : detail::dyn_ref_impl<Trait>(vptr, optr) {};
