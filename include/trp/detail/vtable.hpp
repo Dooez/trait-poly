@@ -50,8 +50,7 @@ struct vtable_definer {
             substitute(^^anon_aggregate, direct_base_types<Trait> | stdv::transform([](auto s) {
                                              return substitute(^^detail::vtable, {s});
                                          }));
-        vtable_elements.push_back(
-            data_member_spec(direct_supertraits_t, {.name = "direct_supertraits"}));
+        vtable_elements.push_back(data_member_spec(direct_supertraits_t, {.name = "direct_supertraits"}));
         define_aggregate(^^vtable_impl, vtable_elements);
     }
 };
@@ -97,13 +96,12 @@ inline constexpr auto trait_vtable_for = fill_vtable<Trait, SmallestExplicitSubt
 template<non_cv_trait Trait, non_cv_trait SESubtrait, non_ref Impl>
     requires explicit_supertrait_of<Trait, SESubtrait>
 consteval auto fill_vtable() {
-    using namespace meta;
     auto       quals           = vtable_cv_quals{};
     const auto get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
         constexpr auto m =
             stdr::find(impls_for<Impl, SESubtrait>, trait_method_idt, &impl_method_bind::idt)->fn;
-        if (m == info{}) {
+        if (m == meta::info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
             if (trait_method_idt_t::is_volatile)

@@ -7,8 +7,6 @@ namespace trp {
 template<any_trait Trait>
 struct dyn_trait_ref;
 
-namespace detail {}
-
 template<typename Supertrait, any_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
 [[nodiscard]] auto trait_cast(const dyn_trait_ref<Trait>& ref) -> dyn_trait_ref<Supertrait> {
@@ -20,9 +18,8 @@ template<typename Impl, any_trait Trait>
     return is_holding_type<Impl>(ref);
 }
 namespace detail {
-
 template<typename T>
-concept any_dyn_trait_ref = meta::has_template_arguments(^^T) and meta::template_of(^^T) == ^^dyn_trait_ref;
+concept any_dyn_trait_ref = has_template_arguments(^^T) and template_of(^^T) == ^^dyn_trait_ref;
 
 template<uZ Index, trait_method_idt MethodId>
 struct cvo_invoker;
@@ -99,8 +96,9 @@ public:
     template<typename... Args>
     auto operator()(Args&&... args) const
         volatile noexcept(noexcept_cvm_invoker<CVMInvoker, vtable_t, Args...>) -> decltype(auto) {
-        return CVMInvoker{}(
-            get_trait_ref().vtable_ptr_, get_trait_ref().obj_ptr_, std::forward<Args>(args)...);
+        return CVMInvoker{}(extract_vtable_ptr(get_trait_ref()),
+                            extract_obj_ptr(get_trait_ref()),
+                            std::forward<Args>(args)...);
     }
 
 private:
@@ -151,15 +149,16 @@ consteval auto extract_cvm_holder(meta::info id, meta::info ref, meta::info cvm_
 
 template<any_trait Trait, typename... MethodHolders>
 class dyn_trait_ref_impl : public MethodHolders... {
-    const vtable<std::remove_cv_t<Trait>>* vtable_ptr_{};
-    void*                                  obj_ptr_{};
+    [[= vtable_ptr_anno]] const vtable<std::remove_cv_t<Trait>>* _;
+    [[= obj_ptr_anno]] void*                                     _;
 
-    dyn_trait_ref_impl() = default;
-    dyn_trait_ref_impl(const vtable<std::remove_cv_t<Trait>>* vptr, auto* optr)
-    : vtable_ptr_(vptr)
-    , obj_ptr_(
-          (void*)optr)    // NOLINT(*cast*)cv qualification is kept via `invoke_wrapper_struct<...>::obj_ptr`
-    {};
+    dyn_trait_ref_impl() {
+        extract_obj_ptr(*this) = nullptr;
+    };
+    dyn_trait_ref_impl(const vtable<std::remove_cv_t<Trait>>* vptr, auto* optr) {
+        extract_vtable_ptr(*this) = vptr;
+        extract_obj_ptr(*this)    = (void*)optr;
+    };
 
     template<any_trait U, typename... MHs>
     friend void ref_release(dyn_trait_ref_impl<U, MHs...>& ref);
@@ -179,21 +178,21 @@ class dyn_trait_ref_impl : public MethodHolders... {
 
 template<any_trait Trait, typename... MethodHolders>
 void ref_release(dyn_trait_ref_impl<Trait, MethodHolders...>& ref) {
-    ref.obj_ptr_ = nullptr;
+    extract_obj_ptr(ref) = nullptr;
 }
 template<any_trait Trait, typename... MethodHolders>
 void ref_rebind(dyn_trait_ref_impl<Trait, MethodHolders...>&       ref,
                 const dyn_trait_ref_impl<Trait, MethodHolders...>& other) {
-    ref.vtable_ptr_ = other.vtable_ptr_;
-    ref.obj_ptr_    = other.obj_ptr_;
+    extract_vtable_ptr(ref) = extract_vtable_ptr(other);
+    extract_obj_ptr(ref)    = extract_obj_ptr(other);
 }
 template<any_trait Trait, typename... MethodHolders>
 [[nodiscard]] auto ref_holds_value(const dyn_trait_ref_impl<Trait, MethodHolders...>& ref) -> bool {
-    return ref.obj_ptr_ != nullptr;
+    return extract_obj_ptr(ref) != nullptr;
 }
 template<any_trait Trait, typename... MethodHolders>
 void ref_default_delete(const dyn_trait_ref_impl<Trait, MethodHolders...>& ref) {
-    ref.vtable_ptr_->default_delete(ref.obj_ptr_);
+    extract_vtable_ptr(ref)->default_delete(extract_obj_ptr(ref));
 }
 template<non_cv_trait Trait>
 struct dyn_cv_ref_impls {
@@ -307,8 +306,6 @@ using dyn_ref_impl = [:[] {
         return ^^typename impls::ref;
     }
 }():];
-
-
 }    // namespace detail
 
 template<any_trait Trait>
@@ -329,7 +326,7 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
     friend auto is_holding_type(const TraitRef& ref) -> bool;
     template<typename Impl>
     [[nodiscard]] static auto is_holding_type(const dyn_trait_ref& ref) -> bool {
-        return ref.vtable_ptr_->id_ptr == &detail::unique_id_struct<Impl>::value;
+        return detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
     }
     template<any_trait U>
         requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
@@ -338,11 +335,11 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
             return true;
         } else {
             if constexpr (non_cv_trait<U>) {
-                return ref.vtable_ptr_->cv_quals.has_full;
+                return detail::extract_vtable_ptr(ref)->cv_quals.has_full;
             } else if constexpr (std::is_const_v<U>) {
-                return ref.vtable_ptr_->cv_quals.has_const;
+                return detail::extract_vtable_ptr(ref)->cv_quals.has_const;
             } else if constexpr (std::is_volatile_v<U>) {
-                return ref.vtable_ptr_->cv_quals.has_volatile;
+                return detail::extract_vtable_ptr(ref)->cv_quals.has_volatile;
             }
             // otherwise U has to be a supertrait of Trait
         }
@@ -350,7 +347,7 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
     template<any_trait U>
         requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
     [[nodiscard]] friend constexpr auto const_trait_cast(const dyn_trait_ref& ref) -> dyn_trait_ref<U> {
-        return {ref.vtable_ptr_, ref.obj_ptr_};
+        return {detail::extract_vtable_ptr(ref), detail::extract_obj_ptr(ref)};
     }
 
     dyn_trait_ref(const detail::vtable<std::remove_cv_t<Trait>>* vptr, void* optr)
@@ -366,8 +363,8 @@ public:
         requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
     dyn_trait_ref(const dyn_trait_ref<U>& ref)    // NOLINT(*-explicit-*)
     : detail::dyn_ref_impl<Trait>(
-          get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(ref.dyn_trait_ref_impl::vtable_ptr_),
-          ref.dyn_trait_ref_impl::obj_ptr_){};
+          get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(detail::extract_vtable_ptr(ref)),    //
+          detail::extract_obj_ptr(ref)){};
 
     template<implements_trait<Trait> Impl>
         requires(not detail::any_dyn_trait_ref<Impl>)

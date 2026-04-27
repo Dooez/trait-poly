@@ -4,19 +4,63 @@
 #endif
 
 namespace trp::detail {
+
+inline constexpr struct {
+} vtable_ptr_anno;
+inline constexpr struct {
+} obj_ptr_anno;
+
+consteval auto find_annotated_member(meta::info type, meta::info annotation) -> meta::info {
+    for (auto m: nonstatic_data_members_of(type, meta::access_context::unchecked())) {
+        for (auto ann: annotations_of(m))
+            if (type_of(ann) == remove_cv(type_of(annotation)))
+                return m;
+    };
+    for (auto base: subextract_info_span(^^direct_base_types, {type})) {
+        auto m = find_annotated_member(base, annotation);
+        if (m != meta::info{})
+            return m;
+    }
+    return {};
+}
+
+template<non_cvref TRef>
+inline constexpr auto vtable_member_info = [] {
+    auto m = find_annotated_member(^^TRef, ^^vtable_ptr_anno);
+    if (m == meta::info{})
+        throw "No vtable annotated member found";
+    return m;
+}();
+
+template<non_cvref TRef>
+inline constexpr auto obj_member_info = [] {
+    auto m = find_annotated_member(^^TRef, ^^obj_ptr_anno);
+    if (m == meta::info{})
+        throw "No object annotated member found";
+    return m;
+}();
+
+auto extract_vtable_ptr(auto&& ref) -> auto&& {
+    return ref.[:vtable_member_info<std::remove_cvref_t<decltype(ref)>>:];
+}
+auto extract_obj_ptr(auto&& ref) -> auto&& {
+    return ref.[:obj_member_info<std::remove_cvref_t<decltype(ref)>>:];
+}
+
 namespace cvts_trait {
 
 template<typename Trait, typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
 protected:
-    Impl* _obj_ptr_{};
+    [[= obj_ptr_anno]] Impl* _;
 
     template<typename, typename, typename, typename, meta::info, trait_method_idt>
     friend struct cvts_cvo_invoker;
 
 public:
-    explicit cvts_trait_ref_impl(Impl& optr)
-    : _obj_ptr_(&optr) {};
+    explicit cvts_trait_ref_impl(Impl& optr) {
+        extract_obj_ptr(*this) = &optr;
+    };
 };
 
 
@@ -57,7 +101,7 @@ struct cvts_cvo_invoker<
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
-            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
     auto operator()(Args... args) const noexcept(Noexcept) -> Ret
@@ -66,7 +110,7 @@ struct cvts_cvo_invoker<
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
-            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
     auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
@@ -75,7 +119,7 @@ struct cvts_cvo_invoker<
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
-            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
     auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
@@ -84,7 +128,7 @@ struct cvts_cvo_invoker<
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
         } else {
-            return get_trait_ref()._obj_ptr_->[:Method:](std::forward<Args>(args)...);
+            return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
 
@@ -232,7 +276,7 @@ struct cvts_ref_definer {
     struct ref : public ref_impl_t {
         using ref_impl_t::ref_impl_t;
         operator Impl&() const volatile {
-            return *this->_obj_ptr_;
+            return *extract_obj_ptr(*this);
         }
     };
 };
