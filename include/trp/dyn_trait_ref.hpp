@@ -63,7 +63,7 @@ private:
     template<typename VTable>
     static auto get_method(VTable* vt) {
         constexpr auto m =
-            std::meta::nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
+            nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
         return vt->[:m:];
     }
 };
@@ -79,7 +79,7 @@ struct cvm_invoker : cvo_invoker<OvSpecs::index, typename OvSpecs::id>... {
 
 template<typename CVMInvoker, typename VTable, typename... Args>
 concept noexcept_cvm_invoker =
-    meta::is_template(^^CVMInvoker) and (meta::template_of(^^CVMInvoker) == ^^cvm_invoker) and ([] {
+    is_template(^^CVMInvoker) and (template_of(^^CVMInvoker) == ^^cvm_invoker) and ([] {
         CVMInvoker invoker{};
         VTable     vt{};
         return noexcept(invoker(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
@@ -135,7 +135,7 @@ struct cvm_holder_definer {
             substitute(^^method_invoker, {^^Ref, ^^Trait, ^^cvm_holder, ^^CVMInvoker});
         define_aggregate(^^cvm_holder,
                          {data_member_spec(method_invoker_info,
-                                           meta::data_member_options{
+                                           {
                                                .name              = id,
                                                .no_unique_address = true,
                                                //  .attributes = {^^[[no_unique_address]] },
@@ -203,18 +203,16 @@ struct dyn_cv_ref_impls {
 
     struct all_refs;
     consteval {
-        using namespace std;
-
         struct method_holder_spec {
-            const char*        id;
-            vector<meta::info> cvm_invoker_targs;
+            const char*             id;
+            std::vector<meta::info> cvm_invoker_targs;
         };
 
         constexpr auto impls = [] {
-            auto method_holders_specs    = vector<method_holder_spec>{};
-            auto method_holders_specs_c  = vector<method_holder_spec>{};
-            auto method_holders_specs_v  = vector<method_holder_spec>{};
-            auto method_holders_specs_cv = vector<method_holder_spec>{};
+            auto method_holders_specs    = std::vector<method_holder_spec>{};
+            auto method_holders_specs_c  = std::vector<method_holder_spec>{};
+            auto method_holders_specs_v  = std::vector<method_holder_spec>{};
+            auto method_holders_specs_cv = std::vector<method_holder_spec>{};
             method_holders_specs.reserve(all_trait_methods<Trait>.size());
             method_holders_specs_c.reserve(all_trait_methods<Trait>.size());
             method_holders_specs_v.reserve(all_trait_methods<Trait>.size());
@@ -246,7 +244,7 @@ struct dyn_cv_ref_impls {
 
             constexpr auto get_ref_impl =
                 [](auto& method_holders_specs, meta::info trait_inf, meta::info ref_info) {
-                    auto ref_impl_targs = vector<meta::info>{trait_inf};
+                    auto ref_impl_targs = std::vector{trait_inf};
                     for (auto& [id, cvm_invoker_targs]: method_holders_specs) {
                         const auto cvm_invoker_info = substitute(^^cvm_invoker, cvm_invoker_targs);
                         ref_impl_targs.push_back(extract<meta::info>(
@@ -269,10 +267,10 @@ struct dyn_cv_ref_impls {
         define_aggregate(
             ^^all_refs,
             {
-                meta::data_member_spec(substitute(^^type_identity, {impls[0]}), {.name = "ref"}),
-                meta::data_member_spec(substitute(^^type_identity, {impls[1]}), {.name = "ref_c"}),
-                meta::data_member_spec(substitute(^^type_identity, {impls[2]}), {.name = "ref_v"}),
-                meta::data_member_spec(substitute(^^type_identity, {impls[3]}), {.name = "ref_cv"}),
+                meta::data_member_spec(substitute(^^std::type_identity, {impls[0]}), {.name = "ref"}),
+                meta::data_member_spec(substitute(^^std::type_identity, {impls[1]}), {.name = "ref_c"}),
+                meta::data_member_spec(substitute(^^std::type_identity, {impls[2]}), {.name = "ref_v"}),
+                meta::data_member_spec(substitute(^^std::type_identity, {impls[3]}), {.name = "ref_cv"}),
             });
     }
     using impl_t    = decltype(all_refs::ref)::type;

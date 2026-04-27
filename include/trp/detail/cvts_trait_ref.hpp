@@ -141,7 +141,7 @@ private:
     template<typename T = void>
     static constexpr auto explicit_method = [] {
         if constexpr (is_template(Method)) {
-            return meta::substitute(Method, {^^TRef});
+            return substitute(Method, {^^TRef});
         } else if constexpr (concepts::explicit_method_impl_for<Method, Impl>) {
             return Method;
         } else {
@@ -152,19 +152,19 @@ private:
     auto get_trait_ref(this auto&& self) -> decltype(auto) {
         constexpr auto add_cvp = [](meta::info type) {
             using this_t = std::remove_reference_t<decltype(self)>;
-            return meta::add_pointer(copy_cv_to(^^this_t, type));
+            return add_pointer(copy_cv_to(^^this_t, type));
         };
 
         static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);
         const auto mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
 
         constexpr auto invoker_ptr = [] {
-            auto mems = meta::nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
+            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
             if (mems.size() != 1)
                 throw "Method holder is expected to have only a single method.";
-            if (meta::type_of(mems[0]) != ^^MethodInvoker)
+            if (type_of(mems[0]) != ^^MethodInvoker)
                 throw "Method invoker type does not match method holders first member type.";
-            return meta::extract<MethodInvoker MethodHolder::*>(mems[0]);
+            return extract<MethodInvoker MethodHolder::*>(mems[0]);
         }();
 #ifdef __cpp_lib_is_pointer_interconvertible
         static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
@@ -212,9 +212,9 @@ struct cvts_holder_definer {
     struct cvts_method_holder;
     using invoker_t = cvts_cvm_invoker<Ref, cvts_method_holder, OvSpecHolder>;
     consteval {
-        meta::define_aggregate(^^cvts_method_holder,
-                               {meta::data_member_spec(^^invoker_t,
-                                                       meta::data_member_options{
+        define_aggregate(^^cvts_method_holder,
+                               {data_member_spec(^^invoker_t,
+                                                       {
                                                            .name              = id,
                                                            .no_unique_address = true,
                                                            //  .attributes = {^^[[no_unique_address]] },
@@ -223,34 +223,26 @@ struct cvts_holder_definer {
 };
 
 template<typename Ref, const char* id, typename OvSpecHolder>
-inline constexpr auto cvts_holder_info =
-    ^^typename cvts_holder_definer<Ref, id, OvSpecHolder>::cvts_method_holder;
+using cvts_holder = typename cvts_holder_definer<Ref, id, OvSpecHolder>::cvts_method_holder;
 
 template<typename Trait, typename Impl>
 struct cvts_ref_definer {
     struct ref;
     struct ref_idt_holder;
     consteval {
-        using namespace std;
-        using namespace meta;
-
         constexpr auto ref_impl = [] {
             struct method_holder_spec {
-                const char*  id;
-                vector<info> ov_specs;
+                const char*             id;
+                std::vector<meta::info> ov_specs;
             };
-            auto method_holders_specs = vector<method_holder_spec>{};
+            auto method_holders_specs = std::vector<method_holder_spec>{};
 
             template for (constexpr auto mem: all_trait_methods<Trait>) {
-                using method_idt = [:mem:];
-                constexpr auto m = [] {
-                    auto m = stdr::find(impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
-
-                    return m;
-                }();
+                using method_idt    = [:mem:];
+                constexpr auto m    = stdr::find(impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
                 constexpr auto spec = substitute(^^cvts_overload_spec,
                                                  {^^Impl,    //
-                                                  reflect_constant(m),
+                                                  meta::reflect_constant(m),
                                                   mem});
                 auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
                 if (it == method_holders_specs.end()) {
@@ -260,21 +252,21 @@ struct cvts_ref_definer {
                     it->ov_specs.push_back(spec);
                 }
             }
-            auto impl_targs = vector<info>{^^Trait, ^^Impl};
-            impl_targs.append_range(
-                method_holders_specs    //
-                | stdv::transform([](auto spec) {
-                      return extract<info>(substitute(
-                          ^^cvts_holder_info,
-                          {^^ref, reflect_constant(spec.id), substitute(^^ovspec_holder, spec.ov_specs)}));
-                  }));
-
+            auto impl_targs = std::vector{^^Trait, ^^Impl};
+            impl_targs.append_range(method_holders_specs    //
+                                    | stdv::transform([](auto spec) {
+                                          return substitute(^^cvts_holder,
+                                                            {^^ref,
+                                                             meta::reflect_constant(spec.id),
+                                                             substitute(^^ovspec_holder, spec.ov_specs)});
+                                      }));
             return substitute(^^cvts_trait_ref_impl, impl_targs);
         }();
-        define_aggregate(^^ref_idt_holder,
-                         {
-                             meta::data_member_spec(substitute(^^type_identity, {ref_impl}), {.name = "ref"}),
-                         });
+        define_aggregate(
+            ^^ref_idt_holder,
+            {
+                data_member_spec(substitute(^^std::type_identity, {ref_impl}), {.name = "ref"}),
+            });
     }
     using ref_impl_t = decltype(ref_idt_holder::ref)::type;
     struct ref : public ref_impl_t {

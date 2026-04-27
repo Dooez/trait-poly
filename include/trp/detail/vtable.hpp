@@ -73,11 +73,11 @@ struct explicit_invoke_wrapper_struct {
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId, typename... Params>
 struct invoke_wrapper_struct {
     using return_type = MethodId::return_type;
-    using obj_ptr     = [:meta::add_pointer(MethodId::add_obj_cv(^^Impl)):];
+    using obj_ptr     = [:add_pointer(MethodId::add_obj_cv(^^Impl)):];
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
         auto&& impl = *static_cast<obj_ptr>(ptr);
-        if constexpr (std::meta::is_template(ImplMethod)) {
+        if constexpr (is_template(ImplMethod)) {
             return impl.template[:ImplMethod:](std::forward<Params>(params)...);
         } else {
             return impl.[:ImplMethod:](std::forward<Params>(params)...);
@@ -113,7 +113,7 @@ consteval auto fill_vtable() {
         auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
         if constexpr (concepts::explicit_template_method_impl_of<m, Trait>) {    // default impl
             using cvts_ref                     = cvts_trait_ref<Trait, Impl>;
-            constexpr auto method              = meta::substitute(m, {^^cvts_ref});
+            constexpr auto method              = substitute(m, {^^cvts_ref});
             constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
                                                             {reflect_constant(method),
                                                              ^^Impl,
@@ -156,7 +156,7 @@ consteval auto fill_vtable() {
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
         quals,
-        {[:meta::substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^Trait, ^^Impl}):]...},
+        {[:substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^Trait, ^^Impl}):]...},
     };
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>
@@ -165,14 +165,13 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     if constexpr (std::same_as<Trait, Supertrait>)
         return ptr;
 
-    using namespace meta;
     using next_supertrait_t = [:[] -> meta::info {
         if constexpr (direct_supertrait_of<Supertrait, Trait>) {
             return ^^Supertrait;
         } else {
             for (auto base: direct_base_types<Trait>) {
-                auto is_derived = meta::substitute(^^std::derived_from, {base, ^^Supertrait});
-                if (meta::extract<bool>(is_derived))
+                const auto is_derived = substitute(^^std::derived_from, {base, ^^Supertrait});
+                if (extract<bool>(is_derived))
                     return base;
             }
             std::unreachable();
@@ -182,7 +181,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
     const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
         using supertraits_t        = decltype(vtable<Trait>::direct_supertraits);
         static constexpr auto mems = std::define_static_array(
-            meta::nonstatic_data_members_of(^^supertraits_t, meta::access_context::unprivileged()));
+            nonstatic_data_members_of(^^supertraits_t, meta::access_context::unprivileged()));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &(ptr->direct_supertraits.[:m:]);

@@ -128,12 +128,12 @@ concept any_immediate_trait = non_cvref<Trait>                                  
 template<meta::info Self, typename... Traits>
 concept any_traits =
     (... and (any_immediate_trait<std::remove_cv_t<Traits>> and
-              [:meta::substitute(Self,
-                                 [] {
-                                     auto args = std::vector{meta::reflect_constant(Self)};
-                                     args.append_range(direct_base_types<std::remove_cv_t<Traits>>);
-                                     return args;
-                                 }()):])    //
+              [:substitute(Self,
+                           [] {
+                               auto args = std::vector{meta::reflect_constant(Self)};
+                               args.append_range(direct_base_types<std::remove_cv_t<Traits>>);
+                               return args;
+                           }()):])    //
     );
 
 }    // namespace concepts

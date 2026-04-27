@@ -140,8 +140,8 @@ struct foo_only_impl {
 // NOLINTEND(*-to-static*)
 template<typename S>
 constexpr bool compare_structs(const S& lhs, const S& rhs) {
-    static constexpr auto mems = std::define_static_array(
-        std::meta::nonstatic_data_members_of(^^S, std::meta::access_context::unchecked()));
+    static constexpr auto mems =
+        std::define_static_array(nonstatic_data_members_of(^^S, std::meta::access_context::unchecked()));
     template for (constexpr auto m: mems) {
         using mem_t = [:std::meta::type_of(m):];
         if constexpr (std::equality_comparable<mem_t>) {

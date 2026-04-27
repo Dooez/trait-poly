@@ -235,14 +235,13 @@ inline constexpr auto direct_trait_methods = [] {
 }();
 template<typename T>
 inline constexpr auto all_trait_methods = [] {
-    using namespace meta;
     constexpr auto is_valid_method = [](meta::info method) {
         return is_function(method)                            //
                and not is_special_member_function(method)     //
                and (is_const(method) or not is_const(^^T))    //
                and (is_volatile(method) or not is_volatile(^^T));
     };
-    auto result        = direct_trait_methods<T> | stdr::to<std::vector<info>>();
+    auto result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
     auto append_unique = [&](auto&& method_idts) {
         for (auto m: method_idts)
             if (not stdr::contains(result, m))
