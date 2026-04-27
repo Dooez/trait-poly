@@ -5,9 +5,9 @@
 
 namespace trp::detail {
 
-inline constexpr struct asd {
+inline constexpr struct {
 } vtable_ptr_anno;
-inline constexpr struct asdf {
+inline constexpr struct {
 } obj_ptr_anno;
 
 consteval auto find_annotated_member(meta::info type, meta::info annotation) -> meta::info {
