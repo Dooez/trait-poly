@@ -8,17 +8,17 @@ namespace trp {
 namespace detail {
 
 consteval auto explicit_impl_to_method_identity(meta::info fn) {
-    const auto identifier = meta::reflect_constant_string(identifier_of(fn));
+    auto const identifier = meta::reflect_constant_string(identifier_of(fn));
     if (is_template(fn)) {
-        const auto trait_inf = parent_of(fn);
-        const auto mock_inf  = substitute(^^mock_trait_ref, {trait_inf});
+        auto const trait_inf = parent_of(fn);
+        auto const mock_inf  = substitute(^^mock_trait_ref, {trait_inf});
         fn                   = substitute(fn, {mock_inf});
     }
-    const auto params = parameters_of(fn);
+    auto const params = parameters_of(fn);
     if (stdr::empty(params))
         throw "Default trait implementation functions must accept at implementation object refernce as a "
               "first paramter.";
-    const auto impl = type_of(params[0]);
+    auto const impl = type_of(params[0]);
 
     auto idt_targs = std::vector{identifier,
                                  meta::reflect_constant(is_const(remove_reference(impl))),
@@ -192,7 +192,7 @@ inline constexpr bool strictly_matches = [] {
 
 template<typename ParamType>
 consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {
-    const auto params = parameters_of(fn);
+    auto const params = parameters_of(fn);
     return stdr::size(params) > 0                             //
            and is_reference_type(type_of(params[0]))          //
            and not is_explicit_object_parameter(params[0])    //

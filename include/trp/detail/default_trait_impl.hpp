@@ -59,7 +59,7 @@ inline constexpr auto all_default_impls = [] {
                      stdv::filter(concepts::is_explicit_template_method_impl<Trait>))
         impls.emplace_back(m, explicit_impl_to_method_identity(m));
 
-    const auto append_unique = [&](auto&& method_impls) {
+    auto const append_unique = [&](auto&& method_impls) {
         for (auto m: method_impls)
             if (not stdr::contains(impls, m.idt, &impl_method_bind::idt))
                 impls.push_back(m);

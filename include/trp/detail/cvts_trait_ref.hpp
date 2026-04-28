@@ -156,7 +156,7 @@ private:
         };
 
         static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);
-        const auto mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
+        auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
 
         constexpr auto invoker_ptr = [] {
             auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
@@ -170,7 +170,7 @@ private:
         static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
 #endif
         static_assert(std::is_standard_layout_v<MethodHolder>);
-        const auto mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
+        auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
 
         static_assert(std::derived_from<TRef, MethodHolder>);
         return *static_cast<[:add_cvp(^^TRef):]>(mh_ptr);
@@ -207,7 +207,7 @@ struct cvts_cvm_invoker<TRef, MethodHolder, ovspec_holder<OvSpecs...>>
                            typename OvSpecs::id>::operator()...;
 };
 
-template<typename Ref, const char* id, typename OvSpecHolder>
+template<typename Ref, char const* id, typename OvSpecHolder>
 struct cvts_holder_definer {
     struct cvts_method_holder;
     using invoker_t = cvts_cvm_invoker<Ref, cvts_method_holder, OvSpecHolder>;
@@ -222,7 +222,7 @@ struct cvts_holder_definer {
     }
 };
 
-template<typename Ref, const char* id, typename OvSpecHolder>
+template<typename Ref, char const* id, typename OvSpecHolder>
 using cvts_holder = typename cvts_holder_definer<Ref, id, OvSpecHolder>::cvts_method_holder;
 
 template<typename Trait, typename Impl>
@@ -232,7 +232,7 @@ struct cvts_ref_definer {
     consteval {
         constexpr auto ref_impl = [] {
             struct method_holder_spec {
-                const char*             id;
+                char const*             id;
                 std::vector<meta::info> ov_specs;
             };
             auto method_holders_specs = std::vector<method_holder_spec>{};

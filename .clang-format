@@ -76,7 +76,14 @@ SpaceBeforeRangeBasedForLoopColon: false
 SpaceInEmptyBlock: false
 SpacesInConditionalStatement: false
 AlignArrayOfStructures: Left
-QualifierAlignment: Left
+QualifierAlignment: Custom
+QualifierOrder:
+  - inline
+  - static
+  - constexpr
+  - type
+  - const
+  - volatile
 ReferenceAlignment: Left
 RequiresClausePosition: OwnLine
 SeparateDefinitionBlocks: Leave

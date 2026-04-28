@@ -97,9 +97,9 @@ template<meta::info RefInfo>
 inline constexpr auto extract_ptr = stdr::data([:RefInfo:]);
 
 template<meta::reflection_range R = std::initializer_list<meta::info>>
-consteval auto subextract_info_span(meta::info r, const R& targs) -> std::span<const meta::info> {
-    const auto src_span = meta::reflect_constant(meta::substitute(r, targs));
-    return std::span<const meta::info>{extract<const meta::info*>(substitute(^^extract_ptr, {src_span})),
+consteval auto subextract_info_span(meta::info r, R const& targs) -> std::span<meta::info const> {
+    auto const src_span = meta::reflect_constant(meta::substitute(r, targs));
+    return std::span<meta::info const>{extract<meta::info const*>(substitute(^^extract_ptr, {src_span})),
                                        extract<uZ>(substitute(^^extract_size, {src_span}))};
 }
 
@@ -146,18 +146,18 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     }
 
 
-    const auto identifier   = meta::reflect_constant_string(identifier_of(method_info));
-    const auto is_noexcept_ = meta::reflect_constant(is_noexcept(method_info));
-    const auto ret          = return_type_of(method_info);
+    auto const identifier   = meta::reflect_constant_string(identifier_of(method_info));
+    auto const is_noexcept_ = meta::reflect_constant(is_noexcept(method_info));
+    auto const ret          = return_type_of(method_info);
     auto       params       = parameters_of(method_info);
     if (not params.empty() and is_explicit_object_parameter(params[0])) {
-        const auto eop          = params[0];
-        const auto eop_t        = type_of(eop);
-        const auto is_const_    = meta::reflect_constant(is_const(remove_reference(eop_t)));
-        const auto is_volatile_ = meta::reflect_constant(is_volatile(eop_t));
-        const auto is_lvref     = meta::reflect_constant(is_lvalue_reference_type(eop_t));
-        const auto is_rvref     = meta::reflect_constant(is_rvalue_reference_type(eop_t));
-        const auto is_value_    = meta::reflect_constant(not is_lvalue_reference_type(eop_t)    //
+        auto const eop          = params[0];
+        auto const eop_t        = type_of(eop);
+        auto const is_const_    = meta::reflect_constant(is_const(remove_reference(eop_t)));
+        auto const is_volatile_ = meta::reflect_constant(is_volatile(eop_t));
+        auto const is_lvref     = meta::reflect_constant(is_lvalue_reference_type(eop_t));
+        auto const is_rvref     = meta::reflect_constant(is_rvalue_reference_type(eop_t));
+        auto const is_value_    = meta::reflect_constant(not is_lvalue_reference_type(eop_t)    //
                                                       and not is_rvalue_reference_type(eop_t));
         auto       arguments    = std::vector{identifier,    //
                                      is_const_,
@@ -170,11 +170,11 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
         arguments.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
         return substitute(^^method_identity_t, arguments);
     }
-    const auto is_const_    = meta::reflect_constant(is_const(method_info));
-    const auto is_volatile_ = meta::reflect_constant(is_volatile(method_info));
-    const auto is_lvref     = meta::reflect_constant(is_lvalue_reference_qualified(method_info));
-    const auto is_rvref     = meta::reflect_constant(is_rvalue_reference_qualified(method_info));
-    const auto is_value_    = meta::reflect_constant(false);
+    auto const is_const_    = meta::reflect_constant(is_const(method_info));
+    auto const is_volatile_ = meta::reflect_constant(is_volatile(method_info));
+    auto const is_lvref     = meta::reflect_constant(is_lvalue_reference_qualified(method_info));
+    auto const is_rvref     = meta::reflect_constant(is_rvalue_reference_qualified(method_info));
+    auto const is_value_    = meta::reflect_constant(false);
     auto       arguments    = std::vector{identifier,    //
                                  is_const_,
                                  is_volatile_,
@@ -249,7 +249,7 @@ inline constexpr auto all_trait_methods = [] {
                and (is_volatile(method) or not is_volatile(^^T));
     };
     auto       result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
-    const auto append_unique = [&](auto&& method_idts) {
+    auto const append_unique = [&](auto&& method_idts) {
         for (auto m: method_idts)
             if (not stdr::contains(result, m))
                 result.push_back(m);
@@ -263,7 +263,7 @@ inline constexpr auto all_trait_methods = [] {
 
 template<non_ref T>
 struct unique_id_struct {
-    static inline char value{};
+    inline static char value{};
 };
 }    // namespace detail
 }    // namespace trp

@@ -47,7 +47,7 @@ template<trait_method_idt... MethodIds>
 struct cvtmock_cvm_invoker : cvtmock_cvo_invoker<MethodIds>... {
     using cvtmock_cvo_invoker<MethodIds>::operator()...;
 };
-template<const char* id, typename Invoker>
+template<char const* id, typename Invoker>
 struct cvtmock_holder_definer {
     struct cvtmock_method_holder;
     consteval {
@@ -61,7 +61,7 @@ struct cvtmock_holder_definer {
     }
 };
 
-template<const char* id, typename Invoker>
+template<char const* id, typename Invoker>
 using cvtmock_holder = typename cvtmock_holder_definer<id, Invoker>::cvtmock_method_holder;
 
 template<typename... MethodHolders>
@@ -70,14 +70,14 @@ struct mock_ref_impl : public MethodHolders... {};
 template<non_cvref Trait>
 consteval auto get_cvtmock_ref() {
     struct method_holder_spec {
-        const char*             id;
+        char const*             id;
         std::vector<meta::info> method_idts;
     };
     auto method_holders_specs = std::vector<method_holder_spec>{};
 
     template for (constexpr auto mem: all_trait_methods<Trait>) {
         using method_idt = [:mem:];
-        auto it          = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
+        auto const it    = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
         if (it == method_holders_specs.end()) {
             method_holders_specs.push_back({.id          = method_idt::identifier,    //
                                             .method_idts = {mem}});

@@ -4,8 +4,7 @@
 #include "default_trait_impl.hpp"
 #endif
 
-namespace trp {
-namespace detail {
+namespace trp::detail {
 
 template<typename Impl>
 void default_delete(void* ptr) {
@@ -43,7 +42,7 @@ struct vtable_definer {
                                | stdr::to<std::vector<meta::info>>();
         using default_delete_fptr = void (*)(void*);
         vtable_elements.push_back(data_member_spec(^^default_delete_fptr, {.name = "default_delete"}));
-        using id_ptr = const char*;
+        using id_ptr = char const*;
         vtable_elements.push_back(data_member_spec(^^id_ptr, {.name = "id_ptr"}));
         vtable_elements.push_back(data_member_spec(^^vtable_cv_quals, {.name = "cv_quals"}));
         auto direct_supertraits_t =
@@ -97,7 +96,7 @@ template<non_cv_trait Trait, non_cv_trait SESubtrait, non_ref Impl>
     requires explicit_supertrait_of<Trait, SESubtrait>
 consteval auto fill_vtable() {
     auto       quals           = vtable_cv_quals{};
-    const auto get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
+    auto const get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
         constexpr auto m =
             stdr::find(impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt)->fn;
@@ -161,7 +160,7 @@ consteval auto fill_vtable() {
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> const vtable<Supertrait>* {
+constexpr auto get_explicit_supertrait_vtable_ptr(vtable<Trait> const* ptr) -> vtable<Supertrait> const* {
     if constexpr (std::same_as<Trait, Supertrait>)
         return ptr;
 
@@ -170,7 +169,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
             return ^^Supertrait;
         } else {
             for (auto base: direct_base_types<Trait>) {
-                const auto is_derived = substitute(^^std::derived_from, {base, ^^Supertrait});
+                auto const is_derived = substitute(^^std::derived_from, {base, ^^Supertrait});
                 if (extract<bool>(is_derived))
                     return base;
             }
@@ -178,7 +177,7 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         }
     }():];
 
-    const auto next_ptr = [=] -> const vtable<next_supertrait_t>* {
+    auto const next_ptr = [=] -> vtable<next_supertrait_t> const* {
         using supertraits_t        = decltype(vtable<Trait>::direct_supertraits);
         static constexpr auto mems = std::define_static_array(
             nonstatic_data_members_of(^^supertraits_t, meta::access_context::unprivileged()));
@@ -194,6 +193,4 @@ constexpr auto get_explicit_supertrait_vtable_ptr(const vtable<Trait>* ptr) -> c
         return get_explicit_supertrait_vtable_ptr<Supertrait>(next_ptr);
     }
 };
-
-}    // namespace detail
-}    // namespace trp
+}    // namespace trp::detail
