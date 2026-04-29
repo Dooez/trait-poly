@@ -225,7 +225,7 @@ struct dyn_cv_ref_impls {
             template for (constexpr auto mem: all_trait_methods<Trait>) {
                 using method_idt      = [:mem:];
                 auto const spec       = substitute(^^overload_spec, {meta::reflect_constant(i), mem});
-                auto       add_holder = [=](auto& method_holders_specs, auto trait_info) {
+                auto const add_holder = [=](auto& method_holders_specs, auto trait_info) {
                     auto it =
                         stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
                     if (it == method_holders_specs.end()) {
