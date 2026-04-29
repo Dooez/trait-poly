@@ -14,17 +14,17 @@ struct trait_proto_imposter {
 struct trait_proto_base {
     auto        bar() const -> no_def_ctor;
     auto        bar(int) const -> no_def_ctor;
-    static auto bar(const auto& v) -> no_def_ctor {
+    static auto bar(auto const& v) -> no_def_ctor {
         std::println("[default trait_proto_base::bar]");
         return no_def_ctor{1};
     };
-    static auto bar(const auto& v, int) -> no_def_ctor {
+    static auto bar(auto const& v, int) -> no_def_ctor {
         std::println("[default trait_proto_base::bar(int)]");
         return no_def_ctor{1};
     };
 };
 struct trait_proto : trait_proto_base {
-    static void foo(const auto& v) {
+    static void foo(auto const& v) {
         std::print("[default const foo impl]");
         v.bar();
         // v.baz();
@@ -35,7 +35,7 @@ struct trait_proto : trait_proto_base {
         v.bar();
         std::println();
     };
-    static auto bar(const auto& v) -> no_def_ctor {
+    static auto bar(auto const& v) -> no_def_ctor {
         std::println("[default trait_proto::bar]");
         return no_def_ctor{1};
     };
@@ -57,8 +57,8 @@ struct bar_only_impl {
 };
 template<>
 struct trp::impl_spec_for<bar_only_impl, trait_proto> {
-    static auto bar(const auto& i) -> no_def_ctor {
-        static_cast<const bar_only_impl&>(i).not_a_trait_foo();
+    static auto bar(auto const& i) -> no_def_ctor {
+        static_cast<bar_only_impl const&>(i).not_a_trait_foo();
         std::print("[impl_spec_for<bar_only_impl, trait_proto>::bar()]");
         return no_def_ctor{1};
     }
@@ -139,7 +139,7 @@ struct foo_only_impl {
 
 // NOLINTEND(*-to-static*)
 template<typename S>
-constexpr bool compare_structs(const S& lhs, const S& rhs) {
+constexpr bool compare_structs(S const& lhs, S const& rhs) {
     static constexpr auto mems =
         std::define_static_array(nonstatic_data_members_of(^^S, std::meta::access_context::unchecked()));
     template for (constexpr auto m: mems) {
@@ -168,7 +168,7 @@ constexpr bool compare_structs(const S& lhs, const S& rhs) {
 
 template<>
 struct trp::default_impl_spec<trait_proto> {
-    static auto bar(const auto& v) -> no_def_ctor {
+    static auto bar(auto const& v) -> no_def_ctor {
         std::println("[default specialization for trait_proto::bar]");
         return no_def_ctor{1};
     };
@@ -178,13 +178,13 @@ static_assert(trp::implements_trait<bar_only_impl, trait_proto>);
 int main() {
     auto simpl = bar_only_impl{};
 
-    auto ref = trp::dyn_trait_ref<const trait_proto>(simpl);
+    auto ref = trp::dyn_trait_ref<trait_proto const>(simpl);
     ref.foo();
     std::println("\n---");
     ref.bar();
     std::println("\n---");
 
-    const auto ref2 = trp::dyn_trait_ref<trait_proto>(simpl);
+    auto const ref2 = trp::dyn_trait_ref<trait_proto>(simpl);
     ref2.foo();
     std::println("\n---");
 
@@ -233,12 +233,15 @@ int main() {
     //
     // // other_impl{}.bar();
     // //
-    // std::println("\nmake_unique:");
-    // auto uptr = trp::make_unique_trait<trait_proto, some_impl>();
-    // uptr->foo();
-    // uptr->bar();
-    // uptr = trp::make_unique_trait<trait_proto, other_impl>();
-    // uptr->foo();
+    std::println("\nmake_unique:");
+    auto uptr = trp::make_unique_trait<trait_proto, some_impl>();
+    uptr->foo();
+    uptr->bar();
+    uptr = trp::make_unique_trait<trait_proto, other_impl>();
+    uptr->foo();
+    auto rawvoidptr = uptr.get();
+    auto rawptr     = uptr.get<other_impl>();
+    rawptr->foo();
     //
     // std::println("\nalloc_unique:");
     // auto auptr = trp::allocate_unique_trait<trait_proto, some_impl>(std::allocator<some_impl>{});

@@ -12,10 +12,14 @@ template<typename Supertrait, any_trait Trait>
 [[nodiscard]] auto trait_cast(dyn_trait_ref<Trait> const& ref) -> dyn_trait_ref<Supertrait> {
     return ref;
 }
+template<any_trait Trait, implements_trait<Trait> Impl, supertrait_of<Trait> Supertrait>
+[[nodiscard]] auto trait_cast(dyn_trait_ref<Supertrait> const& ref) -> dyn_trait_ref<Trait> {
+    return *static_cast<Impl*>(detail::extract_obj_ptr(ref));
+}
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
 [[nodiscard]] auto is_holding_type(dyn_trait_ref<Trait> const& ref) -> bool {
-    return is_holding_type<Impl>(ref);
+    return detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
 }
 namespace detail {
 template<typename T>
@@ -318,13 +322,6 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
     template<any_trait>
     friend class dyn_trait_ref;
 
-    template<typename Impl, detail::any_dyn_trait_ref TraitRef>
-        requires implements_trait<Impl, typename TraitRef::trait_t>
-    friend auto is_holding_type(TraitRef const& ref) -> bool;
-    template<typename Impl>
-    [[nodiscard]] static auto is_holding_type(dyn_trait_ref const& ref) -> bool {
-        return detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
-    }
     template<any_trait U>
         requires std::same_as<std::remove_cv_t<U>, std::remove_cv_t<Trait>>
     [[nodiscard]] friend constexpr auto is_valid_const_trait_cast(dyn_trait_ref const& ref) -> bool {

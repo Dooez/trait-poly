@@ -72,7 +72,7 @@ public:
     }
 
     shared_trait_ptr() = default;
-    shared_trait_ptr(const shared_trait_ptr& other) noexcept {
+    shared_trait_ptr(shared_trait_ptr const& other) noexcept {
         other.increment();
         detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
         ctrl_ptr_ = other.ctrl_ptr_;
@@ -82,7 +82,7 @@ public:
     , ctrl_ptr_(other.ctrl_ptr_) {
         other.release();
     }
-    shared_trait_ptr& operator=(const shared_trait_ptr& other) noexcept {
+    shared_trait_ptr& operator=(shared_trait_ptr const& other) noexcept {
         if (this == &other)
             return *this;
         decrement();
@@ -101,10 +101,18 @@ public:
         return *this;
     }
 
-private:
-    template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
-    friend auto allocate_shared_trait(const Alloc&, Args&&...);
+    [[nodiscard]] auto get() const -> void* {
+        return detail::extract_obj_ptr(dyn_trait_ref_);
+    }
 
+    template<typename Impl>
+    [[nodiscard]] auto get() const -> Impl* {
+        if (not is_holding_type<Impl>(dyn_trait_ref_))
+            return nullptr;
+        return detail::extract_obj_ptr(dyn_trait_ref_);
+    }
+
+private:
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(shared_trait_ptr<T> ptr);
@@ -117,6 +125,15 @@ private:
         ptr.release();
         return new_ptr;
     }
+
+    template<any_trait T, implements_trait<T> Impl>
+    [[nodiscard]] friend auto cast_as(shared_trait_ptr ptr) -> shared_trait_ptr<T> {
+        if (not ptr or not is_holding_type<Impl>(ptr))
+            return {};
+        auto new_ptr = shared_trait_ptr<T>(trait_cast<T, Impl>(ptr.dyn_trait_ref_), ptr.ctrl_ptr_);
+        ptr.release();
+        return new_ptr;
+    }
     template<any_trait>
     friend class shared_trait_ptr;
 };
@@ -126,21 +143,25 @@ template<typename Supertrait, typename Trait>
 auto trait_cast(shared_trait_ptr<Trait> ptr) -> shared_trait_ptr<Supertrait> {
     return upcast<Supertrait>(std::move(ptr));
 }
+template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
+[[nodiscard]] auto trait_cast(shared_trait_ptr<U> ptr) -> shared_trait_ptr<T> {
+    return cast_as<T, Impl>(std::move(ptr));
+}
 
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
-auto is_holding_type(const shared_trait_ptr<Trait>& ptr) -> bool {
+auto is_holding_type(shared_trait_ptr<Trait> const& ptr) -> bool {
     return ptr and is_holding_type<Impl>(*ptr);
 }
 
 
 template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename... Args>
-[[nodiscard]] auto allocate_shared_trait(const Alloc& allocator, Args&&... args) {
+[[nodiscard]] auto allocate_shared_trait(Alloc const& allocator, Args&&... args) {
     using alloc        = std::allocator_traits<Alloc>::template rebind_alloc<std::byte>;
     using ctrl_block   = detail::ctrl_block<Impl, alloc, detail::arc_t>;
     using alloc_traits = std::allocator_traits<alloc>;
     auto new_allocator = static_cast<alloc>(allocator);
-    const auto [ptr, n] =
+    auto const [ptr, n] =
         alloc_traits::allocate_at_least(new_allocator, sizeof(ctrl_block) + alignof(ctrl_block) - 1);
     auto  tmp_n    = n;
     auto* tmp_ptr  = static_cast<void*>(ptr);
@@ -151,7 +172,7 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
     }
     try {
         auto cptr = new (ctrl_ptr) ctrl_block(ptr, n, std::move(new_allocator), std::forward<Args>(args)...);
-        const auto impl_ptr = &(cptr->impl_);
+        auto const impl_ptr = &(cptr->impl_);
         return shared_trait_ptr<Trait>(impl_ptr, cptr);
     } catch (...) {
         alloc_traits::deallocate(new_allocator, ptr, n);
