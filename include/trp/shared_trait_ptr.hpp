@@ -109,7 +109,7 @@ public:
     [[nodiscard]] auto get() const -> Impl* {
         if (not is_holding_type<Impl>(dyn_trait_ref_))
             return nullptr;
-        return detail::extract_obj_ptr(dyn_trait_ref_);
+        return static_cast<Impl*>(detail::extract_obj_ptr(dyn_trait_ref_));
     }
 
 private:

@@ -21,9 +21,6 @@ struct vtable_cv_quals {
 template<trait_method_idt Method>
 using wrapper_fptr_for = Method::wrapper_fptr_type;
 
-template<typename VTableDefiner>
-inline constexpr auto vtable_extractor = ^^typename VTableDefiner::vtable;
-
 template<non_cv_trait Trait>
 struct vtable_definer;
 template<non_cv_trait Trait>
@@ -54,12 +51,7 @@ struct vtable_definer {
     }
 };
 
-template<meta::info Fn,
-         non_ref    Impl,
-         typename Ref,
-         any_trait        Trait,
-         trait_method_idt MethodId,
-         typename... Params>
+template<meta::info Fn, non_ref Impl, typename Ref, trait_method_idt MethodId, typename... Params>
 struct explicit_invoke_wrapper_struct {
     using return_type = MethodId::return_type;
 
@@ -111,35 +103,30 @@ consteval auto fill_vtable() {
         }
 
         auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
-        if constexpr (concepts::explicit_template_method_impl_of<m, SESubtrait>) {    // default impl
+        if constexpr (concepts::explicit_template_method_impl_of<m, SESubtrait>) {
             using cvts_ref                     = cvts_trait_ref<SESubtrait, Impl>;
             constexpr auto method              = substitute(m, {^^cvts_ref});
             constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
                                                             {reflect_constant(method),
                                                              ^^Impl,
                                                              ^^cvts_ref,
-                                                             ^^SESubtrait,
                                                              trait_method_idt,
                                                              trait_method_idt_t::param_infos[is]...});
             using wrapper_struct               = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
 
-        } else if constexpr (concepts::explicit_method_impl_for<m, Impl>) {    // explicit spec
+        } else if constexpr (concepts::explicit_method_impl_for<m, Impl>) {
             constexpr auto ref                 = type_of(parameters_of(m)[0]);
-            constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
-                                                            {reflect_constant(m),
+            constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,
+                                                            {reflect_constant(m),    //
                                                              ^^Impl,
                                                              ref,
-                                                             ^^SESubtrait,
                                                              trait_method_idt,
                                                              trait_method_idt_t::param_infos[is]...});
             using wrapper_struct               = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
 
         } else {
-            if (parent_of(m) != ^^Impl)
-                throw "Not parent";
-            constexpr auto cm                  = reflect_constant(m);
             constexpr auto wrapper_struct_info = substitute(
                 ^^invoke_wrapper_struct,
                 {^^Impl, reflect_constant(m), trait_method_idt, trait_method_idt_t::param_infos[is]...});

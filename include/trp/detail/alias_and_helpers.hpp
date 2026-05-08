@@ -241,12 +241,6 @@ inline constexpr auto direct_trait_methods = [] {
 }();
 template<typename T>
 inline constexpr auto all_trait_methods = [] {
-    constexpr auto is_valid_method = [](meta::info method) {
-        return is_function(method)                            //
-               and not is_special_member_function(method)     //
-               and (is_const(method) or not is_const(^^T))    //
-               and (is_volatile(method) or not is_volatile(^^T));
-    };
     auto       result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
     auto const append_unique = [&](auto&& method_idts) {
         for (auto m: method_idts)

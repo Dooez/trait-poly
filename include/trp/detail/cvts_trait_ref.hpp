@@ -228,46 +228,39 @@ using cvts_holder = typename cvts_holder_definer<Ref, id, OvSpecHolder>::cvts_me
 template<typename Trait, typename Impl>
 struct cvts_ref_definer {
     struct ref;
-    struct ref_idt_holder;
-    consteval {
-        constexpr auto ref_impl = [] {
-            struct method_holder_spec {
-                char const*             id;
-                std::vector<meta::info> ov_specs;
-            };
-            auto method_holders_specs = std::vector<method_holder_spec>{};
+    static constexpr auto ref_impl_info = [] {
+        struct method_holder_spec {
+            char const*             id;
+            std::vector<meta::info> ov_specs;
+        };
+        auto method_holders_specs = std::vector<method_holder_spec>{};
 
-            template for (constexpr auto mem: all_trait_methods<Trait>) {
-                using method_idt    = [:mem:];
-                constexpr auto m    = stdr::find(*impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
-                constexpr auto spec = substitute(^^cvts_overload_spec,
-                                                 {^^Impl,    //
-                                                  meta::reflect_constant(m),
-                                                  mem});
-                auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
-                if (it == method_holders_specs.end()) {
-                    method_holders_specs.push_back({.id       = method_idt::identifier,    //
-                                                    .ov_specs = {spec}});
-                } else {
-                    it->ov_specs.push_back(spec);
-                }
+        template for (constexpr auto mem: all_trait_methods<Trait>) {
+            using method_idt    = [:mem:];
+            constexpr auto m    = stdr::find(*impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
+            constexpr auto spec = substitute(^^cvts_overload_spec,
+                                             {^^Impl,    //
+                                              meta::reflect_constant(m),
+                                              mem});
+            auto it = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
+            if (it == method_holders_specs.end()) {
+                method_holders_specs.push_back({.id       = method_idt::identifier,    //
+                                                .ov_specs = {spec}});
+            } else {
+                it->ov_specs.push_back(spec);
             }
-            auto impl_targs = std::vector{^^Trait, ^^Impl};
-            impl_targs.append_range(method_holders_specs    //
-                                    | stdv::transform([](auto spec) {
-                                          return substitute(^^cvts_holder,
-                                                            {^^ref,
-                                                             meta::reflect_constant(spec.id),
-                                                             substitute(^^ovspec_holder, spec.ov_specs)});
-                                      }));
-            return substitute(^^cvts_trait_ref_impl, impl_targs);
-        }();
-        define_aggregate(^^ref_idt_holder,
-                         {
-                             data_member_spec(substitute(^^std::type_identity, {ref_impl}), {.name = "ref"}),
-                         });
-    }
-    using ref_impl_t = decltype(ref_idt_holder::ref)::type;
+        }
+        auto impl_targs = std::vector{^^Trait, ^^Impl};
+        impl_targs.append_range(method_holders_specs    //
+                                | stdv::transform([](auto spec) {
+                                      return substitute(^^cvts_holder,
+                                                        {^^ref,
+                                                         meta::reflect_constant(spec.id),
+                                                         substitute(^^ovspec_holder, spec.ov_specs)});
+                                  }));
+        return substitute(^^cvts_trait_ref_impl, impl_targs);
+    }();
+    using ref_impl_t = [:ref_impl_info:];
     struct ref : public ref_impl_t {
         using ref_impl_t::ref_impl_t;
         operator Impl&() const volatile {

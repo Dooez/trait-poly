@@ -90,7 +90,7 @@ public:
     [[nodiscard]] auto get() const -> Impl* {
         if (not is_holding_type<Impl>(dyn_trait_ref_))
             return nullptr;
-        return detail::extract_obj_ptr(dyn_trait_ref_);
+        return static_cast<Impl*>(detail::extract_obj_ptr(dyn_trait_ref_));
     }
 
 private:
@@ -258,7 +258,7 @@ template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
 [[nodiscard]] auto trait_cast(unique_trait_ptr<U>&& ptr) -> unique_trait_ptr<T> {
     if (not ptr or not is_holding_type<Impl>(ptr))
         return {};
-    auto new_ptr = alloc_unique_trait_ptr<T>(trait_cast<T, Impl>(ptr.dyn_trait_ref_));
+    auto new_ptr = unique_trait_ptr<T>(trait_cast<T, Impl>(ptr.dyn_trait_ref_));
     ptr.release();
     return new_ptr;
 }

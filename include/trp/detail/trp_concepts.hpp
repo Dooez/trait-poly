@@ -16,8 +16,8 @@ consteval auto explicit_impl_to_method_identity(meta::info fn) {
     }
     auto const params = parameters_of(fn);
     if (stdr::empty(params))
-        throw "Default trait implementation functions must accept at implementation object refernce as a "
-              "first paramter.";
+        throw "Default trait implementation functions must accept an implementation object reference as a "
+              "first parameter.";
     auto const impl = type_of(params[0]);
 
     auto idt_targs = std::vector{identifier,
