@@ -105,10 +105,10 @@ private:
 
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
-    friend auto trait_cast(alloc_unique_trait_ptr<T>&& ptr);
+    friend auto trait_cast(alloc_unique_trait_ptr<T>&& ptr) -> alloc_unique_trait_ptr<S>;
 
     template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
-    friend auto trait_cast(alloc_unique_trait_ptr<U>&& ptr);
+    friend auto trait_cast(alloc_unique_trait_ptr<U>&& ptr) -> alloc_unique_trait_ptr<T>;
 };
 
 template<typename Supertrait, typename Trait>
@@ -227,10 +227,10 @@ public:
 private:
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
-    friend auto trait_cast(unique_trait_ptr<T>&& ptr);
+    friend auto trait_cast(unique_trait_ptr<T>&& ptr) -> unique_trait_ptr<S>;
 
     template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
-    friend auto trait_cast(unique_trait_ptr<U>&& ptr);
+    friend auto trait_cast(unique_trait_ptr<U>&& ptr) -> unique_trait_ptr<T>;
 
 public:
     // new allocated object only

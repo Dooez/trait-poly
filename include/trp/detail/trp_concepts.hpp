@@ -90,6 +90,15 @@ concept static_methods_are_templates =
     stdr::none_of(nonspecial_members<Trait>, [](auto r) { return is_static_member(r) and is_function(r); });
 
 template<typename T>
+concept valid_methods = [] {
+    for (auto m: direct_trait_methods<T>) {
+        if (not extract<bool>(substitute(^^trait_method_idt, {m})))
+            return false;
+    }
+    return true;
+}();
+
+template<typename T>
 concept static_data_members_are_constexpr = [] {
     constexpr auto mems = std::define_static_array(static_data_members_of(^^T, ctx_unchecked));
     auto [... Is]       = make_cw_idxs<mems.size()>();
@@ -120,6 +129,7 @@ concept any_immediate_trait = non_cvref<Trait>                                  
                               and static_data_members_are_constexpr<Trait>             // only in gcc atm
                               and no_operators<Trait>                                  //
                               and nonstatic_methods_are_not_templates<Trait>           //
+                              and valid_methods<Trait>                                 //
                               and static_methods_are_templates<Trait>                  //
                               and static_methods_are_default_impl_for<Trait, Trait>    //
     ;

@@ -190,7 +190,7 @@ template<typename T>
 concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
 
 template<typename T>
-concept trait_method_idt = any_method_idt<T> and not(T::is_lvalue) and not(T::is_rvalue) and not(T::is_value);
+concept trait_method_idt = any_method_idt<T> and not(T::is_rvalue) and not(T::is_value);
 
 namespace concepts {
 template<typename MethodIdt>

@@ -188,6 +188,8 @@ int main() {
     ref2.foo();
     std::println("\n---");
 
+    auto em_shptr = trp::shared_trait_ptr<trait_proto>{};
+
 
     // struct {
     // } no_methods_at_all{};

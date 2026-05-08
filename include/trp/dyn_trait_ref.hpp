@@ -153,6 +153,7 @@ class dyn_trait_ref_impl : public MethodHolders... {
     [[= vtable_ptr_anno]] vtable<std::remove_cv_t<Trait>> const* _{};
     [[= obj_ptr_anno]] void*                                     _;
 
+protected:
     dyn_trait_ref_impl() {
         extract_obj_ptr(*this) = nullptr;
     };
