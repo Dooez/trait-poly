@@ -12,9 +12,10 @@ template<typename Supertrait, any_trait Trait>
 [[nodiscard]] auto trait_cast(dyn_trait_ref<Trait> const& ref) -> dyn_trait_ref<Supertrait> {
     return ref;
 }
-template<any_trait Trait, implements_trait<Trait> Impl, supertrait_of<Trait> Supertrait>
-[[nodiscard]] auto trait_cast(dyn_trait_ref<Supertrait> const& ref) -> dyn_trait_ref<Trait> {
-    return {&detail::trait_vtable_for<std::remove_cv_t<Supertrait>, std::remove_cv_t<Supertrait>, Impl>, detail::extract_obj_ptr(ref)};
+template<any_trait Trait, implements_trait<Trait> Impl, any_trait U>
+[[nodiscard]] auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<Trait> {
+    return {&detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>,
+            detail::extract_obj_ptr(ref)};
 }
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
