@@ -334,6 +334,9 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
     : detail::dyn_ref_impl<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, obj){};
 
+    template<any_trait T, implements_trait<T> Impl, any_trait U>
+    friend auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<T>;
+
 public:
     template<any_trait U>
         requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
