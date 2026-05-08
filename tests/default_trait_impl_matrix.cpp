@@ -60,9 +60,9 @@ void run_case() {
 
     static_assert(trp::explicit_supertrait_of<base_trait, derived_trait>);
     static_assert(trp::implements_trait<empty_impl, base_trait> == expected_base.has_value());
-    static_assert(trp::implements_trait<empty_impl, const base_trait> == expected_base.has_value());
+    static_assert(trp::implements_trait<empty_impl, base_trait const> == expected_base.has_value());
     static_assert(trp::implements_trait<empty_impl, derived_trait> == expected_derived.has_value());
-    static_assert(trp::implements_trait<empty_impl, const derived_trait> == expected_derived.has_value());
+    static_assert(trp::implements_trait<empty_impl, derived_trait const> == expected_derived.has_value());
 
     empty_impl impl{};
 
@@ -71,7 +71,7 @@ void run_case() {
         test::expect_eq(Case::name, "direct_base.value", direct_base_ref.value(), *expected_base);
         test::expect_eq(Case::name, "direct_base.cvalue", direct_base_ref.cvalue(), *expected_base);
 
-        auto const_base_ref = trp::dyn_trait_ref<const base_trait>(impl);
+        auto const_base_ref = trp::dyn_trait_ref<base_trait const>(impl);
         test::expect_eq(Case::name, "const_base.cvalue", const_base_ref.cvalue(), *expected_base);
     }
 
@@ -84,10 +84,10 @@ void run_case() {
         test::expect_eq(Case::name, "upcast_base.value", upcast_base_ref.value(), *expected_derived);
         test::expect_eq(Case::name, "upcast_base.cvalue", upcast_base_ref.cvalue(), *expected_derived);
 
-        auto const_derived_ref = trp::dyn_trait_ref<const derived_trait>(impl);
+        auto const_derived_ref = trp::dyn_trait_ref<derived_trait const>(impl);
         test::expect_eq(Case::name, "const_derived.cvalue", const_derived_ref.cvalue(), *expected_derived);
 
-        auto const_upcast_base_ref = trp::trait_cast<const base_trait>(const_derived_ref);
+        auto const_upcast_base_ref = trp::trait_cast<base_trait const>(const_derived_ref);
         test::expect_eq(
             Case::name, "const_upcast_base.cvalue", const_upcast_base_ref.cvalue(), *expected_derived);
     }
