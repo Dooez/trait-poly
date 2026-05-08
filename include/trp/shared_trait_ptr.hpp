@@ -116,6 +116,7 @@ private:
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(shared_trait_ptr<T> ptr);
+
     template<explicit_supertrait_of<Trait> Supertrait>
     [[nodiscard]] friend auto upcast(shared_trait_ptr ptr) -> shared_trait_ptr<Supertrait> {
         if (not ptr)
@@ -136,6 +137,9 @@ private:
     }
     template<any_trait>
     friend class shared_trait_ptr;
+
+    template<any_trait T, implements_trait<T>, typename Alloc, typename... Args>
+    friend auto allocate_shared_trait(Alloc const&, Args&&...);
 };
 
 template<typename Supertrait, typename Trait>

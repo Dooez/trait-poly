@@ -26,14 +26,6 @@ namespace stdr = std::ranges;
 namespace stdv = std::views;
 namespace meta = std::meta;
 
-consteval auto anon_member_spec(meta::info r) -> meta::info {
-#if defined(__clang__)
-    return data_member_spec(r, {});
-#else
-    return data_member_spec(r, {.name = "_"});
-#endif
-}
-
 template<auto V>
 struct constant_wrapper {
     using type       = constant_wrapper;
@@ -64,12 +56,19 @@ concept cw_info = has_template_arguments(^^T)                     //
                   and
 [:substitute(^^std::same_as, {^^meta::info, type_of(template_arguments_of (^^T)[0])}):];
 
+consteval auto anon_member_spec(meta::info r) -> meta::info {
+#if defined(__clang__)
+    return data_member_spec(r, {});
+#else
+    return data_member_spec(r, {.name = "_"});
+#endif
+}
+
 template<non_cvref... Ts>
 struct aggregate_definer {
     struct aggregate;
     consteval {
-        constexpr auto agg_info = ^^aggregate;
-        define_aggregate(agg_info,
+        define_aggregate(^^aggregate,
                          std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(anon_member_spec));
     }
 };

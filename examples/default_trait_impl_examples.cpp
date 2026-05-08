@@ -22,7 +22,7 @@ namespace base_inline_inherited {
 struct base_trait {
     void ping() const;
 
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[base inline]");
     }
 };
@@ -41,7 +41,7 @@ namespace base_specialization_wins {
 struct base_trait {
     void ping() const;
 
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[base inline]");
     }
 };
@@ -53,14 +53,16 @@ struct empty_impl {};
 
 template<>
 struct trp::default_impl_spec<base_specialization_wins::base_trait> {
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[base specialization]");
     }
 };
 
 
-static_assert(trp::implements_trait<base_specialization_wins::empty_impl, base_specialization_wins::base_trait>);
-static_assert(trp::implements_trait<base_specialization_wins::empty_impl, base_specialization_wins::derived_trait>);
+static_assert(
+    trp::implements_trait<base_specialization_wins::empty_impl, base_specialization_wins::base_trait>);
+static_assert(
+    trp::implements_trait<base_specialization_wins::empty_impl, base_specialization_wins::derived_trait>);
 
 // Derived inline default: override inherited base behavior for derived-facing APIs.
 // Upcasting derived ref to base keeps derived-selected behavior.
@@ -70,7 +72,7 @@ struct base_trait {
 };
 
 struct derived_trait : base_trait {
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[derived inline]");
     }
 };
@@ -80,7 +82,7 @@ struct empty_impl {};
 
 template<>
 struct trp::default_impl_spec<derived_inline_wins::base_trait> {
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[base specialization]");
     }
 };
@@ -95,13 +97,13 @@ namespace derived_specialization_wins {
 struct base_trait {
     void ping() const;
 
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[base inline]");
     }
 };
 
 struct derived_trait : base_trait {
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[derived inline]");
     }
 };
@@ -111,14 +113,14 @@ struct empty_impl {};
 
 template<>
 struct trp::default_impl_spec<derived_specialization_wins::derived_trait> {
-    static void ping(const auto&) {
+    static void ping(auto const&) {
         std::println("[derived specialization]");
     }
 };
 
 
-static_assert(trp::implements_trait<derived_specialization_wins::empty_impl,
-                                    derived_specialization_wins::base_trait>);
+static_assert(
+    trp::implements_trait<derived_specialization_wins::empty_impl, derived_specialization_wins::base_trait>);
 static_assert(trp::implements_trait<derived_specialization_wins::empty_impl,
                                     derived_specialization_wins::derived_trait>);
 
@@ -131,10 +133,10 @@ int main() {
         //   [base inline]  direct derived view
         //   [base inline]  derived ref upcast to base
         empty_impl impl{};
-        trp::dyn_trait_ref<const base_trait>(impl).ping();
-        auto derived = trp::dyn_trait_ref<const derived_trait>(impl);
+        trp::dyn_trait_ref<base_trait const>(impl).ping();
+        auto derived = trp::dyn_trait_ref<derived_trait const>(impl);
         derived.ping();
-        trp::trait_cast<const base_trait>(derived).ping();
+        trp::trait_cast<base_trait const>(derived).ping();
         std::println();
     }
     {
@@ -145,10 +147,10 @@ int main() {
         //   [base specialization]  direct derived view
         //   [base specialization]  derived ref upcast to base
         empty_impl impl{};
-        trp::dyn_trait_ref<const base_trait>(impl).ping();
-        auto derived = trp::dyn_trait_ref<const derived_trait>(impl);
+        trp::dyn_trait_ref<base_trait const>(impl).ping();
+        auto derived = trp::dyn_trait_ref<derived_trait const>(impl);
         derived.ping();
-        trp::trait_cast<const base_trait>(derived).ping();
+        trp::trait_cast<base_trait const>(derived).ping();
         std::println();
     }
     {
@@ -159,10 +161,10 @@ int main() {
         //   [derived inline]       direct derived view
         //   [derived inline]       derived ref upcast to base
         empty_impl impl{};
-        trp::dyn_trait_ref<const base_trait>(impl).ping();
-        auto derived = trp::dyn_trait_ref<const derived_trait>(impl);
+        trp::dyn_trait_ref<base_trait const>(impl).ping();
+        auto derived = trp::dyn_trait_ref<derived_trait const>(impl);
         derived.ping();
-        trp::trait_cast<const base_trait>(derived).ping();
+        trp::trait_cast<base_trait const>(derived).ping();
         std::println();
     }
     {
@@ -173,10 +175,10 @@ int main() {
         //   [derived specialization] direct derived view
         //   [derived specialization] derived ref upcast to base
         empty_impl impl{};
-        trp::dyn_trait_ref<const base_trait>(impl).ping();
-        auto derived = trp::dyn_trait_ref<const derived_trait>(impl);
+        trp::dyn_trait_ref<base_trait const>(impl).ping();
+        auto derived = trp::dyn_trait_ref<derived_trait const>(impl);
         derived.ping();
-        trp::trait_cast<const base_trait>(derived).ping();
+        trp::trait_cast<base_trait const>(derived).ping();
         std::println();
     }
 

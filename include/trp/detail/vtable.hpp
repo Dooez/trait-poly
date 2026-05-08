@@ -99,7 +99,8 @@ consteval auto fill_vtable() {
     auto const get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
         constexpr auto m =
-            stdr::find(impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt)->fn;
+            stdr::find(*impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt)
+                ->fn;
         if (m == meta::info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
@@ -110,14 +111,14 @@ consteval auto fill_vtable() {
         }
 
         auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
-        if constexpr (concepts::explicit_template_method_impl_of<m, Trait>) {    // default impl
-            using cvts_ref                     = cvts_trait_ref<Trait, Impl>;
+        if constexpr (concepts::explicit_template_method_impl_of<m, SESubtrait>) {    // default impl
+            using cvts_ref                     = cvts_trait_ref<SESubtrait, Impl>;
             constexpr auto method              = substitute(m, {^^cvts_ref});
             constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
                                                             {reflect_constant(method),
                                                              ^^Impl,
                                                              ^^cvts_ref,
-                                                             ^^Trait,
+                                                             ^^SESubtrait,
                                                              trait_method_idt,
                                                              trait_method_idt_t::param_infos[is]...});
             using wrapper_struct               = [:wrapper_struct_info:];
@@ -129,7 +130,7 @@ consteval auto fill_vtable() {
                                                             {reflect_constant(m),
                                                              ^^Impl,
                                                              ref,
-                                                             ^^Trait,
+                                                             ^^SESubtrait,
                                                              trait_method_idt,
                                                              trait_method_idt_t::param_infos[is]...});
             using wrapper_struct               = [:wrapper_struct_info:];
@@ -155,7 +156,7 @@ consteval auto fill_vtable() {
         &default_delete<Impl>,
         &unique_id_struct<Impl>::value,
         quals,
-        {[:substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^Trait, ^^Impl}):]...},
+        {[:substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^SESubtrait, ^^Impl}):]...},
     };
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>

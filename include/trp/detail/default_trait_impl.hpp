@@ -54,13 +54,12 @@ struct impl_method_bind {
 template<non_cv_trait Trait>
 inline constexpr auto all_default_impls = [] {
     auto impls = std::vector<impl_method_bind>{};
-
-    for (auto m: nonspecial_members<default_impl_spec<Trait>> |
-                     stdv::filter(concepts::is_explicit_template_method_impl<Trait>))
+    for (auto const m: nonspecial_members<default_impl_spec<Trait>> |
+                           stdv::filter(concepts::is_explicit_template_method_impl<Trait>))
         impls.emplace_back(m, explicit_impl_to_method_identity(m));
 
     auto const append_unique = [&](auto&& method_impls) {
-        for (auto m: method_impls)
+        for (auto const m: method_impls)
             if (not stdr::contains(impls, m.idt, &impl_method_bind::idt))
                 impls.push_back(m);
     };
@@ -79,48 +78,58 @@ template<non_cvref Impl, any_method_idt MethodIdt>
 inline constexpr auto matching_id_direct_public_members_for_method =
     matching_id_direct_public_members<Impl, MethodIdt::identifier>;
 
-consteval auto find_trait_method_impl(meta::info trait, meta::info impl, meta::info method_idt)
+consteval auto find_explicit_trait_method_impl(meta::info ncv_trait, meta::info impl, meta::info method_idt)
     -> meta::info {
-    auto nsm = subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, trait})});
-    for (auto m: nsm)
+    auto const nsm =
+        subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
+    for (auto const m: nsm)
         if (explicit_impl_to_method_identity(m) == method_idt)
             return m;
 
-    auto bases = subextract_info_span(^^direct_base_types, {trait});
-    for (auto base: bases)
-        if (auto m = find_trait_method_impl(copy_cv_to(trait, base), impl, method_idt); m != meta::info{})
+    auto const bases = subextract_info_span(^^direct_base_types, {ncv_trait});
+    for (auto const base: bases)
+        if (auto m = find_explicit_trait_method_impl(base, impl, method_idt); m != meta::info{})
             return m;
-
-    auto id_mems =
+    return {};
+};
+consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, meta::info method_idt) {
+    auto const m = find_explicit_trait_method_impl(ncv_trait, impl, method_idt);
+    if (m != meta::info{})
+        return m;
+    auto const id_mems =
         subextract_info_span(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt});
-    for (auto m: id_mems) {
+    for (auto const m: id_mems) {
         auto matches = extract<bool>(substitute(^^strictly_matches, {impl, reflect_constant(m), method_idt}));
         if (matches)
             return m;
     }
-    return {};
-};
+    return meta::info{};
+}
 
-template<non_cvref Impl, non_cv_trait Trait>
+template<non_ref Impl, non_cv_trait Trait>
 inline constexpr auto full_impls_for = [] {
     auto impls = std::vector<impl_method_bind>();
     for (auto method_idt: all_trait_methods<Trait>) {
         auto m = find_trait_method_impl(^^Trait, ^^Impl, method_idt);
         if (m == meta::info{}) {
             m = [=] {
-                auto checked_bases = std::vector<meta::info>{};
-                auto next_bases    = std::vector<meta::info>{};
-                auto bases =
-                    subextract_info_span(^^direct_base_types, {^^Impl}) | stdr::to<std::vector<meta::info>>();
+                auto       checked_bases = std::vector<meta::info>{};
+                auto       next_bases    = std::vector<meta::info>{};
+                auto const apply_cv = stdv::transform([](auto base) { return copy_cv_to(^^Impl, base); });
+
+                auto bases = subextract_info_span(^^direct_base_types, {remove_cv(^^Impl)})    //
+                             | apply_cv                                                        //
+                             | stdr::to<std::vector<meta::info>>();
                 while (not stdr::empty(bases)) {
-                    for (auto base: bases) {
-                        auto m = find_trait_method_impl(^^Trait, base, method_idt);
-                        if (m != meta::info{})
+                    for (auto const base: bases) {
+                        if (auto m = find_trait_method_impl(^^Trait, base, method_idt); m != meta::info{})
                             return m;
                         checked_bases.push_back(base);
-                        auto nb = subextract_info_span(^^direct_base_types, {base});
+                        auto nb = subextract_info_span(^^direct_base_types, {remove_cv(base)});
                         next_bases.append_range(
-                            nb | stdv::filter([&](auto r) { return not stdr::contains(checked_bases, r); }));
+                            nb            //
+                            | apply_cv    //
+                            | stdv::filter([&](auto r) { return not stdr::contains(checked_bases, r); }));
                     }
                     bases = next_bases;
                     next_bases.clear();
@@ -129,7 +138,7 @@ inline constexpr auto full_impls_for = [] {
             }();
         }
         if (m == meta::info{}) {
-            for (auto bind: all_default_impls<Trait>)
+            for (auto const bind: all_default_impls<Trait>)
                 if (bind.idt == method_idt) {
                     m = bind.fn;
                     break;
@@ -142,28 +151,31 @@ inline constexpr auto full_impls_for = [] {
 
 
 template<non_ref Impl, any_trait Trait>
-inline constexpr auto impls_for = [] {
-    constexpr auto is_matching_method = [](impl_method_bind bind) {
-        return (is_const_idt(bind.idt) or not is_const(^^Trait))    //
-               and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
-    };
-    constexpr auto is_invokable_method = [](impl_method_bind bind) {
-        return (is_const_idt(bind.idt) or not is_const(^^Impl))    //
-               and (is_volatile_idt(bind.idt) or not is_volatile(^^Impl));
-    };
-    return std::define_static_array(full_impls_for<std::remove_cv_t<Impl>, std::remove_cv_t<Trait>>    //
-                                    | stdv::filter(is_matching_method)                                 //
-                                    | stdv::transform([=](auto bind) {
-                                          if (not is_invokable_method(bind))
-                                              bind.fn = {};
-                                          return bind;
-                                      }));
+inline constexpr auto impls_for = [] -> std::optional<std::span<impl_method_bind const>> {
+    auto const impls = [] {
+        if constexpr (non_cv_trait<Trait>) {
+            return full_impls_for<Impl, Trait>;
+        } else {
+            constexpr auto is_matching_method = [](impl_method_bind bind) {
+                return (is_const_idt(bind.idt) or not is_const(^^Trait))    //
+                       and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
+            };
+            return full_impls_for<Impl, std::remove_cv_t<Trait>>    //
+                   | stdv::filter(is_matching_method)               //
+                   | stdr::to<std::vector<impl_method_bind>>();
+        }
+    }();
+    if (stdr::contains(impls, meta::info{}, &impl_method_bind::fn))
+        return std::nullopt;
+    if constexpr (non_cv_trait<Trait>) {
+        return impls;
+    } else {
+        return std::define_static_array(impls);
+    }
 }();
-
 }    // namespace detail
 
 template<typename Impl, typename Trait>
 concept implements_trait =
-    any_trait<Trait> and std::is_class_v<Impl> and
-    stdr::none_of(detail::impls_for<Impl, Trait>, [](auto bind) { return bind.fn == meta::info{}; });
+    any_trait<Trait> and std::is_class_v<Impl> and detail::impls_for<Impl, Trait>.has_value();
 }    // namespace trp

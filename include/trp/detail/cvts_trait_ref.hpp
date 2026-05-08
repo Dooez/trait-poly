@@ -239,7 +239,7 @@ struct cvts_ref_definer {
 
             template for (constexpr auto mem: all_trait_methods<Trait>) {
                 using method_idt    = [:mem:];
-                constexpr auto m    = stdr::find(impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
+                constexpr auto m    = stdr::find(*impls_for<Impl, Trait>, mem, &impl_method_bind::idt)->fn;
                 constexpr auto spec = substitute(^^cvts_overload_spec,
                                                  {^^Impl,    //
                                                   meta::reflect_constant(m),
@@ -278,6 +278,6 @@ struct cvts_ref_definer {
 }    // namespace cvts_trait
 
 // cv-transient static trait reference
-template<any_trait Trait, typename Impl>
+template<any_trait Trait, implements_trait<Trait> Impl>
 using cvts_trait_ref = cvts_trait::cvts_ref_definer<Trait, Impl>::ref;
 }    // namespace trp::detail

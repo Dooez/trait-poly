@@ -143,7 +143,7 @@ concept any_trait =
     std::is_class_v<Trait> and detail::concepts::any_traits<^^detail::concepts::any_traits, Trait>;
 
 template<typename Trait>
-concept non_cv_trait = any_trait<Trait> and non_cvref<Trait>;
+concept non_cv_trait = non_cvref<Trait> and any_trait<Trait>;
 
 template<typename Supertrait, typename Trait>
 concept supertrait_of = any_trait<Supertrait>    //
