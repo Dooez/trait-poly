@@ -18,7 +18,6 @@ template<auto Identifier,
          bool Noexcept,
          typename Ret,
          typename... Args>
-    requires(not(RVRef or Value))    // not supported
 struct cvtmock_cvo_invoker<
     method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
     auto operator()(Args...) noexcept(Noexcept) -> Ret

@@ -14,7 +14,7 @@ template<typename Supertrait, any_trait Trait>
 }
 template<any_trait Trait, implements_trait<Trait> Impl, supertrait_of<Trait> Supertrait>
 [[nodiscard]] auto trait_cast(dyn_trait_ref<Supertrait> const& ref) -> dyn_trait_ref<Trait> {
-    return *static_cast<Impl*>(detail::extract_obj_ptr(ref));
+    return {&detail::trait_vtable_for<std::remove_cv_t<Supertrait>, std::remove_cv_t<Supertrait>, Impl>, detail::extract_obj_ptr(ref)};
 }
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
