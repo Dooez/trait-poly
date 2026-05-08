@@ -37,7 +37,6 @@ template<uZ   Index,
          bool Noexcept,
          typename Ret,
          typename... Args>
-    requires(not(LVRef or RVRef or Value))    // not supported
 struct cvo_invoker<
     Index,
     method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {

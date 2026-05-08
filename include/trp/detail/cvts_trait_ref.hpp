@@ -91,7 +91,7 @@ template<typename TRef,
          bool       Noexcept,
          typename Ret,
          typename... Args>
-    requires(not(LVRef or RVRef or Value))    // not supported
+    requires(not(RVRef or Value))    // not supported
 struct cvts_cvo_invoker<
     TRef,
     MethodHolder,
