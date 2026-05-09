@@ -11,7 +11,7 @@ namespace detail {
 namespace concepts {
 template<any_trait Trait>
 consteval bool maps_to_a_trait_method_of(meta::info fn) {
-    return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(fn));
+    return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(fn, ^^Trait));
 };
 
 template<any_trait Trait>
@@ -56,17 +56,18 @@ inline constexpr auto all_default_impls = [] {
     auto impls = std::vector<impl_method_bind>{};
     for (auto const m: nonspecial_members<default_impl_spec<Trait>> |
                            stdv::filter(concepts::is_explicit_template_method_impl<Trait>))
-        impls.emplace_back(m, explicit_impl_to_method_identity(m));
+        impls.emplace_back(m, explicit_impl_to_method_identity(m, ^^Trait));
 
     auto const append_unique = [&](auto&& method_impls) {
         for (auto const m: method_impls)
             if (not stdr::contains(impls, m.idt, &impl_method_bind::idt))
                 impls.push_back(m);
     };
-    append_unique(
-        nonspecial_members<Trait>                                            //
-        | stdv::filter(concepts::is_explicit_template_method_impl<Trait>)    //
-        | stdv::transform([](auto m) { return impl_method_bind{m, explicit_impl_to_method_identity(m)}; }));
+    append_unique(nonspecial_members<Trait>                                            //
+                  | stdv::filter(concepts::is_explicit_template_method_impl<Trait>)    //
+                  | stdv::transform([](auto m) {
+                        return impl_method_bind{m, explicit_impl_to_method_identity(m, ^^Trait)};
+                    }));
     template for (constexpr auto base: direct_base_types<Trait>) {
         using base_t = [:base:];
         append_unique(all_default_impls<base_t>);
@@ -83,7 +84,7 @@ consteval auto find_explicit_trait_method_impl(meta::info ncv_trait, meta::info 
     auto const nsm =
         subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
     for (auto const m: nsm)
-        if (explicit_impl_to_method_identity(m) == method_idt)
+        if (explicit_impl_to_method_identity(m, ncv_trait) == method_idt)
             return m;
 
     auto const bases = subextract_info_span(^^direct_base_types, {ncv_trait});

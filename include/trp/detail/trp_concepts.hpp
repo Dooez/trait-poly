@@ -7,12 +7,11 @@
 namespace trp {
 namespace detail {
 
-consteval auto explicit_impl_to_method_identity(meta::info fn) {
+consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_inf) {
     auto const identifier = meta::reflect_constant_string(identifier_of(fn));
     if (is_template(fn)) {
-        auto const trait_inf = parent_of(fn);
-        auto const mock_inf  = substitute(^^mock_trait_ref, {trait_inf});
-        fn                   = substitute(fn, {mock_inf});
+        auto const mock_inf = substitute(^^mock_trait_ref, {trait_inf});
+        fn                  = substitute(fn, {mock_inf});
     }
     auto const params = parameters_of(fn);
     if (stdr::empty(params))
@@ -75,9 +74,10 @@ concept no_operators = non_cvref<Trait>    //
                                       or is_operator_function_template(m);
                            });    //
 template<typename Trait>
-concept no_virtual = non_cvref<Trait>                                                  //
-                     and stdr::none_of(nonspecial_members<Trait>, meta::is_virtual)    //
-                     and stdr::none_of(direct_base_types<Trait>, meta::is_virtual);
+concept no_virtual =
+    non_cvref<Trait>                                                  //
+    and stdr::none_of(nonspecial_members<Trait>, meta::is_virtual)    //
+    and stdr::none_of(bases_of(^^Trait, meta::access_context::unchecked()), meta::is_virtual);
 
 template<typename Trait>
 concept nonstatic_methods_are_not_templates =
@@ -115,7 +115,8 @@ concept static_methods_are_default_impl_for =
                                      or is_function(r));
                      }),
                      [](auto r) {
-                         return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(r));
+                         return stdr::contains(all_trait_methods<Trait>,
+                                               explicit_impl_to_method_identity(r, ^^Trait));
                      });
 
 

@@ -20,7 +20,8 @@ template<any_trait Trait, implements_trait<Trait> Impl, any_trait U>
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
 [[nodiscard]] auto is_holding_type(dyn_trait_ref<Trait> const& ref) -> bool {
-    return detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
+    return detail::extract_obj_ptr(ref)    //
+           and detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
 }
 namespace detail {
 template<typename T>
@@ -82,11 +83,13 @@ struct cvm_invoker : cvo_invoker<OvSpecs::index, typename OvSpecs::id>... {
 
 template<typename CVMInvoker, typename VTable, typename... Args>
 concept noexcept_cvm_invoker =
-    is_template(^^CVMInvoker) and (template_of(^^CVMInvoker) == ^^cvm_invoker) and ([] {
-        CVMInvoker invoker{};
-        VTable     vt{};
-        return noexcept(invoker(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
-    });
+    has_template_arguments(^^CVMInvoker)                //
+    and (template_of(^^CVMInvoker) == ^^cvm_invoker)    //
+    and ([] {
+            CVMInvoker invoker{};
+            VTable     vt{};
+            return noexcept(invoker(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
+        }());
 
 
 template<typename TRef, typename Trait, typename MethodHolder, typename CVMInvoker>

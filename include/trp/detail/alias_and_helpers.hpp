@@ -51,10 +51,10 @@ inline constexpr auto cw = constant_wrapper<V>{};
 static constexpr auto ctx_unchecked = meta::access_context::unchecked();
 
 template<typename T>
-concept cw_info = has_template_arguments(^^T)                     //
-                  and template_of(^^T) == (^^constant_wrapper)    //
-                  and
-[:substitute(^^std::same_as, {^^meta::info, type_of(template_arguments_of (^^T)[0])}):];
+concept cw_info =
+    has_template_arguments(^^T)                     //
+    and template_of(^^T) == (^^constant_wrapper)    //
+    and extract<bool>(substitute(^^std::same_as, {^^meta::info, type_of(template_arguments_of (^^T)[0])}));
 
 consteval auto anon_member_spec(meta::info r) -> meta::info {
 #if defined(__clang__)
@@ -153,7 +153,7 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
         auto const eop          = params[0];
         auto const eop_t        = type_of(eop);
         auto const is_const_    = meta::reflect_constant(is_const(remove_reference(eop_t)));
-        auto const is_volatile_ = meta::reflect_constant(is_volatile(eop_t));
+        auto const is_volatile_ = meta::reflect_constant(is_volatile(remove_reference(eop_t)));
         auto const is_lvref     = meta::reflect_constant(is_lvalue_reference_type(eop_t));
         auto const is_rvref     = meta::reflect_constant(is_rvalue_reference_type(eop_t));
         auto const is_value_    = meta::reflect_constant(not is_lvalue_reference_type(eop_t)    //
@@ -258,5 +258,29 @@ template<non_ref T>
 struct unique_id_struct {
     inline static char value{};
 };
+
+consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_inf) {
+    auto const identifier = meta::reflect_constant_string(identifier_of(fn));
+    if (is_template(fn)) {
+        auto const mock_inf = substitute(^^mock_trait_ref, {trait_inf});
+        fn                  = substitute(fn, {mock_inf});
+    }
+    auto const params = parameters_of(fn);
+    if (stdr::empty(params))
+        throw "Default trait implementation functions must accept an implementation object reference as a "
+              "first parameter.";
+    auto const impl = type_of(params[0]);
+
+    auto idt_targs = std::vector{identifier,
+                                 meta::reflect_constant(is_const(remove_reference(impl))),
+                                 meta::reflect_constant(is_volatile(remove_reference(impl))),
+                                 meta::reflect_constant(false),
+                                 meta::reflect_constant(false),
+                                 meta::reflect_constant(false),
+                                 meta::reflect_constant(is_noexcept(fn)),
+                                 return_type_of(fn)};
+    idt_targs.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
+    return substitute(^^method_identity_t, idt_targs);
+}
 }    // namespace detail
 }    // namespace trp
