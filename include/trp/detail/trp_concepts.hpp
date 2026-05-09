@@ -15,13 +15,13 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     }
     auto const params = parameters_of(fn);
     if (stdr::empty(params))
-        throw "Default trait implementation functions must accept an implementation object reference as a "
+        throw "Explicit trait implementation functions must accept an implementation object reference as a "
               "first parameter.";
-    auto const impl = type_of(params[0]);
+    auto const ref = type_of(params[0]);
 
     auto idt_targs = std::vector{identifier,
-                                 meta::reflect_constant(is_const(remove_reference(impl))),
-                                 meta::reflect_constant(is_volatile(remove_reference(impl))),
+                                 meta::reflect_constant(is_const(remove_reference(ref))),
+                                 meta::reflect_constant(is_volatile(remove_reference(ref))),
                                  meta::reflect_constant(false),
                                  meta::reflect_constant(false),
                                  meta::reflect_constant(false),

@@ -14,6 +14,7 @@ struct ctrl_header {
 };
 
 template<typename Impl, typename Allocator, typename Arc = empty_0>
+    requires std::is_nothrow_move_constructible_v<Allocator>
 struct ctrl_block : public ctrl_header<Arc> {
     ctrl_block() = delete;
 

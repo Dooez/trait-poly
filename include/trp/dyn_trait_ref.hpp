@@ -319,8 +319,10 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
                 return detail::extract_vtable_ptr(ref)->cv_quals.has_const;
             } else if constexpr (std::is_volatile_v<U>) {
                 return detail::extract_vtable_ptr(ref)->cv_quals.has_volatile;
+            } else {
+                // otherwise U has to be a supertrait of Trait
+                static_assert(false);
             }
-            // otherwise U has to be a supertrait of Trait
         }
     }
     template<any_trait U>
