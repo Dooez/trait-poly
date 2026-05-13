@@ -183,22 +183,36 @@ inline constexpr auto matching_id_direct_public_members = std::define_static_arr
 
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId>
 inline constexpr bool strictly_matches = [] {
-    using return_type       = MethodId::return_type;
-    using impl_invocation_t = [:MethodId::add_obj_cv(^^Impl):];
-    auto [... arg_ids]      = MethodId::param_identities;
-    if constexpr (is_template(ImplMethod)) {
+    using return_type          = MethodId::return_type;
+    using impl_invocation_t    = [:MethodId::add_obj_cv(^^Impl):];
+    constexpr auto is_template = meta::is_template(ImplMethod);
+    auto [... arg_ids]         = MethodId::param_identities;
+    if (is_template and MethodId::is_noexcept) {
+        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+            {
+                impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+            } noexcept -> std::same_as<return_type>;
+        };
+    }
+    if (is_template) {
         return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
             {
                 impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
             } -> std::same_as<return_type>;
         };
-    } else {
+    }
+    if (MethodId::is_noexcept) {
         return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
             {
                 impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
-            } -> std::same_as<return_type>;
+            } noexcept -> std::same_as<return_type>;
         };
     }
+    return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+        {
+            impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+        } -> std::same_as<return_type>;
+    };
 }();
 
 template<typename ParamType>
