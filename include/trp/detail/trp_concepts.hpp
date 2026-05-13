@@ -22,7 +22,7 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     auto idt_targs = std::vector{identifier,
                                  meta::reflect_constant(is_const(remove_reference(ref))),
                                  meta::reflect_constant(is_volatile(remove_reference(ref))),
-                                 meta::reflect_constant(false),
+                                 meta::reflect_constant(true),
                                  meta::reflect_constant(false),
                                  meta::reflect_constant(false),
                                  meta::reflect_constant(is_noexcept(fn)),
@@ -44,6 +44,7 @@ consteval bool check_constexpr_static_data_member() {
 #else
     return false;
 #endif
+#undef TRP_CHECK_CESDM
 }
 
 template<typename Trait>

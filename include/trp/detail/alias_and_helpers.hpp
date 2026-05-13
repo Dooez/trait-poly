@@ -111,6 +111,7 @@ template<auto Identifier,
          bool Noexcept,
          typename Ret,
          typename... Params>
+    requires(LVRef + RVRef + Value <= 1)
 struct method_identity_t {
     static constexpr auto identifier       = Identifier;
     static constexpr bool is_const         = Const;
@@ -186,6 +187,16 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     return substitute(^^method_identity_t, arguments);
 }
 
+consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
+    if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
+        throw "Expected method_identity_t specialization";
+    auto targs = template_arguments_of(idt);
+    if (extract<bool>(targs[3]) or extract<bool>(targs[4]) or extract<bool>(targs[5]))
+        return idt;
+    targs[3] = meta::reflect_constant(true);
+    return substitute(^^method_identity_t, targs);
+}
+
 template<typename T>
 concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
 
@@ -229,15 +240,17 @@ inline constexpr auto direct_base_types = std::define_static_array(
 
 template<typename T>
 inline constexpr auto direct_trait_methods = [] {
-    constexpr auto is_valid_method = [](meta::info method) {
+    constexpr auto is_relevant_method = [](meta::info method) {
         return is_function(method)                            //
                and not is_special_member_function(method)     //
                and (is_const(method) or not is_const(^^T))    //
                and (is_volatile(method) or not is_volatile(^^T));
     };
+
     return define_static_array(members_of(^^T, std::meta::access_context::unprivileged())    //
-                               | stdv::filter(is_valid_method)                               //
-                               | stdv::transform(method_identity));
+                               | stdv::filter(is_relevant_method)                            //
+                               | stdv::transform(method_identity)
+                               | stdv::transform(as_lref_method_identity));
 }();
 template<typename T>
 inline constexpr auto all_trait_methods = [] {
