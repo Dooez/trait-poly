@@ -202,7 +202,7 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     return substitute(^^method_identity_t, arguments);
 }
 template<typename MethodIdt>
-inline constexpr std::string_view method_identifier = MethodIdt::identifier;
+inline constexpr char const* method_identifier = MethodIdt::identifier;
 
 template<typename MethodIdt>
 inline constexpr auto method_qualifiers = MethodIdt::qualifiers;
@@ -217,10 +217,10 @@ consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     targs[3] = meta::reflect_constant(true);
     return substitute(^^method_identity_t, targs);
 }
-consteval auto extract_method_identifier(meta::info idt) -> std::string_view {
+consteval auto extract_method_identifier(meta::info idt) -> char const* {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    return extract<std::string_view>(substitute(^^method_identifier, {idt}));
+    return extract<char const*>(substitute(^^method_identifier, {idt}));
 };
 consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
@@ -295,7 +295,8 @@ inline constexpr auto all_trait_methods = [] {
         append_unique(all_trait_methods<base_t>);
     }
     constexpr auto method_id_less = [](meta::info lhs, meta::info rhs) {
-        return extract_method_identifier(lhs) < extract_method_identifier(rhs);
+        return std::string_view(extract_method_identifier(lhs)) <
+               std::string_view(extract_method_identifier(rhs));
     };
     stdr::sort(result, method_id_less);
     return define_static_array(result);
@@ -311,14 +312,14 @@ inline constexpr auto trait_method_groups = [] -> std::span<name_id_pair const> 
         return {};
     auto groups = std::vector<name_id_pair>{};
     groups.push_back({
-        .name      = extract_method_identifier(all_trait_methods<T>[0]).data(),
+        .name      = extract_method_identifier(all_trait_methods<T>[0]),
         .begin_idx = 0,
     });
     for (auto [i, idt]: stdv::zip(stdv::iota(0U), all_trait_methods<T>) | stdv::drop(1)) {
         if (auto name = extract_method_identifier(idt); name != groups.back().name) {
             groups.back().end_idx = i;
             groups.push_back({
-                .name      = name.data(),
+                .name      = name,
                 .begin_idx = i,
                 .end_idx   = i + 1,
             });
