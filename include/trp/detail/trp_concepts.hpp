@@ -53,8 +53,8 @@ concept no_private_members =
                              stdr::size(members_of(^^Trait, meta::access_context::unprivileged()));
 template<typename Trait>
 concept no_private_bases =
-    non_cvref<Trait> and stdr::size(direct_base_types<Trait>) ==
-                             stdr::size(bases_of(^^Trait, meta::access_context::unprivileged()));
+    non_cvref<Trait> and
+    stdr::size(bases_of(^^Trait, meta::access_context::unchecked())) == stdr::size(direct_base_types<Trait>);
 template<typename Trait>
 concept no_nonstatic_data_members =
     non_cvref<Trait> and
