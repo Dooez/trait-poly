@@ -21,20 +21,33 @@ consteval bool is_explicit_template_method_impl(meta::info fn) {
            and first_parameter_is_non_eop_cvref_of<mock_trait_ref<Trait>>(
                    substitute(fn, {^^mock_trait_ref<Trait>}));
 }
+template<meta::info Fn>
+concept any_static_member_info = is_static_member(Fn);
+template<meta::info Fn>
+concept any_fn_template_info = is_function_template(Fn);
+
 template<meta::info Fn, typename Trait>
-concept explicit_template_method_impl_of = is_explicit_template_method_impl<Trait>(Fn);
+concept explicit_template_method_impl_of =
+    any_static_member_info<Fn> and any_fn_template_info<Fn> and is_explicit_template_method_impl<Trait>(Fn);
+
+template<typename T>
+concept no_nonstatic_members = stdr::all_of(nonspecial_members<T>, meta::is_static_member);
 }    // namespace concepts
 
-template<typename DefaultImpl, typename Trait>
-concept default_impl_spec_for =
-    non_cv_trait<Trait>                                                                                     //
-    and stdr::all_of(nonspecial_members<DefaultImpl>, concepts::is_explicit_template_method_impl<Trait>)    //
+template<typename ExplicitImpl, typename Trait>
+concept explicit_impl_spec_for = non_cv_trait<Trait>                                                       //
+                                 and concepts::no_private_members<ExplicitImpl>                            //
+                                 and concepts::no_private_bases<ExplicitImpl>                              //
+                                 and concepts::no_virtual<ExplicitImpl>                                    //
+                                 and concepts::no_explicit_special_members<ExplicitImpl>                   //
+                                 and concepts::no_nonstatic_members<ExplicitImpl>                          //
+                                 and concepts::static_methods_are_default_impl_for<ExplicitImpl, Trait>    //
     ;
 
-template<typename DefaultImpl, typename Trait>
-concept strict_default_impl_spec_for = default_impl_spec_for<DefaultImpl, Trait>    //
-                                       and stdr::all_of(nonspecial_members<DefaultImpl>,
-                                                        concepts::maps_to_a_trait_method_of<Trait>)    //
+template<typename ExplicitImpl, typename Trait>
+concept strict_explicit_impl_spec_for = explicit_impl_spec_for<ExplicitImpl, Trait>    //
+                                        and stdr::all_of(nonspecial_members<ExplicitImpl>,
+                                                         concepts::maps_to_a_trait_method_of<Trait>)    //
     ;
 
 struct impl_method_bind {
@@ -142,16 +155,19 @@ inline constexpr auto full_impls_for = [] {
 }();
 
 
-template<non_ref Impl, any_trait Trait>
-inline constexpr auto has_impls_for_all_methods =
-    stdr::all_of(full_impls_for<Impl, std::remove_cv_t<Trait>>, [](impl_method_bind bind) {
-        auto const is_relevant_method = (is_const_idt(bind.idt) or not is_const(^^Trait))    //
-                                        and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
-        return not is_relevant_method or bind.fn != meta::info{};
-    });
+template<typename Impl, typename Trait>
+concept has_impls_for_all_methods =
+    non_ref<Impl>           //
+    and any_trait<Trait>    //
+    and stdr::all_of(full_impls_for<Impl, std::remove_cv_t<Trait>>, [](impl_method_bind bind) {
+            auto const is_relevant_method = (is_const_idt(bind.idt) or not is_const(^^Trait))    //
+                                            and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
+            return not is_relevant_method or bind.fn != meta::info{};
+        });
 }    // namespace detail
 
 template<typename Impl, typename Trait>
-concept implements_trait =
-    any_trait<Trait> and std::is_class_v<Impl> and detail::has_impls_for_all_methods<Impl, Trait>;
+concept implements_trait = any_trait<Trait> and std::is_class_v<Impl> and
+                           detail::explicit_impl_spec_for<impl_spec_for<Impl, Trait>, Trait> and
+                           detail::has_impls_for_all_methods<Impl, Trait>;
 }    // namespace trp
