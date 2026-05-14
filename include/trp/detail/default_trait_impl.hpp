@@ -152,31 +152,15 @@ inline constexpr auto full_impls_for = [] {
 
 
 template<non_ref Impl, any_trait Trait>
-inline constexpr auto impls_for = [] -> std::optional<std::span<impl_method_bind const>> {
-    auto const impls = [] {
-        if constexpr (non_cv_trait<Trait>) {
-            return full_impls_for<Impl, Trait>;
-        } else {
-            constexpr auto is_matching_method = [](impl_method_bind bind) {
-                return (is_const_idt(bind.idt) or not is_const(^^Trait))    //
-                       and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
-            };
-            return full_impls_for<Impl, std::remove_cv_t<Trait>>    //
-                   | stdv::filter(is_matching_method)               //
-                   | stdr::to<std::vector<impl_method_bind>>();
-        }
-    }();
-    if (stdr::contains(impls, meta::info{}, &impl_method_bind::fn))
-        return std::nullopt;
-    if constexpr (non_cv_trait<Trait>) {
-        return impls;
-    } else {
-        return std::define_static_array(impls);
-    }
-}();
+inline constexpr auto has_impls_for_all_methods =
+    stdr::all_of(full_impls_for<Impl, std::remove_cv_t<Trait>>, [](impl_method_bind bind) {
+        auto const is_relevant_method = (is_const_idt(bind.idt) or not is_const(^^Trait))    //
+                                        and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
+        return not is_relevant_method or bind.fn != meta::info{};
+    });
 }    // namespace detail
 
 template<typename Impl, typename Trait>
 concept implements_trait =
-    any_trait<Trait> and std::is_class_v<Impl> and detail::impls_for<Impl, Trait>.has_value();
+    any_trait<Trait> and std::is_class_v<Impl> and detail::has_impls_for_all_methods<Impl, Trait>;
 }    // namespace trp

@@ -207,42 +207,6 @@ struct dyn_cv_ref_impls {
     struct ref_cv;
 
     static constexpr auto impls = [] {
-        // struct method_holder_spec {
-        //     char const* id;
-        //     // std::vector<meta::info> cvm_invoker_targs;
-        //     meta::info cvm_invoker;
-        // };
-        // auto method_holders_specs    = std::vector<method_holder_spec>{};
-        // auto method_holders_specs_c  = std::vector<method_holder_spec>{};
-        // auto method_holders_specs_v  = std::vector<method_holder_spec>{};
-        // auto method_holders_specs_cv = std::vector<method_holder_spec>{};
-        // method_holders_specs.reserve(trait_method_groups<Trait>.size());
-        // method_holders_specs_c.reserve(trait_method_groups<Trait>.size());
-        // method_holders_specs_v.reserve(trait_method_groups<Trait>.size());
-        // method_holders_specs_cv.reserve(trait_method_groups<Trait>.size());
-
-        // uZ i = 0;
-        // for (auto mem: all_trait_methods<Trait>) {
-        //     auto const id         = extract_method_identifier(mem);
-        //     auto const quals      = extract_method_qualifiers(mem);
-        //     auto const spec       = substitute(^^overload_spec, {meta::reflect_constant(i), mem});
-        //     auto const add_holder = [=](auto& method_holders_specs) {
-        //         auto it = stdr::find(method_holders_specs, id, &method_holder_spec::id);
-        //         if (it == method_holders_specs.end()) {
-        //             method_holders_specs.push_back({.id = id.data(), .cvm_invoker_targs = {spec}});
-        //         } else {
-        //             it->cvm_invoker_targs.push_back(spec);
-        //         }
-        //     };
-        //     add_holder(method_holders_specs);
-        //     if (quals.is_const)
-        //         add_holder(method_holders_specs_c);
-        //     if (quals.is_volatile)
-        //         add_holder(method_holders_specs_v);
-        //     if (quals.is_const and quals.is_volatile)
-        //         add_holder(method_holders_specs_cv);
-        //     ++i;
-        // }
         auto ref_targs    = std::vector{^^Trait};
         auto ref_targs_c  = std::vector{add_const(^^Trait)};
         auto ref_targs_v  = std::vector{add_volatile(^^Trait)};
