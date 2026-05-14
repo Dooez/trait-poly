@@ -132,7 +132,8 @@ struct method_identity_t {
     static constexpr auto qualifiers  = method_qualifiers_t{
          .is_const    = is_const,
          .is_volatile = is_volatile,
-         .is_lvalue   = is_rvalue,
+         .is_lvalue   = is_lvalue,
+         .is_rvalue   = is_rvalue,
          .is_value    = is_value,
          .is_noexcept = is_noexcept,
     };

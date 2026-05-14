@@ -7,29 +7,51 @@ template<non_ref Impl, non_cv_trait Trait>
 struct impl_spec_for {};
 
 namespace detail {
+template<typename T>
+struct trait_of_impl_spec;
+
+template<non_ref Impl, non_cv_trait Trait>
+struct trait_of_impl_spec<impl_spec_for<Impl, Trait>> {
+    using type = Trait;
+};
 //
 namespace concepts {
 template<typename T>
 concept only_static_members = stdr::all_of(nonspecial_members<T>, meta::is_static_member);
 
-template<typename T, typename Impl>
-concept static_methods_are_default_impl_of =
-    non_cvref<T>           //
-    and non_cvref<Impl>    //
-    and stdr::all_of(nonspecial_members<T>, first_parameter_is_non_eop_cvref_of<Impl>);
+template<any_trait Trait>
+consteval bool maps_to_a_trait_method_of(meta::info fn) {
+    return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(fn, ^^Trait));
+};
 
+template<any_trait Trait>
+consteval bool is_explicit_template_method_impl(meta::info fn) {
+    return is_static_member(fn)            //
+           and is_function_template(fn)    //
+           and first_parameter_is_non_eop_cvref_of<mock_trait_ref<Trait>>(
+                   substitute(fn, {^^mock_trait_ref<Trait>}));
+}
+template<meta::info Fn>
+concept any_static_member_info = is_static_member(Fn);
+template<meta::info Fn>
+concept any_fn_template_info = is_function_template(Fn);
+template<meta::info Fn, typename Trait>
+concept explicit_template_method_impl_of =
+    any_static_member_info<Fn> and any_fn_template_info<Fn> and is_explicit_template_method_impl<Trait>(Fn);
 }    // namespace concepts
-template<typename ImplSpec, typename Impl>
-concept any_impl_spec_of = non_cvref<ImplSpec>                                    //
-                           and non_cvref<Impl>                                    //
-                           and concepts::no_explicit_special_members<ImplSpec>    //
-                           and concepts::no_nonstatic_data_members<ImplSpec>      //
-                           and concepts::only_static_members<ImplSpec>            //
-                           and concepts::static_methods_are_default_impl_of<ImplSpec, Impl>;
 
-template<typename ImplSpec, typename Impl, typename Trait>
-concept strict_impl_spec_for = any_impl_spec_of<ImplSpec, Impl>    //
-                               and concepts::static_methods_are_default_impl_for<ImplSpec, Trait>;
+template<typename ExplicitImpl, typename Trait>
+concept explicit_impl_spec_for = non_cv_trait<Trait>                                                       //
+                                 and concepts::no_private_members<ExplicitImpl>                            //
+                                 and concepts::no_private_bases<ExplicitImpl>                              //
+                                 and concepts::no_virtual<ExplicitImpl>                                    //
+                                 and concepts::no_explicit_special_members<ExplicitImpl>                   //
+                                 and concepts::only_static_members<ExplicitImpl>                           //
+                                 and concepts::static_methods_are_default_impl_for<ExplicitImpl, Trait>    //
+    ;
+
+template<typename T>
+concept valid_explicit_impl_spec = explicit_impl_spec_for<T, typename trait_of_impl_spec<T>::type>;
 
 }    // namespace detail
 }    // namespace trp
