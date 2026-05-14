@@ -22,19 +22,21 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "$env{TRP_P2996_INSTALL_PATH}/bin/clang++",
-        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements -fannotation-attributes -O2",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements -fannotation-attributes",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -stdlib=libc++ -lc++abi -lunwind",
+        "CMAKE_BUILD_TYPE": "Release",
         "TRP_BUILD_EXAMPLES": "ON"
       }
     },
     {
-      "name": "gcc-latest",
-      "displayName": "gcc-latest",
-      "description": "gcc-latest toolchain with examples enabled",
+      "name": "gcc",
+      "displayName": "gcc",
+      "description": "gcc toolchain with examples enabled",
       "inherits": "base",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "$env{TRP_GCC_INSTALL_PATH}/bin/g++",
-        "CMAKE_CXX_FLAGS": "-O2",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_FLAGS": "",
+        "CMAKE_BUILD_TYPE": "Release",
         "TRP_BUILD_EXAMPLES": "ON"
       }
     }
@@ -45,8 +47,8 @@
       "configurePreset": "clang-p2996"
     },
     {
-      "name": "gcc-latest",
-      "configurePreset": "gcc-latest"
+      "name": "gcc",
+      "configurePreset": "gcc"
     }
   ]
 }
