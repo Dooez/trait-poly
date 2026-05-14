@@ -1,7 +1,10 @@
 # Trait-Based Runtime Polymorphism in C++26
 This repository provides a basic implementation of runtime polymorphism through traits.  
-[Godbolt Example](https://godbolt.org/z/qxGTjYv53)  
+[Godbolt Example](https://godbolt.org/z/xbx4M494G)  
 Traits are defined with a struct declared with non-template, non-static methods and no data members.
+
+> [!WARNING]
+> The docs are not fully updated
 
 ## Implementation Details
 C++26 reflection cannot generate types with methods; it can only generate aggregates with public data members.  
@@ -67,5 +70,5 @@ At this moment, the repository is for experimenting and sharing.
 
 ## Build examples
 - Configure with the p2996 preset: `cmake --preset clang-p2996 -DTRP_P2996_INSTALL_PATH=/path/to/clang-p2996/install`
-- Configure with the gcc preset: `cmake --preset gcc-latest -DTRP_GCC_INSTALL_PATH=/path/to/gcc/install`
-- Build with the matching build preset: `cmake --build --preset <clang-p2996|gcc-latest>`
+- Configure with the gcc preset: `cmake --preset gcc`
+- Build with the matching build preset: `cmake --build --preset <clang-p2996|gcc>`
