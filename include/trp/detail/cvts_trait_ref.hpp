@@ -73,7 +73,7 @@ template<typename TRef,
          typename MethodHolder,
          typename MethodInvoker,
          typename Impl,
-         meta::info,
+         meta::info Method,
          trait_method_idt>
 struct cvts_cvo_invoker;
 
@@ -141,8 +141,6 @@ private:
     static constexpr auto explicit_method = [] {
         if constexpr (is_template(Method)) {
             return substitute(Method, {^^TRef});
-        } else if constexpr (concepts::explicit_method_impl_for<Method, Impl>) {
-            return Method;
         } else {
             return meta::info{};
         }

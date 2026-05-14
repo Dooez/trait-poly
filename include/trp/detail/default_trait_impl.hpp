@@ -21,15 +21,6 @@ consteval bool is_explicit_template_method_impl(meta::info fn) {
            and first_parameter_is_non_eop_cvref_of<mock_trait_ref<Trait>>(
                    substitute(fn, {^^mock_trait_ref<Trait>}));
 }
-template<typename Impl>
-consteval bool is_explicit_method_impl(meta::info fn) {
-    return is_static_member(fn)    //
-           and is_function(fn)     //
-           and first_parameter_is_non_eop_cvref_of<Impl>(fn);
-}
-
-template<meta::info Fn, typename Impl>
-concept explicit_method_impl_for = is_explicit_method_impl<Impl>(Fn);
 template<meta::info Fn, typename Trait>
 concept explicit_template_method_impl_of = is_explicit_template_method_impl<Trait>(Fn);
 }    // namespace concepts

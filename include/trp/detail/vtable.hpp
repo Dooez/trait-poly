@@ -115,18 +115,6 @@ consteval auto fill_vtable() {
                                                              trait_method_idt_t::param_infos[is]...});
             using wrapper_struct               = [:wrapper_struct_info:];
             return &wrapper_struct::invoke;
-
-        } else if constexpr (concepts::explicit_method_impl_for<m, Impl>) {
-            constexpr auto ref                 = type_of(parameters_of(m)[0]);
-            constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,
-                                                            {reflect_constant(m),    //
-                                                             ^^Impl,
-                                                             ref,
-                                                             trait_method_idt,
-                                                             trait_method_idt_t::param_infos[is]...});
-            using wrapper_struct               = [:wrapper_struct_info:];
-            return &wrapper_struct::invoke;
-
         } else {
             constexpr auto wrapper_struct_info = substitute(
                 ^^invoke_wrapper_struct,
