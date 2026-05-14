@@ -72,11 +72,6 @@ struct aggregate_definer {
                          std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(anon_member_spec));
     }
 };
-
-template<>
-struct aggregate_definer<> {
-    struct aggregate {};
-};
 template<non_cvref... Ts>
 using anon_aggregate = aggregate_definer<Ts...>::aggregate;
 
