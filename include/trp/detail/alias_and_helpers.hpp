@@ -102,25 +102,40 @@ consteval auto subextract_info_span(meta::info r, R const& targs) -> std::span<m
                                        extract<uZ>(substitute(^^extract_size, {src_span}))};
 }
 
-template<auto Identifier,
-         bool Const,
-         bool Volatile,
-         bool LVRef,
-         bool RVRef,
-         bool Value,
-         bool Noexcept,
+struct method_qualifiers_t {
+    bool is_const;
+    bool is_volatile;
+    bool is_lvalue;
+    bool is_rvalue;
+    bool is_value;
+    bool is_noexcept;
+};
+template<char const* Identifier,
+         bool        Const,
+         bool        Volatile,
+         bool        LVRef,
+         bool        RVRef,
+         bool        Value,
+         bool        Noexcept,
          typename Ret,
          typename... Params>
     requires(LVRef + RVRef + Value <= 1)
 struct method_identity_t {
-    static constexpr auto identifier       = Identifier;
-    static constexpr bool is_const         = Const;
-    static constexpr bool is_volatile      = Volatile;
-    static constexpr bool is_cv            = Const and Volatile;
-    static constexpr bool is_lvalue        = LVRef;
-    static constexpr bool is_rvalue        = RVRef;
-    static constexpr bool is_value         = Value;
-    static constexpr bool is_noexcept      = Noexcept;
+    static constexpr auto identifier  = Identifier;
+    static constexpr bool is_const    = Const;
+    static constexpr bool is_volatile = Volatile;
+    static constexpr bool is_cv       = Const and Volatile;
+    static constexpr bool is_lvalue   = LVRef;
+    static constexpr bool is_rvalue   = RVRef;
+    static constexpr bool is_value    = Value;
+    static constexpr bool is_noexcept = Noexcept;
+    static constexpr auto qualifiers  = method_qualifiers_t{
+         .is_const    = is_const,
+         .is_volatile = is_volatile,
+         .is_lvalue   = is_rvalue,
+         .is_value    = is_value,
+         .is_noexcept = is_noexcept,
+    };
     using return_type                      = Ret;
     static constexpr auto param_infos      = std::array<meta::info, sizeof...(Params)>{^^Params...};
     static constexpr auto param_identities = make_aggregate(std::type_identity<Params>{}...);
@@ -186,6 +201,12 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     arguments.append_range(params | stdv::transform(meta::type_of));
     return substitute(^^method_identity_t, arguments);
 }
+template<typename MethodIdt>
+inline constexpr std::string_view method_identifier = MethodIdt::identifier;
+
+template<typename MethodIdt>
+inline constexpr auto method_qualifiers = MethodIdt::qualifiers;
+
 
 consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
@@ -196,6 +217,16 @@ consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     targs[3] = meta::reflect_constant(true);
     return substitute(^^method_identity_t, targs);
 }
+consteval auto extract_method_identifier(meta::info idt) -> std::string_view {
+    if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
+        throw "Expected method_identity_t specialization";
+    return extract<std::string_view>(substitute(^^method_identifier, {idt}));
+};
+consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t {
+    if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
+        throw "Expected method_identity_t specialization";
+    return extract<method_qualifiers_t>(substitute(^^method_qualifiers, {idt}));
+};
 
 template<typename T>
 concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
@@ -249,8 +280,7 @@ inline constexpr auto direct_trait_methods = [] {
 
     return define_static_array(members_of(^^T, std::meta::access_context::unprivileged())    //
                                | stdv::filter(is_relevant_method)                            //
-                               | stdv::transform(method_identity)
-                               | stdv::transform(as_lref_method_identity));
+                               | stdv::transform(method_identity) | stdv::transform(as_lref_method_identity));
 }();
 template<typename T>
 inline constexpr auto all_trait_methods = [] {
@@ -264,7 +294,38 @@ inline constexpr auto all_trait_methods = [] {
         using base_t = [:copy_cv_to(^^T, base):];
         append_unique(all_trait_methods<base_t>);
     }
+    constexpr auto method_id_less = [](meta::info lhs, meta::info rhs) {
+        return extract_method_identifier(lhs) < extract_method_identifier(rhs);
+    };
+    stdr::sort(result, method_id_less);
     return define_static_array(result);
+}();
+struct name_id_pair {
+    char const* name;
+    uZ          begin_idx;
+    uZ          end_idx;
+};
+template<typename T>
+inline constexpr auto trait_method_groups = [] -> std::span<name_id_pair const> {
+    if (stdr::empty(all_trait_methods<T>))
+        return {};
+    auto groups = std::vector<name_id_pair>{};
+    groups.push_back({
+        .name      = extract_method_identifier(all_trait_methods<T>[0]).data(),
+        .begin_idx = 0,
+    });
+    for (auto [i, idt]: stdv::zip(stdv::iota(0U), all_trait_methods<T>) | stdv::drop(1)) {
+        if (auto name = extract_method_identifier(idt); name != groups.back().name) {
+            groups.back().end_idx = i;
+            groups.push_back({
+                .name      = name.data(),
+                .begin_idx = i,
+                .end_idx   = i + 1,
+            });
+        }
+    }
+    groups.back().end_idx = all_trait_methods<T>.size();
+    return std::define_static_array(groups);
 }();
 
 template<non_ref T>

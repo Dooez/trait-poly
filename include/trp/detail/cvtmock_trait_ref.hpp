@@ -68,29 +68,16 @@ struct mock_ref_impl : public MethodHolders... {};
 
 template<non_cvref Trait>
 consteval auto get_cvtmock_ref() {
-    struct method_holder_spec {
-        char const*             id;
-        std::vector<meta::info> method_idts;
-    };
-    auto method_holders_specs = std::vector<method_holder_spec>{};
-
-    template for (constexpr auto mem: all_trait_methods<Trait>) {
-        using method_idt = [:mem:];
-        auto const it    = stdr::find(method_holders_specs, method_idt::identifier, &method_holder_spec::id);
-        if (it == method_holders_specs.end()) {
-            method_holders_specs.push_back({.id          = method_idt::identifier,    //
-                                            .method_idts = {mem}});
-        } else {
-            it->method_idts.push_back(mem);
-        }
-    }
-    return substitute(^^mock_ref_impl,
-                      method_holders_specs    //
-                          | stdv::transform([](auto spec) {
-                                return substitute(^^cvtmock_holder,
-                                                  {meta::reflect_constant(spec.id),
-                                                   substitute(^^cvtmock_cvm_invoker, spec.method_idts)});
-                            }));
+    auto const holders = trait_method_groups<Trait>    //
+                         | stdv::transform([](auto grp) {
+                               return substitute(^^cvtmock_holder,
+                                                 {meta::reflect_constant(grp.name),
+                                                  substitute(^^cvtmock_cvm_invoker,
+                                                             all_trait_methods<Trait>         //
+                                                                 | stdv::take(grp.end_idx)    //
+                                                                 | stdv::drop(grp.begin_idx))});
+                           });
+    return substitute(^^mock_ref_impl, holders);
 };
 }    // namespace cvtmock_trait
 
