@@ -317,10 +317,10 @@ inline constexpr auto trait_method_groups = [] -> std::span<name_id_pair const> 
         .begin_idx = 0,
     });
     for (auto [i, idt]: stdv::zip(stdv::iota(0U), all_trait_methods<T>) | stdv::drop(1)) {
-        if (auto name = extract_method_identifier(idt); name != groups.back().name) {
+        if (std::string_view name = extract_method_identifier(idt); name != groups.back().name) {
             groups.back().end_idx = i;
             groups.push_back({
-                .name      = name,
+                .name      = name.data(),
                 .begin_idx = i,
                 .end_idx   = i + 1,
             });

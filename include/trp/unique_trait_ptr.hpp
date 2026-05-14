@@ -79,7 +79,7 @@ public:
     }
     // UB if not holding value
     auto operator*(this auto&& self) -> decltype(auto) {
-        return self.dyn_trait_ref_;
+        return (self.dyn_trait_ref_);
     }
 
     [[nodiscard]] auto get() const -> void* {
@@ -201,12 +201,12 @@ public:
         return holds_value();
     }
     // UB if not holding value
-    auto operator->(this auto&& self) -> dyn_trait_ref<Trait>* {
+    auto operator->(this auto&& self) -> decltype(auto) {
         return &self.dyn_trait_ref_;
     }
     // UB if not holding value
-    auto operator*(this auto&& self) -> dyn_trait_ref<Trait>& {
-        return self.dyn_trait_ref_;
+    auto operator*(this auto&& self) -> decltype(auto) {
+        return (self.dyn_trait_ref_);
     }
 
     [[nodiscard]] auto get() const -> void* {
