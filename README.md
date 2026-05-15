@@ -31,7 +31,7 @@ draw_object(p);
 ## Trait Definitions
 
 A TRP trait is a class type accepted by concept `trp::any_trait`. 
-Trait must conform to the following limitations:
+A trait must conform to the following limitations:
 - all members and base classes are public;
 - no virtual functions or virtual bases;
 - no non-static data members;
@@ -41,7 +41,7 @@ Trait must conform to the following limitations:
 - no rvalue-qualified and explicit-object-by-value methods;
 - static data members are accepted only when recognized as `constexpr`. The
   current check is GCC-specific. Clang effectively rejects static data members;
-- static function are only allowed as templates 
+- static functions are only allowed as templates 
   of default implementations for trait methods;
 
 ## Trait Implementations
@@ -57,8 +57,8 @@ The implementation lookup is performed in the following order:
     - callable through cv-qualified reference to `Impl` with arguments specified by trait method;
     - invocation is noexcept if specified by trait;
     - return type exactly matches the type specified by trait;
-3. 1-3 is repeated for public bases of `Impl`, width-first;
-4. Trait defaults;
+4. Steps 1-3 are repeated for public bases of `Impl`, width-first;
+5. Trait defaults;
 
 The lookup doesn't perform overload resolution.
 Full overload resolution would be pretty complex to implement, and (as far as I know) 
@@ -73,9 +73,9 @@ The core handle is a type-erased `dyn_trait_ref<Trait>`.
 This handle is a non-owning view over a trait object.
 Method access uses dot notation `ref.foo();`. 
 Since the dot notation is unavailable, interaction with `dyn_trait_ref` is provided via free functions:
-- `trp::is_holding_type<Impl>(ref) -> bool` checks if implementation object is `Impl`. 
+- `trp::is_holding_type<Impl>(ref) -> bool` checks if the implementation object is `Impl`. 
     Impl must match cv qualifications exactly.
-- `trp::trait_cast<ExplicitSupertrait>(ref) -> dyn_trait_ref<ExplicitSupertrat>` 
+- `trp::trait_cast<ExplicitSupertrait>(ref) -> dyn_trait_ref<ExplicitSupertrait>` 
     The vtable holds references to all explicit supertrait vtables, so this is always valid.
 - `trp::trait_cast<Impl, AnotherTrait>(ref)` returns a trait reference assuming the object is `Impl`.
     If the underlying object is not of type `Impl`, calling any methods is potentially UB.
@@ -86,8 +86,8 @@ Since the dot notation is unavailable, interaction with `dyn_trait_ref` is provi
 
 There are implementations of owning handles
 - `trp::shared_trait_ptr` reference-counted trait handle
-- `trp::unique_trait_ptr` new-allocated non-copiable trait handle
-- `trp::alloca_unique_trait_ptr` allocator-aware non-copiable trait handle
+- `trp::unique_trait_ptr` new-allocated non-copyable trait handle
+- `trp::alloc_unique_trait_ptr` allocator-aware non-copyable trait handle
 
 The owning handles are very basic. Common API:
 - `explicit operator bool()` checks whether the handle stores an object;
@@ -121,11 +121,10 @@ Currently, `trp` does not have a clear way to define a custom owning handle.
         - `explicit_supertrait_of<S, T>` - `supertrait_of<S, T>` and S is in the inheritance chain of T, true for S == T;
         - `direct_supertrait_of<S, T>` - `supertrait_of<S, T>` and S is a direct base class of T, false for S == T;
 - [x] Non-owning type-erased trait handle `dyn_trait_ref<T>`
-    - [x] `trait_ref<cv_trait>` where `cv_trait` is cv-qualified
-    - [x] cv-qualified `trait_ref<T>`
+    - [x] `dyn_trait_ref<cv_trait>` where `cv_trait` is cv-qualified
     - [x] Upcasting to `explicit_supertrait<S, T>` via `trait_cast<S>`
-    - [x] Runtime type identification for implementations. via `bool trp::is_holding_type<Impl>(const trait_ref<T>&)`.
-    - [x] Casting to other traits by providing implementation type via `trait_cast<T, Impl>`. Checked cast for owning handles, unchecked cast for trait_ref;
+    - [x] Runtime type identification for implementations via `bool trp::is_holding_type<Impl>(const dyn_trait_ref<T>&)`.
+    - [x] Casting to other traits by providing implementation type via `trait_cast<T, Impl>`. Checked cast for owning handles, unchecked cast for dyn_trait_ref;
     - [ ] (?) Conversion to non-explicit supertraits for allocator-aware handles by constructing vtables at runtime.
 - [x] Basic owning trait handles
     - [x] `shared_trait_ptr`, `unique_trait_ptr`, and `alloc_unique_trait_ptr`;
@@ -151,7 +150,7 @@ with correct cv qualifications for each overload.
 This way native C++ overload resolution is used for both argument type and cv resolution.
 
 ## Limitations
-Compilation is relatively slow. Some effort was put to minimize repeated evalutation in implementation.  
+Compilation is relatively slow. Some effort was put to minimize repeated evaluation in implementation.  
 Compilers may require `-fconstexpr-steps` with high number to successfully compile.  
 `static constexpr` trait data members are supported by GCC only.  
 `clangd` works but exhibits significant delays when handling trait objects.  
@@ -163,7 +162,7 @@ However, current tooling challenges raise concerns about possible production usa
 ## Exploration
 Not implemented, but potentially feasible and interesting:
 - Partial overload resolution of implementation methods during vtable construction
-- Definition of trait combinations (e.g. greatest common supertrait or common subtrait wo/ inheritence and explicit definition)
+- Definition of trait combinations (e.g. greatest common supertrait or common subtrait without inheritance and explicit definition)
 - Option for return type conversion in implementation methods
 - Small object optimization
 - (?) Non-type-erased reference wrapper to enforce restricted interfaces
