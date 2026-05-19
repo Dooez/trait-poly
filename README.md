@@ -151,7 +151,8 @@ Through the `/* dyn-ref-wrapper */` pointer, the vtable and type-erased object p
 Because the access is done through a proxy, the cv-qualifications of `dyn_trait_ref<Trait>` must not be transient, 
 and should be inferred from `Trait`.
 To achieve it, `cvm_invoker<...>` is used, that provides `operator()(auto const* vtable, void* obj, <method arguments>)` 
-with correct cv qualifications for each overload. 
+with correct cv qualifications for each overload. cv-qualified `cvm_invoker<...>` with qualification equal to
+`Trait` qualifications is constructed and invoked. 
 
 This way native C++ overload resolution is used for both argument type and cv resolution.
 

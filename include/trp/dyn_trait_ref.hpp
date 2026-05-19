@@ -86,25 +86,25 @@ concept noexcept_cvm_invoker =
     has_template_arguments(^^CVMInvoker)                //
     and (template_of(^^CVMInvoker) == ^^cvm_invoker)    //
     and ([] {
-            CVMInvoker invoker{};
-            VTable     vt{};
-            return noexcept(invoker(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
+            VTable vt{};
+            return noexcept(CVMInvoker{}(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
         }());
 
 
 template<typename TRef, typename Trait, typename MethodHolder, typename CVMInvoker>
 struct method_invoker {
 private:
-    using trait_t  = Trait;
-    using vtable_t = vtable<std::remove_cv_t<trait_t>>;
+    using trait_t   = Trait;
+    using vtable_t  = vtable<std::remove_cv_t<trait_t>>;
+    using invoker_t = [:copy_cv_to(^^trait_t, ^^CVMInvoker):];
 
 public:
     template<typename... Args>
     auto operator()(Args&&... args) const
-        volatile noexcept(noexcept_cvm_invoker<CVMInvoker, vtable_t, Args...>) -> decltype(auto) {
-        return CVMInvoker{}(extract_vtable_ptr(get_trait_ref()),
-                            extract_obj_ptr(get_trait_ref()),
-                            std::forward<Args>(args)...);
+        volatile noexcept(noexcept_cvm_invoker<invoker_t, vtable_t, Args...>) -> decltype(auto) {
+        return invoker_t{}(extract_vtable_ptr(get_trait_ref()),
+                           extract_obj_ptr(get_trait_ref()),
+                           std::forward<Args>(args)...);
     }
 
 private:
@@ -213,10 +213,10 @@ struct dyn_cv_ref_wrappers {
         auto ref_targs_v  = std::vector{add_volatile(^^Trait)};
         auto ref_targs_cv = std::vector{add_cv(^^Trait)};
 
-        auto methods    = std::vector<meta::info>{};
-        auto methods_c  = std::vector<meta::info>{};
-        auto methods_v  = std::vector<meta::info>{};
-        auto methods_cv = std::vector<meta::info>{};
+        auto methods = std::vector<meta::info>{};
+        bool is_c    = false;
+        bool is_v    = false;
+        bool is_cv   = false;
         for (auto grp: trait_method_groups<Trait>) {
             auto const id          = grp.name;
             auto const raw_methods = all_trait_methods<Trait>     //
@@ -226,30 +226,25 @@ struct dyn_cv_ref_wrappers {
                 auto const quals = extract_method_qualifiers(mem);
                 auto const spec  = substitute(^^overload_spec, {meta::reflect_constant(i), mem});
                 methods.push_back(spec);
-                if (quals.is_const)
-                    methods_c.push_back(spec);
-                if (quals.is_volatile)
-                    methods_v.push_back(spec);
-                if (quals.is_const and quals.is_volatile)
-                    methods_cv.push_back(spec);
+                is_c  = is_c or quals.is_const;
+                is_v  = is_v or quals.is_volatile;
+                is_cv = is_cv or (quals.is_const and quals.is_volatile);
             };
 
             auto const id_refl   = meta::reflect_constant(id);
-            auto const maybe_add = [=](auto& targs, auto ref, auto trait, auto const& methods) {
-                if (std::empty(methods))
+            auto const invoker   = substitute(^^cvm_invoker, methods);
+            auto const maybe_add = [=](auto& targs, auto ref, auto trait, bool do_add) {
+                if (not do_add)
                     return;
-                targs.push_back(extract<meta::info>(substitute(
-                    ^^method_holder_info, {id_refl, ref, trait, substitute(^^cvm_invoker, methods)})));
+                targs.push_back(
+                    extract<meta::info>(substitute(^^method_holder_info, {id_refl, ref, trait, invoker})));
             };
-            maybe_add(ref_targs, ^^ref, ^^Trait, methods);
-            maybe_add(ref_targs_c, ^^ref_c, add_const(^^Trait), methods_c);
-            maybe_add(ref_targs_v, ^^ref_v, add_volatile(^^Trait), methods_v);
-            maybe_add(ref_targs_cv, ^^ref_cv, add_cv(^^Trait), methods_cv);
+            maybe_add(ref_targs, ^^ref, ^^Trait, true);
+            maybe_add(ref_targs_c, ^^ref_c, add_const(^^Trait), is_c);
+            maybe_add(ref_targs_v, ^^ref_v, add_volatile(^^Trait), is_v);
+            maybe_add(ref_targs_cv, ^^ref_cv, add_cv(^^Trait), is_cv);
 
             methods.clear();
-            methods_c.clear();
-            methods_v.clear();
-            methods_cv.clear();
         }
 
         return std::array{
