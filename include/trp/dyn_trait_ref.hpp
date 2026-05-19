@@ -134,12 +134,12 @@ private:
 };
 
 template<char const* id, typename Ref, typename Trait, typename CVMInvoker>
-struct cvm_holder_definer {
-    struct cvm_holder;
+struct method_holder_definer {
+    struct method_holder;
     consteval {
         constexpr auto method_invoker_info =
-            substitute(^^method_invoker, {^^Ref, ^^Trait, ^^cvm_holder, ^^CVMInvoker});
-        define_aggregate(^^cvm_holder,
+            substitute(^^method_invoker, {^^Ref, ^^Trait, ^^method_holder, ^^CVMInvoker});
+        define_aggregate(^^method_holder,
                          {data_member_spec(method_invoker_info,
                                            {
                                                .name              = id,
@@ -149,7 +149,8 @@ struct cvm_holder_definer {
     }
 };
 template<char const* id, typename Ref, typename Trait, typename CVMInvoker>
-inline constexpr auto cvm_holder_info = ^^typename cvm_holder_definer<id, Ref, Trait, CVMInvoker>::cvm_holder;
+inline constexpr auto method_holder_info =
+    ^^typename method_holder_definer<id, Ref, Trait, CVMInvoker>::method_holder;
 
 template<any_trait Trait, typename... MethodHolders>
 class dyn_trait_ref_impl : public MethodHolders... {
@@ -200,7 +201,7 @@ void ref_default_delete(dyn_trait_ref_impl<Trait, MethodHolders...> const& ref) 
     extract_vtable_ptr(ref)->default_delete(extract_obj_ptr(ref));
 }
 template<non_cv_trait Trait>
-struct dyn_cv_ref_impls {
+struct dyn_cv_ref_wrappers {
     struct ref;
     struct ref_c;
     struct ref_v;
@@ -238,7 +239,7 @@ struct dyn_cv_ref_impls {
                 if (std::empty(methods))
                     return;
                 targs.push_back(extract<meta::info>(substitute(
-                    ^^cvm_holder_info, {id_refl, ref, trait, substitute(^^cvm_invoker, methods)})));
+                    ^^method_holder_info, {id_refl, ref, trait, substitute(^^cvm_invoker, methods)})));
             };
             maybe_add(ref_targs, ^^ref, ^^Trait, methods);
             maybe_add(ref_targs_c, ^^ref_c, add_const(^^Trait), methods_c);
@@ -277,8 +278,8 @@ struct dyn_cv_ref_impls {
     };
 };
 template<any_trait Trait>
-using dyn_ref_impl = [:[] {
-    using impls = dyn_cv_ref_impls<std::remove_cv_t<Trait>>;
+using dyn_trait_ref_wrapper = [:[] {
+    using impls = dyn_cv_ref_wrappers<std::remove_cv_t<Trait>>;
     if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
         return ^^typename impls::ref_cv;
     } else if constexpr (std::is_volatile_v<Trait>) {
@@ -292,7 +293,7 @@ using dyn_ref_impl = [:[] {
 }    // namespace detail
 
 template<any_trait Trait>
-class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
+class dyn_trait_ref : public detail::dyn_trait_ref_wrapper<Trait> {
     dyn_trait_ref() = default;
 
     template<any_trait>
@@ -329,11 +330,11 @@ class dyn_trait_ref : public detail::dyn_ref_impl<Trait> {
     }
 
     dyn_trait_ref(detail::vtable<std::remove_cv_t<Trait>> const* vptr, void* optr)
-    : detail::dyn_ref_impl<Trait>(vptr, optr) {};
+    : detail::dyn_trait_ref_wrapper<Trait>(vptr, optr) {};
 
     template<implements_trait<Trait> Impl>
     explicit dyn_trait_ref(Impl* obj)
-    : detail::dyn_ref_impl<Trait>(
+    : detail::dyn_trait_ref_wrapper<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, obj){};
 
     template<any_trait T, implements_trait<T> Impl, any_trait U>
@@ -343,14 +344,14 @@ public:
     template<any_trait U>
         requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
     dyn_trait_ref(dyn_trait_ref<U> const& ref)    // NOLINT(*-explicit-*)
-    : detail::dyn_ref_impl<Trait>(
+    : detail::dyn_trait_ref_wrapper<Trait>(
           get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(detail::extract_vtable_ptr(ref)),    //
           detail::extract_obj_ptr(ref)){};
 
     template<implements_trait<Trait> Impl>
         requires(not detail::any_dyn_trait_ref<Impl>)
     explicit dyn_trait_ref(Impl& obj)
-    : detail::dyn_ref_impl<Trait>(
+    : detail::dyn_trait_ref_wrapper<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, &obj){};
 
     dyn_trait_ref(dyn_trait_ref const&)            = default;
