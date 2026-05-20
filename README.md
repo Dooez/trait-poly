@@ -3,7 +3,7 @@
 This repository is an experimental implementation of runtime polymorphism based
 on structural traits and type-erased trait handles.
 
-[Godbolt example](https://godbolt.org/z/xbx4M494G)
+[Godbolt example](https://godbolt.org/z/4a9zKEe8e)
 
 ## Minimal Example
 
