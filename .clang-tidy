@@ -9,7 +9,9 @@ Checks: '*, -altera*, -fuchsia*, -llvm-*, -llvmlibc-*, -cert-*,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -*braces-around-statements,
   -misc-include-cleaner,
-  -*-using-namespace'
+  -*-using-namespace,
+  -misc-use-internal-linkage,
+  -readability-convert-member-functions-to-static'
 CheckOptions:
     - key: readability-magic-numbers.IgnorePowersOf2IntegerValues
       value: true

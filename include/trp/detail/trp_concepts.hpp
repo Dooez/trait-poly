@@ -17,16 +17,17 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     if (stdr::empty(params))
         throw "Explicit trait implementation functions must accept an implementation object reference as a "
               "first parameter.";
-    auto const ref = type_of(params[0]);
+    auto const ref   = type_of(params[0]);
+    auto const quals = method_qualifiers_t{
+        .is_const    = is_const(remove_reference(ref)),
+        .is_volatile = is_volatile(remove_reference(ref)),
+        .is_lvalue   = true,
+        .is_rvalue   = false,
+        .is_value    = false,
+        .is_noexcept = is_noexcept(fn),
+    };
 
-    auto idt_targs = std::vector{identifier,
-                                 meta::reflect_constant(is_const(remove_reference(ref))),
-                                 meta::reflect_constant(is_volatile(remove_reference(ref))),
-                                 meta::reflect_constant(true),
-                                 meta::reflect_constant(false),
-                                 meta::reflect_constant(false),
-                                 meta::reflect_constant(is_noexcept(fn)),
-                                 return_type_of(fn)};
+    auto idt_targs = std::vector{identifier, meta::reflect_constant(quals), return_type_of(fn)};
     idt_targs.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
     return substitute(^^method_identity_t, idt_targs);
 }

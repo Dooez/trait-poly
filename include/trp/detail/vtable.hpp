@@ -90,10 +90,9 @@ consteval auto fill_vtable() {
     auto       quals           = vtable_cv_quals{};
     auto const get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
-        constexpr auto m         = stdr::find(full_impls_for<Impl, SESubtrait>,
-                                      meta::info{trait_method_idt},
-                                      &impl_method_bind::idt)
-                               ->fn;
+        constexpr auto m =
+            stdr::find(full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt)
+                ->fn;
         if (m == meta::info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;

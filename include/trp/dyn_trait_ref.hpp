@@ -29,37 +29,28 @@ concept any_dyn_trait_ref = has_template_arguments(^^T) and template_of(^^T) == 
 
 template<uZ Index, trait_method_idt MethodId>
 struct cvo_invoker;
-template<uZ   Index,
-         auto Identifier,
-         bool Const,
-         bool Volatile,
-         bool LVRef,
-         bool RVRef,
-         bool Value,
-         bool Noexcept,
-         typename Ret,
-         typename... Args>
-struct cvo_invoker<
-    Index,
-    method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) noexcept(Noexcept) -> Ret
-        requires(not Const and not Volatile)
+template<uZ Index, auto Identifier, method_qualifiers_t Quals, typename Ret, typename... Args>
+struct cvo_invoker<Index, method_identity_t<Identifier, Quals, Ret, Args...>> {
+    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) noexcept(Quals.is_noexcept) -> Ret
+        requires(not Quals.is_const and not Quals.is_volatile)
     {
         return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
     }
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) const noexcept(Noexcept) -> Ret
-        requires(Const and not Volatile)
-    {
-        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
-    }
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) volatile noexcept(Noexcept) -> Ret
-        requires(not Const and Volatile)
-    {
-        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
-    }
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) const volatile noexcept(Noexcept)
+    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) const noexcept(Quals.is_noexcept)
         -> Ret
-        requires(Const and Volatile)
+        requires(Quals.is_const and not Quals.is_volatile)
+    {
+        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
+    }
+    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) volatile noexcept(Quals.is_noexcept)
+        -> Ret
+        requires(not Quals.is_const and Quals.is_volatile)
+    {
+        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
+    }
+    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) const
+        volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and Quals.is_volatile)
     {
         return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
     }

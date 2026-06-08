@@ -81,25 +81,19 @@ template<typename TRef,
          typename MethodHolder,
          typename MethodInvoker,
          typename Impl,
-         meta::info Method,
-         auto       Identifier,
-         bool       Const,
-         bool       Volatile,
-         bool       LVRef,
-         bool       RVRef,
-         bool       Value,
-         bool       Noexcept,
+         meta::info          Method,
+         auto                Identifier,
+         method_qualifiers_t Quals,
          typename Ret,
          typename... Args>
-struct cvts_cvo_invoker<
-    TRef,
-    MethodHolder,
-    MethodInvoker,
-    Impl,
-    Method,
-    method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
-    auto operator()(Args... args) noexcept(Noexcept) -> Ret
-        requires(not Const and not Volatile)
+struct cvts_cvo_invoker<TRef,
+                        MethodHolder,
+                        MethodInvoker,
+                        Impl,
+                        Method,
+                        method_identity_t<Identifier, Quals, Ret, Args...>> {
+    auto operator()(Args... args) noexcept(Quals.is_noexcept) -> Ret
+        requires(not Quals.is_const and not Quals.is_volatile)
     {
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
@@ -107,8 +101,8 @@ struct cvts_cvo_invoker<
             return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
-    auto operator()(Args... args) const noexcept(Noexcept) -> Ret
-        requires(Const and not Volatile)
+    auto operator()(Args... args) const noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and not Quals.is_volatile)
     {
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
@@ -116,8 +110,8 @@ struct cvts_cvo_invoker<
             return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
-    auto operator()(Args... args) volatile noexcept(Noexcept) -> Ret
-        requires(not Const and Volatile)
+    auto operator()(Args... args) volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(not Quals.is_const and Quals.is_volatile)
     {
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);
@@ -125,8 +119,8 @@ struct cvts_cvo_invoker<
             return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);
         }
     }
-    auto operator()(Args... args) const volatile noexcept(Noexcept) -> Ret
-        requires(Const and Volatile)
+    auto operator()(Args... args) const volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and Quals.is_volatile)
     {
         if constexpr (explicit_method<> != meta::info{}) {
             return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);

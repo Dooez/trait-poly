@@ -135,36 +135,6 @@ struct foo_only_impl {
         std::println("foo foo_only_impl");
     };
 };
-// static_assert(trp::implements_trait<other_impl, trait_proto>);
-
-// NOLINTEND(*-to-static*)
-template<typename S>
-constexpr bool compare_structs(S const& lhs, S const& rhs) {
-    static constexpr auto mems =
-        std::define_static_array(nonstatic_data_members_of(^^S, std::meta::access_context::unchecked()));
-    template for (constexpr auto m: mems) {
-        using mem_t = [:std::meta::type_of(m):];
-        if constexpr (std::equality_comparable<mem_t>) {
-            if (lhs.[:m:] != rhs.[:m:])
-                return false;
-        } else {
-            return compare_structs(lhs.[:m:], rhs.[:m:]);
-        }
-    }
-    return true;
-};
-//
-// constexpr auto vt0  = trp::detail::fill_vtable<trait_proto, some_impl>();
-// constexpr auto vt01 = *trp::detail::get_explicit_supertrait_vtable_ptr<trait_proto_base>(&vt0);
-// constexpr auto vt1  = trp::detail::fill_vtable<trait_proto_base, some_impl>();
-// constexpr auto vt2  = trp::detail::fill_vtable<trait_proto_base, other_impl>();
-//
-// static_assert(compare_structs(vt01, vt1));
-// static_assert(not compare_structs(vt01, vt2));
-
-// consteval {
-//     trp::detail::define_cvts_ref<trait_proto, some_impl>();
-// }
 
 template<>
 struct trp::default_impl_spec<trait_proto> {
@@ -191,49 +161,6 @@ int main() {
     auto em_shptr = trp::shared_trait_ptr<trait_proto>{};
 
 
-    // struct {
-    // } no_methods_at_all{};
-    // auto defref = trp::dyn_trait_ref<const trait_proto>(no_methods_at_all);
-    // defref.bar();
-    // ref.bar();
-    // auto       ts_ref   = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
-    // const auto ts_ref_c = trp::detail::cvts_trait_ref<trait_proto, some_impl>(simpl);
-    // ts_ref.foo();
-    // ts_ref_c.foo();
-
-
-    // std::println("make_shared:");
-    // const auto to    = trp::make_shared_trait<trait_proto, some_impl>();
-    // const auto toref = *to;
-    // to->foo();
-    // toref.foo();
-    // auto to_up = trp::trait_cast<trait_proto_base>(to);
-    // to_up->bar();
-    //
-    // auto cvto = trp::make_shared_trait<const volatile trait_proto, some_impl>();
-    // cvto->foo();
-    // std::println();
-    //
-    // std::println("/* dyn_trait_ref<const volatile trait_proto> */ x.foo();");
-    // auto cvtoref = *cvto;
-    // auto(cvtoref).foo();
-    // std::println("Can cast to non-const trait_proto: {}",
-    //              trp::is_valid_const_trait_cast<trait_proto>(cvtoref));
-    // std::println("const_trait_cast<trait_proto>(x).foo()");
-    // trp::const_trait_cast<trait_proto>(cvtoref).foo();
-    // std::println();
-    //
-    // auto cto = trp::make_shared_trait<const trait_proto, some_impl>();
-    // cto->foo();
-    // cto = trp::make_shared_trait<const trait_proto, other_impl>();
-    // cto->foo();
-    //
-    // auto to2 = trp::make_shared_trait<trait_proto, other_impl>();
-    //
-    // to2->foo();
-    // to2->bar();
-    //
-    // // other_impl{}.bar();
     // //
     std::println("\nmake_unique:");
     auto uptr = trp::make_unique_trait<trait_proto, some_impl>();
@@ -245,29 +172,6 @@ int main() {
     auto rawptr     = uptr.get<other_impl>();
     rawptr->foo();
     //
-    // std::println("\nalloc_unique:");
-    // auto auptr = trp::allocate_unique_trait<trait_proto, some_impl>(std::allocator<some_impl>{});
-    // auptr->foo();
-    // std::println("\nmove unique to alloc_unique:");
-    // auptr = std::move(uptr);
-    // auptr->foo();
-    // std::println("\ncast auptr to base:");
-    // auto auptr_up = trp::trait_cast<trait_proto_base>(std::move(auptr));
-    // auptr_up->bar();
-    //
-    // auto auptr2 = trp::allocate_unique_trait<const trait_proto, other_impl>(std::allocator<other_impl>{});
-    // auptr2->foo();
-    //
-    //
-    // std::println("\nref:");
-    // const auto simpl = foo_only_impl{};
-    // auto       tref  = trp::dyn_trait_ref<const trait_fb>(simpl);
-    // tref.foo();
-    // std::println("Can cast to non-const trait_fb: {}", trp::is_valid_const_trait_cast<trait_fb>(tref));
-    //
-    // const auto csimpl = some_impl{};
-    // auto       tref2  = trp::dyn_trait_ref<trait_foo_only>(csimpl);    // implementation may be overqualified
-    // tref2.foo();
 
     return 0;
 }

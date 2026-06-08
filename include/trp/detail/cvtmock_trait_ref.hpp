@@ -9,34 +9,25 @@ namespace cvtmock_trait {
 template<trait_method_idt>
 struct cvtmock_cvo_invoker;
 
-template<auto Identifier,
-         bool Const,
-         bool Volatile,
-         bool LVRef,
-         bool RVRef,
-         bool Value,
-         bool Noexcept,
-         typename Ret,
-         typename... Args>
-struct cvtmock_cvo_invoker<
-    method_identity_t<Identifier, Const, Volatile, LVRef, RVRef, Value, Noexcept, Ret, Args...>> {
-    auto operator()(Args...) noexcept(Noexcept) -> Ret
-        requires(not Const and not Volatile)
+template<auto Identifier, method_qualifiers_t Quals, typename Ret, typename... Args>
+struct cvtmock_cvo_invoker<method_identity_t<Identifier, Quals, Ret, Args...>> {
+    auto operator()(Args...) noexcept(Quals.is_noexcept) -> Ret
+        requires(not Quals.is_const and not Quals.is_volatile)
     {
         std::unreachable();
     }
-    auto operator()(Args...) const noexcept(Noexcept) -> Ret
-        requires(Const and not Volatile)
+    auto operator()(Args...) const noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and not Quals.is_volatile)
     {
         std::unreachable();
     }
-    auto operator()(Args...) volatile noexcept(Noexcept) -> Ret
-        requires(not Const and Volatile)
+    auto operator()(Args...) volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(not Quals.is_const and Quals.is_volatile)
     {
         std::unreachable();
     }
-    auto operator()(Args...) const volatile noexcept(Noexcept) -> Ret
-        requires(Const and Volatile)
+    auto operator()(Args...) const volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and Quals.is_volatile)
     {
         std::unreachable();
     }

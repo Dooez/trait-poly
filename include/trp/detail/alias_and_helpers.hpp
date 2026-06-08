@@ -110,33 +110,22 @@ struct method_qualifiers_t {
     bool is_value;
     bool is_noexcept;
 };
-template<char const* Identifier,
-         bool        Const,
-         bool        Volatile,
-         bool        LVRef,
-         bool        RVRef,
-         bool        Value,
-         bool        Noexcept,
-         typename Ret,
-         typename... Params>
-    requires(LVRef + RVRef + Value <= 1)
+template<method_qualifiers_t quals>
+concept valid_quals = (quals.is_lvalue + quals.is_rvalue + quals.is_value) <= 1;
+
+template<char const* Identifier, method_qualifiers_t Quals, typename Ret, typename... Params>
+    requires valid_quals<Quals>
 struct method_identity_t {
     static constexpr auto identifier  = Identifier;
-    static constexpr bool is_const    = Const;
-    static constexpr bool is_volatile = Volatile;
-    static constexpr bool is_cv       = Const and Volatile;
-    static constexpr bool is_lvalue   = LVRef;
-    static constexpr bool is_rvalue   = RVRef;
-    static constexpr bool is_value    = Value;
-    static constexpr bool is_noexcept = Noexcept;
-    static constexpr auto qualifiers  = method_qualifiers_t{
-         .is_const    = is_const,
-         .is_volatile = is_volatile,
-         .is_lvalue   = is_lvalue,
-         .is_rvalue   = is_rvalue,
-         .is_value    = is_value,
-         .is_noexcept = is_noexcept,
-    };
+    static constexpr bool is_const    = Quals.is_const;
+    static constexpr bool is_volatile = Quals.is_volatile;
+    static constexpr bool is_cv       = is_const and is_volatile;
+    static constexpr bool is_lvalue   = Quals.is_lvalue;
+    static constexpr bool is_rvalue   = Quals.is_rvalue;
+    static constexpr bool is_value    = Quals.is_value;
+    static constexpr bool is_noexcept = Quals.is_noexcept;
+    static constexpr auto qualifiers  = Quals;
+
     using return_type                      = Ret;
     static constexpr auto param_infos      = std::array<meta::info, sizeof...(Params)>{^^Params...};
     static constexpr auto param_identities = make_aggregate(std::type_identity<Params>{}...);
@@ -149,7 +138,7 @@ struct method_identity_t {
         return inf;
     };
 
-    using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(Noexcept) -> Ret;
+    using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(is_noexcept) -> Ret;
 };
 consteval auto method_identity(meta::info method_info) -> meta::info {
     auto is_nsmf = is_function(method_info)                 //
@@ -162,42 +151,33 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     }
 
 
-    auto const identifier   = meta::reflect_constant_string(identifier_of(method_info));
-    auto const is_noexcept_ = meta::reflect_constant(is_noexcept(method_info));
-    auto const ret          = return_type_of(method_info);
-    auto       params       = parameters_of(method_info);
+    auto       quals      = method_qualifiers_t{};
+    auto const identifier = meta::reflect_constant_string(identifier_of(method_info));
+    quals.is_noexcept     = is_noexcept(method_info);
+    auto const ret        = return_type_of(method_info);
+    auto       params     = parameters_of(method_info);
     if (not params.empty() and is_explicit_object_parameter(params[0])) {
-        auto const eop          = params[0];
-        auto const eop_t        = type_of(eop);
-        auto const is_const_    = meta::reflect_constant(is_const(remove_reference(eop_t)));
-        auto const is_volatile_ = meta::reflect_constant(is_volatile(remove_reference(eop_t)));
-        auto const is_lvref     = meta::reflect_constant(is_lvalue_reference_type(eop_t));
-        auto const is_rvref     = meta::reflect_constant(is_rvalue_reference_type(eop_t));
-        auto const is_value_    = meta::reflect_constant(not is_lvalue_reference_type(eop_t)    //
-                                                      and not is_rvalue_reference_type(eop_t));
-        auto       arguments    = std::vector{identifier,    //
-                                     is_const_,
-                                     is_volatile_,
-                                     is_lvref,
-                                     is_rvref,
-                                     is_value_,
-                                     is_noexcept_,
+        auto const eop    = params[0];
+        auto const eop_t  = type_of(eop);
+        quals.is_const    = is_const(remove_reference(eop_t));
+        quals.is_volatile = is_volatile(remove_reference(eop_t));
+        quals.is_lvalue   = is_lvalue_reference_type(eop_t);
+        quals.is_rvalue   = is_rvalue_reference_type(eop_t);
+        quals.is_value    = not is_lvalue_reference_type(eop_t)    //
+                         and not is_rvalue_reference_type(eop_t);
+        auto arguments = std::vector{identifier,    //
+                                     meta::reflect_constant(quals),
                                      ret};
         arguments.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
         return substitute(^^method_identity_t, arguments);
     }
-    auto const is_const_    = meta::reflect_constant(is_const(method_info));
-    auto const is_volatile_ = meta::reflect_constant(is_volatile(method_info));
-    auto const is_lvref     = meta::reflect_constant(is_lvalue_reference_qualified(method_info));
-    auto const is_rvref     = meta::reflect_constant(is_rvalue_reference_qualified(method_info));
-    auto const is_value_    = meta::reflect_constant(false);
-    auto       arguments    = std::vector{identifier,    //
-                                 is_const_,
-                                 is_volatile_,
-                                 is_lvref,
-                                 is_rvref,
-                                 is_value_,
-                                 is_noexcept_,
+    quals.is_const    = is_const(method_info);
+    quals.is_volatile = is_volatile(method_info);
+    quals.is_lvalue   = is_lvalue_reference_qualified(method_info);
+    quals.is_rvalue   = is_rvalue_reference_qualified(method_info);
+    quals.is_value    = false;
+    auto arguments    = std::vector{identifier,    //
+                                 meta::reflect_constant(quals),
                                  ret};
     arguments.append_range(params | stdv::transform(meta::type_of));
     return substitute(^^method_identity_t, arguments);
@@ -213,9 +193,11 @@ consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
     auto targs = template_arguments_of(idt);
-    if (extract<bool>(targs[3]) or extract<bool>(targs[4]) or extract<bool>(targs[5]))
+    auto quals = extract<method_qualifiers_t>(targs[1]);
+    if (quals.is_rvalue or quals.is_lvalue or quals.is_value)
         return idt;
-    targs[3] = meta::reflect_constant(true);
+    quals.is_lvalue = true;
+    targs[1]        = meta::reflect_constant(quals);
     return substitute(^^method_identity_t, targs);
 }
 consteval auto extract_method_identifier(meta::info idt) -> char const* {
