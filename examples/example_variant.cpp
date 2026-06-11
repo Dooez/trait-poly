@@ -26,8 +26,18 @@ struct s1 {
 };
 
 int main() {
-    auto var = trp::trait_variant<my_trait, s0, s1>(s0{});
-    var.foo();
+    auto var0 = trp::trait_variant<my_trait, s0, s1>(s0{});
+    var0.foo();
+
+    auto var1 = trp::trait_variant<my_trait, s0, s1>(std::in_place_type<s1>);
+    var1.foo();
+    
+    auto var2 = trp::trait_variant<my_trait, s0, s1>(std::in_place_index<0>);
+    var2.foo();
+
+    var2 = s1{};
+    var2.foo();
+
 
     return 0;
 }

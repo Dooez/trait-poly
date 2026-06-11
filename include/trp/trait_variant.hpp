@@ -3,6 +3,7 @@
 #include "detail/cvts_trait_ref.hpp"
 #endif
 
+#include <type_traits>
 namespace trp {
 
 namespace detail {
@@ -32,12 +33,13 @@ struct impl_union_definer {
         impls_union storage{.empty = {}};
         tag_t       tag;
 
+        static constexpr uZ   count        = sizeof...(Impl);
         static constexpr auto type_infos   = std::array{^^Impl...};
         static constexpr auto member_infos = std::define_static_array(
             nonstatic_data_members_of(^^impls_union, std::meta::access_context::current()));
 
         template<typename T>
-        static constexpr auto holds = stdr::contains(type_infos, ^^T);
+        static constexpr auto type_count = stdr::count(type_infos, ^^T);
 
         template<typename T>
         static constexpr auto type_index = stdr::distance(type_infos.begin(), stdr::find(type_infos, ^^T));
@@ -45,6 +47,7 @@ struct impl_union_definer {
         template<uZ I, typename... Args>
         void construct(Args&&... args) {
             std::construct_at(&storage.[:member_infos[I + 1]:], std::forward<Args>(args)...);
+            tag = I;
         };
         template<uZ I>
         void destroy() {
@@ -225,11 +228,51 @@ class trait_variant_impl : public MethodHolders... {
 
 public:
     template<typename Impl>
-        requires(ImplHolder::template holds<Impl>)
-    explicit trait_variant_impl(Impl value) {
-        extract_union_member(*this).template construct<ImplHolder::template type_index<Impl>>(
-            std::move(value));
+        requires(ImplHolder::template type_count<Impl> == 1)
+    constexpr explicit trait_variant_impl(Impl value) noexcept(std::is_nothrow_move_constructible_v<Impl>) {
+        constexpr auto index = ImplHolder::template type_index<Impl>;
+        extract_union_member(*this).template construct<index>(std::move(value));
     }
+    template<typename Impl, typename... Args>
+        requires(ImplHolder::template type_count<Impl> == 1)
+    constexpr trait_variant_impl(std::in_place_type_t<Impl>,
+                                 Args&&... args) noexcept(std::is_nothrow_constructible_v<Impl, Args...>) {
+        constexpr auto index = ImplHolder::template type_index<Impl>;
+        extract_union_member(*this).template construct<index>(std::forward<Args>(args)...);
+    }
+    template<uZ I, typename... Args>
+        requires(I < ImplHolder::count)
+    constexpr trait_variant_impl(std::in_place_index_t<I>, Args&&... args) noexcept(
+        std::is_nothrow_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>) {
+        extract_union_member(*this).template construct<I>(std::forward<Args>(args)...);
+    }
+
+    template<typename Impl>
+        requires(ImplHolder::template type_count<std::remove_cvref_t<Impl>> == 1)
+    constexpr trait_variant_impl& operator=(Impl&& other) {
+        using impl_t             = std::remove_cvref_t<Impl>;
+        constexpr auto index     = ImplHolder::template type_index<impl_t>;
+        auto&&         union_ref = extract_union_member(*this);
+        auto const     tag       = union_ref.tag;
+        if (tag == index) {
+            union_ref.template get<index>() = std::forward<Impl>(other);
+            return *this;
+        }
+        template for (constexpr auto i: stdv::iota(0UZ, ImplHolder::count)) {
+            if (tag == i)
+                union_ref.template destroy<i>();
+        }
+        union_ref.template construct<index>(std::forward<Impl>(other));
+        return *this;
+    }
+
+
+    // template<typename Impl>
+    //     requires(ImplHolder::template type_count<Impl> == 1)
+    // constexpr explicit trait_variant_impl(Impl value) {
+    //     extract_union_member(*this).template construct<ImplHolder::template type_index<Impl>>(
+    //         std::move(value));
+    // }
 };
 
 
@@ -303,6 +346,7 @@ struct var_wrappers {
 
     struct var : public impl_t {
         using impl_t::impl_t;
+        using impl_t::operator=;
     };
     // struct ref_c : public impl_c_t {
     //     using impl_c_t::impl_c_t;
