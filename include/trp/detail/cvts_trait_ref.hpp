@@ -201,8 +201,8 @@ struct cvts_cvm_invoker<TRef, MethodHolder, ovspec_holder<OvSpecs...>>
 template<char const* id, typename Ref, typename OvSpecHolder>
 struct cvts_holder_definer {
     struct cvts_method_holder;
-    using invoker_t = cvts_cvm_invoker<Ref, cvts_method_holder, OvSpecHolder>;
     consteval {
+        using invoker_t = cvts_cvm_invoker<Ref, cvts_method_holder, OvSpecHolder>;
         define_aggregate(^^cvts_method_holder,
                          {data_member_spec(^^invoker_t,
                                            {
