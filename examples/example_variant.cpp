@@ -6,11 +6,15 @@
 struct my_trait {
     void foo();
     void bar(int);
+    void foo() const;
 };
 
 struct s0 {
     void foo() {
         std::println("s0::foo()");
+    }
+    void foo() const {
+        std::println("s0::foo() const");
     }
     void bar(int v) {
         std::println("s0::bar({})", v);
@@ -19,6 +23,9 @@ struct s0 {
 struct s1 {
     void foo() {
         std::println("s1::foo()");
+    }
+    void foo() const {
+        std::println("s0::foo() const");
     }
     void bar(int v) {
         std::println("s1::bar({})", v);
@@ -37,6 +44,8 @@ int main() {
 
     var2 = s1{};
     var2.foo();
+
+    std::as_const(var0).foo();
 
 
     return 0;

@@ -102,31 +102,97 @@ template<non_cvref           MethodHolder,
 struct cvo_invoker<MethodHolder,
                    MethodInvoker,
                    overload_spec<Variant, Trait, method_identity_t<Identifier, Quals, Ret, Args...>>> {
-    auto operator()(this auto&& self, Args... args) noexcept(Quals.is_noexcept) -> Ret
+    auto operator()(Args... args) noexcept(Quals.is_noexcept) -> Ret
         requires(not Quals.is_const and not Quals.is_volatile)
     {
-        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(self.get_var_ref()))>;
-        auto const tag    = extract_union_member(self.get_var_ref()).tag;
+        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
+        auto const tag    = extract_union_member(get_var_ref()).tag;
 
         static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
         template for (constexpr auto i: is) {
             if (tag == i) {
-                static_assert(not is_rvalue_reference_type(^^decltype(self)));
-                using this_t   = std::remove_reference_t<decltype(self)>;
+                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
+                using this_t   = std::remove_reference_t<decltype(*this)>;
                 using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using cvts_ref   = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<Trait, active_t>):];
+                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
 
                 return cvts_trait::call_method_via_id<Identifier>(
-                    cvts_ref(extract_union_member(self.get_var_ref()).template get<i>()),
+                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
                     std::forward<Args>(args)...);
+            }
+        }
+        throw std::runtime_error(std::format("impossible tag {}", tag));
+    }
+    auto operator()(Args... args) const noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and not Quals.is_volatile)
+    {
+        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
+        auto const tag    = extract_union_member(get_var_ref()).tag;
 
+        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
+        template for (constexpr auto i: is) {
+            if (tag == i) {
+                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
+                using this_t   = std::remove_reference_t<decltype(*this)>;
+                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
+                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
+
+                return cvts_trait::call_method_via_id<Identifier>(
+                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
+                    std::forward<Args>(args)...);
+            }
+        }
+        throw std::runtime_error(std::format("impossible tag {}", tag));
+    }
+
+    auto operator()(Args... args) volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(not Quals.is_const and Quals.is_volatile)
+    {
+        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
+        auto const tag    = extract_union_member(get_var_ref()).tag;
+
+        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
+        template for (constexpr auto i: is) {
+            if (tag == i) {
+                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
+                using this_t   = std::remove_reference_t<decltype(*this)>;
+                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
+                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
+
+                return cvts_trait::call_method_via_id<Identifier>(
+                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
+                    std::forward<Args>(args)...);
+            }
+        }
+        throw std::runtime_error(std::format("impossible tag {}", tag));
+    }
+    auto operator()(Args... args) const volatile noexcept(Quals.is_noexcept) -> Ret
+        requires(Quals.is_const and Quals.is_volatile)
+    {
+        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
+        auto const tag    = extract_union_member(get_var_ref()).tag;
+
+        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
+        template for (constexpr auto i: is) {
+            if (tag == i) {
+                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
+                using this_t   = std::remove_reference_t<decltype(*this)>;
+                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
+                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
+
+                return cvts_trait::call_method_via_id<Identifier>(
+                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
+                    std::forward<Args>(args)...);
             }
         }
         throw std::runtime_error(std::format("impossible tag {}", tag));
     }
 
 private:
-
     auto get_var_ref(this auto&& self) -> decltype(auto) {
         constexpr auto add_cvp = [](meta::info type) {
             using this_t = std::remove_reference_t<decltype(self)>;
@@ -257,12 +323,8 @@ struct var_definer {
             auto const raw_methods = all_trait_methods<Trait>     //
                                      | stdv::take(grp.end_idx)    //
                                      | stdv::drop(grp.begin_idx);
-            auto const [... raw_impls] = make_aggregate(full_impls_for<Impls, Trait>    //
-                                                        | stdv::take(grp.end_idx)       //
-                                                        | stdv::drop(grp.begin_idx)...);
-
-            for (auto [mem, ... impls]: stdv::zip(raw_methods, raw_impls...)) {
-                auto const quals = extract_method_qualifiers(mem);
+            for (auto mem: raw_methods) {
+                auto const quals     = extract_method_qualifiers(mem);
                 auto const maybe_add = [=, mem = mem](auto& targs, meta::info var_info, bool do_add) {
                     if (not do_add)
                         return;
@@ -293,45 +355,48 @@ struct var_definer {
 
         return std::array{
             substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs_c),
-            substitute(^^trait_variant_impl, var_targs_v),
-            substitute(^^trait_variant_impl, var_targs_cv),
+            substitute(^^trait_variant_impl, var_targs),
+            substitute(^^trait_variant_impl, var_targs),
+            substitute(^^trait_variant_impl, var_targs),
+            // substitute(^^trait_variant_impl, var_targs_c),
+            // substitute(^^trait_variant_impl, var_targs_v),
+            // substitute(^^trait_variant_impl, var_targs_cv),
         };
     }();
-    using impl_t    = [:impls[0]:];
-    using impl_c_t  = [:impls[1]:];
-    using impl_v_t  = [:impls[2]:];
-    using impl_cv_t = [:impls[3]:];
+    using impl_t = [:impls[0]:];
+    // using impl_c_t  = [:impls[1]:];
+    // using impl_v_t  = [:impls[2]:];
+    // using impl_cv_t = [:impls[3]:];
 
     struct var : public impl_t {
         using impl_t::impl_t;
         using impl_t::operator=;
     };
-    struct var_c : public impl_c_t {
-        using impl_c_t::impl_c_t;
-        using impl_c_t::operator=;
-    };
-    struct var_v : public impl_v_t {
-        using impl_v_t::impl_v_t;
-        using impl_v_t::operator=;
-    };
-    struct var_cv : public impl_cv_t {
-        using impl_cv_t::impl_cv_t;
-        using impl_cv_t::operator=;
-    };
+    // struct var_c : public impl_c_t {
+    //     using impl_c_t::impl_c_t;
+    //     using impl_c_t::operator=;
+    // };
+    // struct var_v : public impl_v_t {
+    //     using impl_v_t::impl_v_t;
+    //     using impl_v_t::operator=;
+    // };
+    // struct var_cv : public impl_cv_t {
+    //     using impl_cv_t::impl_cv_t;
+    //     using impl_cv_t::operator=;
+    // };
 };
 template<any_trait Trait, implements_trait<Trait>... Impls>
 using trait_variant = [:[] {
     using definer = var_definer<std::remove_cvref_t<Trait>, Impls...>;
-    if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
-        return ^^typename definer::var_cv;
-    } else if constexpr (std::is_volatile_v<Trait>) {
-        return ^^typename definer::var_v;
-    } else if constexpr (std::is_const_v<Trait>) {
-        return ^^typename definer::var_c;
-    } else {
-        return ^^typename definer::var;
-    }
+    // if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
+    //     return ^^typename definer::var_cv;
+    // } else if constexpr (std::is_volatile_v<Trait>) {
+    //     return ^^typename definer::var_v;
+    // } else if constexpr (std::is_const_v<Trait>) {
+    //     return ^^typename definer::var_c;
+    // } else {
+    return ^^typename definer::var;
+    // }
 }():];
 }    // namespace var
 }    // namespace detail
