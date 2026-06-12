@@ -114,7 +114,7 @@ struct cvo_invoker<MethodHolder,
                 static_assert(not is_rvalue_reference_type(^^decltype(*this)));
                 using this_t   = std::remove_reference_t<decltype(*this)>;
                 using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
                 using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
 
                 return cvts_trait::call_method_via_id<Identifier>(
@@ -136,7 +136,7 @@ struct cvo_invoker<MethodHolder,
                 static_assert(not is_rvalue_reference_type(^^decltype(*this)));
                 using this_t   = std::remove_reference_t<decltype(*this)>;
                 using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
                 using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
 
                 return cvts_trait::call_method_via_id<Identifier>(
@@ -159,7 +159,7 @@ struct cvo_invoker<MethodHolder,
                 static_assert(not is_rvalue_reference_type(^^decltype(*this)));
                 using this_t   = std::remove_reference_t<decltype(*this)>;
                 using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
                 using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
 
                 return cvts_trait::call_method_via_id<Identifier>(
@@ -181,7 +181,7 @@ struct cvo_invoker<MethodHolder,
                 static_assert(not is_rvalue_reference_type(^^decltype(*this)));
                 using this_t   = std::remove_reference_t<decltype(*this)>;
                 using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t = [:copy_cv_to(^^this_t, ^^Trait):];
+                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
                 using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
 
                 return cvts_trait::call_method_via_id<Identifier>(
@@ -366,7 +366,7 @@ struct var_definer {
             // substitute(^^trait_variant_impl, var_targs),
         };
     }();
-    using impl_t = [:impls[0]:];
+    using impl_t    = [:impls[0]:];
     using impl_c_t  = [:impls[1]:];
     using impl_v_t  = [:impls[2]:];
     using impl_cv_t = [:impls[3]:];
@@ -398,7 +398,7 @@ using trait_variant = [:[] {
     } else if constexpr (std::is_const_v<Trait>) {
         return ^^typename definer::var_c;
     } else {
-    return ^^typename definer::var;
+        return ^^typename definer::var;
     }
 }():];
 }    // namespace var
