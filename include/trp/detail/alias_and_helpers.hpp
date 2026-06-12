@@ -252,6 +252,11 @@ template<non_cvref T>
 inline constexpr auto direct_base_types = std::define_static_array(
     bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
 
+consteval auto subextract_base_types(meta::info type) {
+    return subextract_info_span(^^direct_base_types, {type});
+}
+
+
 template<typename T>
 inline constexpr auto direct_trait_methods = [] {
     constexpr auto is_relevant_method = [](meta::info method) {

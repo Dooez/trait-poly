@@ -313,25 +313,61 @@ struct cvts_ref_definer {
     };
 };
 
-template<non_ref Trait, non_ref Impl>
-struct cvts_ref_proxy {
-    using type = cvts_ref_definer<Trait, Impl>::ref;
+template<any_trait Trait, implements_trait<Trait>... Impls>
+using cvts_trait_ref = [:[] {
+    using definer = cvts_ref_definer<std::remove_cvref_t<Trait>, Impls...>;
+    if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
+        return ^^typename definer::ref_cv;
+    } else if constexpr (std::is_volatile_v<Trait>) {
+        return ^^typename definer::ref_v;
+    } else if constexpr (std::is_const_v<Trait>) {
+        return ^^typename definer::ref_c;
+    } else {
+        return ^^typename definer::ref;
+    }
+}():];
+
+struct name_info_pair {
+    char const* name;
+    meta::info  member;
 };
-template<non_ref Trait, non_ref Impl>
-struct cvts_ref_proxy<Trait const, Impl> {
-    using type = cvts_ref_definer<Trait, Impl>::ref_c;
-};
-template<non_ref Trait, non_ref Impl>
-struct cvts_ref_proxy<Trait volatile, Impl> {
-    using type = cvts_ref_definer<Trait, Impl>::ref_v;
-};
-template<non_ref Trait, non_ref Impl>
-struct cvts_ref_proxy<Trait const volatile, Impl> {
-    using type = cvts_ref_definer<Trait, Impl>::ref_cv;
-};
+
+template<non_cvref CvtsRef>
+inline constexpr auto all_cvref_methods = [] {
+    auto mems       = std::vector<name_info_pair>{};
+    auto types      = std::vector<meta::info>{^^CvtsRef};
+    auto next_types = std::vector<meta::info>{};
+    while (not stdr::empty(types)) {
+        for (auto t: types) {
+            mems.append_range(nonstatic_data_members_of(dealias(t), meta::access_context::unprivileged()) |
+                              stdv::transform([](meta::info m) {
+                                  return name_info_pair{std::define_static_string(identifier_of(m)), m};
+                              }));
+            next_types.append_range(subextract_base_types(t));
+        }
+        swap(types, next_types);
+        next_types.clear();
+    }
+    return std::define_static_array(mems);
+}();
+
+template<char const* MethodId, non_cvref CvtsRef>
+inline constexpr auto ref_method = [] -> meta::info {
+    return stdr::find(all_cvref_methods<CvtsRef>,
+                      std::string_view(MethodId),
+                      [](auto p) { return std::string_view(p.name); })
+        ->member;
+}();
+
+template<char const* MethodId, typename... Args>
+auto call_method_via_id(auto&& ref, Args&&... args) -> decltype(auto) {
+    using ref_t = std::remove_cvref_t<decltype(ref)>;
+    return ref.[:ref_method<MethodId, ref_t>:](std::forward<Args>(args)...);
+}
 }    // namespace cvts_trait
+
 
 // cv-transient static trait reference
 template<any_trait Trait, implements_trait<Trait> Impl>
-using cvts_trait_ref = cvts_trait::cvts_ref_proxy<Trait, Impl>::type;
+using cvts_trait_ref = cvts_trait::cvts_trait_ref<Trait, Impl>;
 }    // namespace trp::detail
