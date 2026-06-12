@@ -47,6 +47,8 @@ int main() {
 
     std::as_const(var0).foo();
 
+    auto var3 = trp::trait_variant<my_trait const, s0, s1>(std::in_place_index<0>);
+    var3.foo();
 
     return 0;
 }

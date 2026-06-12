@@ -320,6 +320,9 @@ struct var_definer {
             char const* const id      = grp.name;
             auto const        id_refl = meta::reflect_constant(id);
             holder_targs.push_back(id_refl);
+            holder_targs_c.push_back(id_refl);
+            holder_targs_v.push_back(id_refl);
+            holder_targs_cv.push_back(id_refl);
             auto const raw_methods = all_trait_methods<Trait>     //
                                      | stdv::take(grp.end_idx)    //
                                      | stdv::drop(grp.begin_idx);
@@ -355,48 +358,48 @@ struct var_definer {
 
         return std::array{
             substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs),
-            // substitute(^^trait_variant_impl, var_targs_c),
-            // substitute(^^trait_variant_impl, var_targs_v),
-            // substitute(^^trait_variant_impl, var_targs_cv),
+            substitute(^^trait_variant_impl, var_targs_c),
+            substitute(^^trait_variant_impl, var_targs_v),
+            substitute(^^trait_variant_impl, var_targs_cv),
+            // substitute(^^trait_variant_impl, var_targs),
+            // substitute(^^trait_variant_impl, var_targs),
+            // substitute(^^trait_variant_impl, var_targs),
         };
     }();
     using impl_t = [:impls[0]:];
-    // using impl_c_t  = [:impls[1]:];
-    // using impl_v_t  = [:impls[2]:];
-    // using impl_cv_t = [:impls[3]:];
+    using impl_c_t  = [:impls[1]:];
+    using impl_v_t  = [:impls[2]:];
+    using impl_cv_t = [:impls[3]:];
 
     struct var : public impl_t {
         using impl_t::impl_t;
         using impl_t::operator=;
     };
-    // struct var_c : public impl_c_t {
-    //     using impl_c_t::impl_c_t;
-    //     using impl_c_t::operator=;
-    // };
-    // struct var_v : public impl_v_t {
-    //     using impl_v_t::impl_v_t;
-    //     using impl_v_t::operator=;
-    // };
-    // struct var_cv : public impl_cv_t {
-    //     using impl_cv_t::impl_cv_t;
-    //     using impl_cv_t::operator=;
-    // };
+    struct var_c : public impl_c_t {
+        using impl_c_t::impl_c_t;
+        using impl_c_t::operator=;
+    };
+    struct var_v : public impl_v_t {
+        using impl_v_t::impl_v_t;
+        using impl_v_t::operator=;
+    };
+    struct var_cv : public impl_cv_t {
+        using impl_cv_t::impl_cv_t;
+        using impl_cv_t::operator=;
+    };
 };
 template<any_trait Trait, implements_trait<Trait>... Impls>
 using trait_variant = [:[] {
     using definer = var_definer<std::remove_cvref_t<Trait>, Impls...>;
-    // if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
-    //     return ^^typename definer::var_cv;
-    // } else if constexpr (std::is_volatile_v<Trait>) {
-    //     return ^^typename definer::var_v;
-    // } else if constexpr (std::is_const_v<Trait>) {
-    //     return ^^typename definer::var_c;
-    // } else {
+    if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
+        return ^^typename definer::var_cv;
+    } else if constexpr (std::is_volatile_v<Trait>) {
+        return ^^typename definer::var_v;
+    } else if constexpr (std::is_const_v<Trait>) {
+        return ^^typename definer::var_c;
+    } else {
     return ^^typename definer::var;
-    // }
+    }
 }():];
 }    // namespace var
 }    // namespace detail
