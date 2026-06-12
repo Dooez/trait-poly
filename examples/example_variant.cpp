@@ -31,7 +31,7 @@ int main() {
 
     auto var1 = trp::trait_variant<my_trait, s0, s1>(std::in_place_type<s1>);
     var1.foo();
-    
+
     auto var2 = trp::trait_variant<my_trait, s0, s1>(std::in_place_index<0>);
     var2.foo();
 

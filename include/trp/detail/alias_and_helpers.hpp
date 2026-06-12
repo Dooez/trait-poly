@@ -265,6 +265,11 @@ inline constexpr auto direct_trait_methods = [] {
                                | stdv::filter(is_relevant_method)                            //
                                | stdv::transform(method_identity) | stdv::transform(as_lref_method_identity));
 }();
+
+/**
+ * @brief All reflections of method_identity_t for all methods in a trait T sorted in lexicographical order of identifiers
+ * @tparam T 
+ */
 template<typename T>
 inline constexpr auto all_trait_methods = [] {
     auto       result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
@@ -284,11 +289,13 @@ inline constexpr auto all_trait_methods = [] {
     stdr::sort(result, method_id_less);
     return define_static_array(result);
 }();
+
 struct name_id_pair {
-    char const* name;
-    uZ          begin_idx;
-    uZ          end_idx;
+    char const* name;    // method identifier
+    uZ begin_idx;        // index from the begining of `all_trait_methods<T>` of the first method in a group
+    uZ end_idx;    // one past the index from the begining of `all_trait_methods<T>` of the last method in a group
 };
+
 template<typename T>
 inline constexpr auto trait_method_groups = [] -> std::span<name_id_pair const> {
     if (stdr::empty(all_trait_methods<T>))

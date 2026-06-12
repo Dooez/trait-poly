@@ -95,24 +95,24 @@ struct method_pack {
     }();
 };
 
-template<typename Var, typename Trait, typename MethodPack, trait_method_idt MethodIdt>
+template<non_cvref Variant, non_cv_trait Trait, non_cvref MethodPack, trait_method_idt MethodIdt>
 struct overload_spec {};
 
-template<typename MethodInvoker, typename MethodHolder, typename OvSpec>
+template<non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref OvSpec>
 struct cvo_invoker;
-template<typename MethodInvoker,
-         typename MethodHolder,
-         typename Var,
-         typename Trait,
-         typename MethodPack,
-         auto                Identifier,
+template<non_cvref           MethodHolder,
+         non_cvref           MethodInvoker,
+         non_cvref           Variant,
+         non_cv_trait        Trait,
+         non_cvref           MethodPack,
+         char const*         Identifier,
          method_qualifiers_t Quals,
          typename Ret,
          typename... Args>
 struct cvo_invoker<
-    MethodInvoker,
     MethodHolder,
-    overload_spec<Var, Trait, MethodPack, method_identity_t<Identifier, Quals, Ret, Args...>>> {
+    MethodInvoker,
+    overload_spec<Variant, Trait, MethodPack, method_identity_t<Identifier, Quals, Ret, Args...>>> {
     auto operator()(Args... args) noexcept(Quals.is_noexcept) -> Ret
         requires(not Quals.is_const and not Quals.is_volatile)
     {
@@ -159,7 +159,7 @@ private:
     auto invoke_method(this auto&& self, Args&&... args) -> Ret {
         if constexpr (is_template(Method)) {
             using this_t     = std::remove_reference_t<decltype(self)>;
-            using active_t   = [:extract_var_type_info(^^Var, I):];
+            using active_t   = [:extract_var_type_info(^^Variant, I):];
             using active_ref = [:copy_cv_to(^^this_t, ^^active_t):];
             using cvts_ref   = cvts_trait_ref<Trait, active_t>;
 
@@ -195,17 +195,17 @@ private:
         static_assert(std::is_standard_layout_v<MethodHolder>);
         auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
 
-        static_assert(std::derived_from<Var, MethodHolder>);
-        return *static_cast<[:add_cvp(^^Var):]>(mh_ptr);
+        static_assert(std::derived_from<Variant, MethodHolder>);
+        return *static_cast<[:add_cvp(^^Variant):]>(mh_ptr);
     }
 };
-template<typename MethodHolder, typename... OvSpecs>
-struct cvm_invoker : cvo_invoker<cvm_invoker<MethodHolder, OvSpecs...>, MethodHolder, OvSpecs>... {
-    using cvo_invoker<cvm_invoker<MethodHolder, OvSpecs...>, MethodHolder, OvSpecs>::operator()...;
+template<non_cvref MethodHolder, non_cvref... OvSpecs>
+struct cvm_invoker : cvo_invoker<MethodHolder, cvm_invoker<MethodHolder, OvSpecs...>, OvSpecs>... {
+    using cvo_invoker<MethodHolder, cvm_invoker<MethodHolder, OvSpecs...>, OvSpecs>::operator()...;
 };
 
 
-template<char const* id, typename... OvSpecs>
+template<char const* id, non_cvref... OvSpecs>
 struct method_holder_definer {
     struct method_holder;
     consteval {
@@ -219,10 +219,10 @@ struct method_holder_definer {
                                            })});
     }
 };
-template<char const* id, typename... OvSpecs>
+template<char const* id, non_cvref... OvSpecs>
 inline constexpr auto method_holder_info = ^^typename method_holder_definer<id, OvSpecs...>::method_holder;
 
-template<typename Trait, typename ImplHolder, typename... MethodHolders>
+template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
     [[= obj_union_anno]] ImplHolder _;
 
@@ -276,27 +276,28 @@ public:
 };
 
 
-template<non_cv_trait Trait, implements_trait<Trait>... Impls>
-struct var_wrappers {
+template<non_cv_trait Trait, non_ref... Impls>
+struct var_definer {
     struct var;
-    // struct var_c;
-    // struct var_v;
-    // struct var_cv;
+    struct var_c;
+    struct var_v;
+    struct var_cv;
 
     static constexpr auto impls = [] {
         using impl_holder_t = impl_union_definer<Impls...>::impls;
-        auto var_targs      = std::vector{^^Trait, ^^impl_holder_t};
-        // auto ref_targs_c  = std::vector{add_const(^^Trait)};
-        // auto ref_targs_v  = std::vector{add_volatile(^^Trait)};
-        // auto ref_targs_cv = std::vector{add_cv(^^Trait)};
+        auto var_targs      = std::vector{^^impl_holder_t};
+        auto var_targs_c    = std::vector{^^impl_holder_t};
+        auto var_targs_v    = std::vector{^^impl_holder_t};
+        auto var_targs_cv   = std::vector{^^impl_holder_t};
 
-        auto holder_targs = std::vector<meta::info>{};
-        // bool is_c    = false;
-        // bool is_v    = false;
-        // bool is_cv   = false;
-        for (auto grp: trait_method_groups<Trait>) {
-            auto const id      = grp.name;
-            auto const id_refl = meta::reflect_constant(id);
+        auto holder_targs    = std::vector<meta::info>{};
+        auto holder_targs_c  = std::vector<meta::info>{};
+        auto holder_targs_v  = std::vector<meta::info>{};
+        auto holder_targs_cv = std::vector<meta::info>{};
+
+        for (auto const grp: trait_method_groups<Trait>) {
+            char const* const id      = grp.name;
+            auto const        id_refl = meta::reflect_constant(id);
             holder_targs.push_back(id_refl);
             auto const raw_methods = all_trait_methods<Trait>     //
                                      | stdv::take(grp.end_idx)    //
@@ -304,65 +305,87 @@ struct var_wrappers {
             auto const [... raw_impls] = make_aggregate(full_impls_for<Impls, Trait>    //
                                                         | stdv::take(grp.end_idx)       //
                                                         | stdv::drop(grp.begin_idx)...);
+
             for (auto [mem, ... impls]: stdv::zip(raw_methods, raw_impls...)) {
-                auto const quals            = extract_method_qualifiers(mem);
-                auto const method_pack_vals = std::vector<meta::info>{};
-                auto const method_pack_info =
-                    substitute(^^method_pack, {meta::reflect_constant(impls.fn)...});
-                auto const spec = substitute(^^overload_spec, {^^var, ^^Trait, method_pack_info, mem});
-                holder_targs.push_back(spec);
-                // is_c  = is_c or quals.is_const;
-                // is_v  = is_v or quals.is_volatile;
-                // is_cv = is_cv or (quals.is_const and quals.is_volatile);
+                auto const quals      = extract_method_qualifiers(mem);
+                auto const mpack_info = substitute(^^method_pack, {meta::reflect_constant(impls.fn)...});
+                auto const maybe_add  = [=, mem = mem](auto& targs, meta::info var_info, bool do_add) {
+                    if (not do_add)
+                        return;
+                    auto const spec = substitute(^^overload_spec, {var_info, ^^Trait, mpack_info, mem});
+                    targs.push_back(spec);
+                };
+                maybe_add(holder_targs, ^^var, true);
+                maybe_add(holder_targs_c, ^^var_c, quals.is_const);
+                maybe_add(holder_targs_v, ^^var_v, quals.is_volatile);
+                maybe_add(holder_targs_cv, ^^var_cv, quals.is_const and quals.is_volatile);
             };
 
-            auto const maybe_add = [=](auto& targs, auto ref, auto trait, bool do_add) {
-                if (not do_add)
+            auto const add_nonempty = [=](auto& targs, auto const& holder_targs) {
+                if (stdr::empty(holder_targs))
                     return;
                 targs.push_back(extract<meta::info>(substitute(^^method_holder_info, holder_targs)));
             };
-            maybe_add(var_targs, ^^var, ^^Trait, true);
-            // maybe_add(ref_targs_c, ^^var_c, add_const(^^Trait), is_c);
-            // maybe_add(ref_targs_v, ^^var_v, add_volatile(^^Trait), is_v);
-            // maybe_add(ref_targs_cv, ^^var_cv, add_cv(^^Trait), is_cv);
+            add_nonempty(var_targs, holder_targs);
+            add_nonempty(var_targs_c, holder_targs_c);
+            add_nonempty(var_targs_v, holder_targs_v);
+            add_nonempty(var_targs_cv, holder_targs_cv);
 
             holder_targs.clear();
+            holder_targs_c.clear();
+            holder_targs_v.clear();
+            holder_targs_cv.clear();
         }
 
         return std::array{
             substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs),
-            substitute(^^trait_variant_impl, var_targs),
-            // substitute(^^trait_variant_impl, ref_targs_c),
-            // substitute(^^trait_variant_impl, ref_targs_v),
-            // substitute(^^trait_variant_impl, ref_targs_cv),
+            // substitute(^^trait_variant_impl, var_targs),
+            // substitute(^^trait_variant_impl, var_targs),
+            // substitute(^^trait_variant_impl, var_targs),
+            substitute(^^trait_variant_impl, var_targs_c),
+            substitute(^^trait_variant_impl, var_targs_v),
+            substitute(^^trait_variant_impl, var_targs_cv),
         };
     }();
-    using impl_t = [:impls[0]:];
-    // using impl_c_t  = [:impls[1]:];
-    // using impl_v_t  = [:impls[2]:];
-    // using impl_cv_t = [:impls[3]:];
+    using impl_t    = [:impls[0]:];
+    using impl_c_t  = [:impls[1]:];
+    using impl_v_t  = [:impls[2]:];
+    using impl_cv_t = [:impls[3]:];
 
     struct var : public impl_t {
         using impl_t::impl_t;
         using impl_t::operator=;
     };
-    // struct ref_c : public impl_c_t {
-    //     using impl_c_t::impl_c_t;
-    // };
-    // struct ref_v : public impl_v_t {
-    //     using impl_v_t::impl_v_t;
-    // };
-    // struct ref_cv : public impl_cv_t {
-    //     using impl_cv_t::impl_cv_t;
-    // };
+    struct var_c : public impl_c_t {
+        using impl_c_t::impl_c_t;
+        using impl_c_t::operator=;
+    };
+    struct var_v : public impl_v_t {
+        using impl_v_t::impl_v_t;
+        using impl_v_t::operator=;
+    };
+    struct var_cv : public impl_cv_t {
+        using impl_cv_t::impl_cv_t;
+        using impl_cv_t::operator=;
+    };
 };
-
+template<any_trait Trait, implements_trait<Trait>... Impls>
+using trait_variant = [:[] {
+    using definer = var_definer<std::remove_cvref_t<Trait>, Impls...>;
+    if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
+        return ^^typename definer::var_cv;
+    } else if constexpr (std::is_volatile_v<Trait>) {
+        return ^^typename definer::var_v;
+    } else if constexpr (std::is_const_v<Trait>) {
+        return ^^typename definer::var_c;
+    } else {
+        return ^^typename definer::var;
+    }
+}():];
 }    // namespace var
 }    // namespace detail
 
-template<non_cv_trait Trait, implements_trait<Trait>... Impls>
-using trait_variant = detail::var::var_wrappers<Trait, Impls...>::var;
+template<any_trait Trait, implements_trait<Trait>... Impls>
+using trait_variant = detail::var::trait_variant<Trait, Impls...>;
 
 }    // namespace trp
