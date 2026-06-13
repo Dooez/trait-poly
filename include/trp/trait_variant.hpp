@@ -14,6 +14,11 @@ template<typename... Impl>
 struct impl_holder {
     struct empty {};
 
+    static constexpr auto move_constructible          = (... and std::is_copy_constructible_v<Impl>);
+    static constexpr auto copy_constructible          = (... and std::is_copy_constructible_v<Impl>);
+    static constexpr auto noexcept_copy_constructible = (... and std::is_nothrow_copy_constructible_v<Impl>);
+    static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
+
     /**
      * @brief While P3074 is not implemented, we need a wrapper to handle types 
      * with nontrivial destructors in undefined unions
@@ -234,6 +239,16 @@ class trait_variant_impl : public MethodHolders... {
         union_ref.construct(index, std::forward<Args>(args)...);
         return union_ref.get(index);
     }
+    template<uZ I, typename... Args>
+    constexpr friend auto emplace(trait_variant_impl& var, constant_wrapper<I> index, Args&&... args) {
+        auto& union_ref = extract_union_member(var);
+        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+            if (union_ref.tag == i)
+                union_ref.destroy(i);
+        }
+        union_ref.construct(index, std::forward<Args>(args)...);
+        return union_ref.get(index);
+    }
 
 
 public:
@@ -242,6 +257,29 @@ public:
         template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
             if (union_ref.tag == i)
                 union_ref.destroy(i);
+        }
+    }
+    constexpr explicit trait_variant_impl(trait_variant_impl const& other) noexcept(
+        ImplHolder::noexcept_copy_constructible)
+        requires(ImplHolder::copy_constructible)
+    {
+        auto&  this_union  = extract_union_member(*this);
+        auto&& other_union = extract_union_member(other);
+        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+            if (other_union.tag == i)
+                this_union.construct(i, other_union.get(i));
+        }
+    }
+
+    constexpr explicit trait_variant_impl(trait_variant_impl&& other) noexcept(
+        ImplHolder::noexcept_move_constructible)
+        requires(ImplHolder::move_constructible)
+    {
+        auto& this_union  = extract_union_member(*this);
+        auto& other_union = extract_union_member(other);
+        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+            if (other_union.tag == i)
+                this_union.construct(i, std::move(other_union.get(i)));
         }
     }
 

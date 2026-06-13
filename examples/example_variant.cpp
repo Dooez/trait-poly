@@ -21,6 +21,18 @@ struct s0 {
     }
 };
 struct s1 {
+    s1() = default;
+    s1& operator=(s1 const&) =default;
+    s1& operator=(s1 &&) =default;
+
+    s1(s1 const&){
+        std::println("s1::s1(s1 const&)");
+
+    }
+    s1(s1 &&){
+        std::println("s1::s1(s1&&)");
+
+    }
     void foo() {
         std::println("s1::foo()");
     }
@@ -50,8 +62,11 @@ int main() {
 
     std::as_const(var0).foo();
 
-    auto var3 = trp::trait_variant<my_trait const, s0, s1>(std::in_place_index<0>);
+    auto var3 = trp::trait_variant<my_trait const, s0, s1>(std::in_place_index<1>);
     var3.foo();
+
+    auto var4 = var3;
+    auto var5 = std::move(var3);
 
     return 0;
 }
