@@ -52,7 +52,7 @@ struct impl_holder {
     static constexpr tag_t invalid_tag = std::numeric_limits<tag_t>::max();
 
     impls_union storage{.empty = {}};
-    tag_t       tag;
+    tag_t       tag{invalid_tag};
 
     static constexpr uZ   count        = sizeof...(Impl);
     static constexpr auto type_infos   = std::array{^^Impl...};
