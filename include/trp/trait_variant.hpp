@@ -20,16 +20,20 @@ struct impl_union_definer {
     }
     using tag_t = [:[] {
         constexpr auto n = sizeof...(Impl);
-        if (n <= std::numeric_limits<u8>::max())
+        if (n < std::numeric_limits<u8>::max())
             return ^^u8;
-        if (n <= std::numeric_limits<u16>::max())
+        if (n < std::numeric_limits<u16>::max())
             return ^^u16;
-        if (n <= std::numeric_limits<u32>::max())
+        if (n < std::numeric_limits<u32>::max())
             return ^^u32;
         return ^^u64;
     }():];
 
     struct impls {
+        using tag_t = impl_union_definer::tag_t;
+
+        static constexpr tag_t invalid_tag = std::numeric_limits<tag_t>::max();
+
         impls_union storage{.empty = {}};
         tag_t       tag;
 
@@ -40,22 +44,26 @@ struct impl_union_definer {
             | stdv::drop(1));
 
         template<typename T>
-        static constexpr auto type_count = stdr::count(type_infos, ^^T);
+        static constexpr uZ type_count = stdr::count(type_infos, ^^T);
 
         template<typename T>
-        static constexpr auto type_index = stdr::distance(type_infos.begin(), stdr::find(type_infos, ^^T));
+        static constexpr uZ type_index = stdr::distance(type_infos.begin(), stdr::find(type_infos, ^^T));
 
         template<uZ I, typename... Args>
-        void construct(Args&&... args) {
+        void construct(constant_wrapper<I>, Args&&... args) {
             std::construct_at(&storage.[:member_infos[I]:], std::forward<Args>(args)...);
             tag = I;
         };
+
         template<uZ I>
-        void destroy() {
+            requires(I < count)
+        void destroy(constant_wrapper<I>) {
             std::destroy_at(&storage.[:member_infos[I]:]);
+            tag = invalid_tag;
         }
+
         template<uZ I>
-        auto get(this auto&& self) -> auto&& {
+        auto get(this auto&& self, constant_wrapper<I>) -> auto&& {
             using this_t = decltype(self);
             static_assert(not is_rvalue_reference_type(^^this_t));
             return std::forward_like<decltype(self)>(self.storage.[:member_infos[I]:]);
@@ -105,62 +113,62 @@ struct cvo_invoker;
 #define TRP_ASSERT_INTERCONVERTIBLE
 #endif
 
-#define TRP_CV_OVERLOAD(Req, C, V)                                                                         \
-    template<non_cvref           MethodHolder,                                                             \
-             non_cvref           MethodInvoker,                                                            \
-             non_cvref           Variant,                                                                  \
-             non_cv_trait        Trait,                                                                    \
-             char const*         Id,                                                                       \
-             method_qualifiers_t Quals,                                                                    \
-             typename Ret,                                                                                 \
-             typename... Args>                                                                             \
-        requires(Req)                                                                                      \
-    struct cvo_invoker<MethodHolder,                                                                       \
-                       MethodInvoker,                                                                      \
-                       cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>> {             \
-        auto operator()(Args... args) C V noexcept(Quals.is_noexcept) -> Ret {                             \
-            using impl_holder = std::remove_cvref_t<decltype(get_union_ref())>;                            \
-            auto const tag    = get_union_ref().tag;                                                       \
-            template for (constexpr auto i: make_cw_idxs<impl_holder::count>()) {                          \
-                if (tag == i) {                                                                            \
-                    using this_t = std::remove_reference_t<decltype(*this)>;                               \
-                    /* Use cv-qualified active type because cvts_ref constructs from reference */          \
-                    using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];        \
-                    /* Use cv-qualified trait type because cv-qualified active type */                     \
-                    /* may not implement unqualified trait */                                              \
-                    using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];                                    \
-                    using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];        \
-                                                                                                           \
-                    return cvts_trait::call_method_via_id<Id>(cvts_ref(get_union_ref().template get<i>()), \
-                                                              std::forward<Args>(args)...);                \
-                }                                                                                          \
-            }                                                                                              \
-            std::unreachable();                                                                            \
-        }                                                                                                  \
-        auto get_union_ref(this auto&& self) -> auto&& {                                                   \
-            constexpr auto add_cvp = [](meta::info type) {                                                 \
-                using this_t = std::remove_reference_t<decltype(self)>;                                    \
-                return add_pointer(copy_cv_to(^^this_t, type));                                            \
-            };                                                                                             \
-            static_assert(std::derived_from<MethodInvoker, cvo_invoker>);                                  \
-            auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                          \
-                                                                                                           \
-            constexpr auto invoker_ptr = [] {                                                              \
-                auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);                         \
-                if (stdr::size(mems) != 1)                                                                 \
-                    throw "Method holder is expected to have only a single method.";                       \
-                if (type_of(mems[0]) != ^^MethodInvoker)                                                   \
-                    throw "Method invoker type does not match method holders first member type.";          \
-                return extract<MethodInvoker MethodHolder::*>(mems[0]);                                    \
-            }();                                                                                           \
-                                                                                                           \
-            static_assert(std::is_standard_layout_v<MethodHolder>);                                        \
-            TRP_ASSERT_INTERCONVERTIBLE                                                                    \
-            auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);                     \
-                                                                                                           \
-            static_assert(std::derived_from<Variant, MethodHolder>);                                       \
-            return extract_union_member(*static_cast<[:add_cvp(^^Variant):]>(mh_ptr));                     \
-        }                                                                                                  \
+#define TRP_CV_OVERLOAD(Req, C, V)                                                                  \
+    template<non_cvref           MethodHolder,                                                      \
+             non_cvref           MethodInvoker,                                                     \
+             non_cvref           Variant,                                                           \
+             non_cv_trait        Trait,                                                             \
+             char const*         Id,                                                                \
+             method_qualifiers_t Quals,                                                             \
+             typename Ret,                                                                          \
+             typename... Args>                                                                      \
+        requires(Req)                                                                               \
+    struct cvo_invoker<MethodHolder,                                                                \
+                       MethodInvoker,                                                               \
+                       cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>> {      \
+        auto operator()(Args... args) C V noexcept(Quals.is_noexcept) -> Ret {                      \
+            using impl_holder = std::remove_cvref_t<decltype(get_union_ref())>;                     \
+            auto const tag    = get_union_ref().tag;                                                \
+            template for (constexpr auto i: make_cw_idxs<impl_holder::count>()) {                   \
+                if (tag == i) {                                                                     \
+                    using this_t = std::remove_reference_t<decltype(*this)>;                        \
+                    /* Use cv-qualified active type because cvts_ref constructs from reference */   \
+                    using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):]; \
+                    /* Use cv-qualified trait type because cv-qualified active type */              \
+                    /* may not implement unqualified trait */                                       \
+                    using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];                             \
+                    using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):]; \
+                                                                                                    \
+                    return cvts_trait::call_method_via_id<Id>(cvts_ref(get_union_ref().get(i)),     \
+                                                              std::forward<Args>(args)...);         \
+                }                                                                                   \
+            }                                                                                       \
+            std::unreachable();                                                                     \
+        }                                                                                           \
+        auto get_union_ref(this auto&& self) -> auto&& {                                            \
+            constexpr auto add_cvp = [](meta::info type) {                                          \
+                using this_t = std::remove_reference_t<decltype(self)>;                             \
+                return add_pointer(copy_cv_to(^^this_t, type));                                     \
+            };                                                                                      \
+            static_assert(std::derived_from<MethodInvoker, cvo_invoker>);                           \
+            auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                   \
+                                                                                                    \
+            constexpr auto invoker_ptr = [] {                                                       \
+                auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);                  \
+                if (stdr::size(mems) != 1)                                                          \
+                    throw "Method holder is expected to have only a single method.";                \
+                if (type_of(mems[0]) != ^^MethodInvoker)                                            \
+                    throw "Method invoker type does not match method holders first member type.";   \
+                return extract<MethodInvoker MethodHolder::*>(mems[0]);                             \
+            }();                                                                                    \
+                                                                                                    \
+            static_assert(std::is_standard_layout_v<MethodHolder>);                                 \
+            TRP_ASSERT_INTERCONVERTIBLE                                                             \
+            auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);              \
+                                                                                                    \
+            static_assert(std::derived_from<Variant, MethodHolder>);                                \
+            return extract_union_member(*static_cast<[:add_cvp(^^Variant):]>(mh_ptr));              \
+        }                                                                                           \
     };
 
 TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile, , );
@@ -196,43 +204,71 @@ template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
     [[= obj_union_anno]] ImplHolder _;
 
+    constexpr friend auto index(trait_variant_impl const& var) noexcept -> ImplHolder::tag_t {
+        return extract_union_member(var).tag;
+    }
+    constexpr friend auto valueless_by_exception(trait_variant_impl const& var) noexcept -> bool {
+        return index(var) == ImplHolder::invalid_tag;
+    }
+    template<typename T, typename... Args>
+        requires(ImplHolder::template type_count<T> == 1)
+    constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> T& {
+        constexpr auto index     = cw<ImplHolder::template type_index<T>>;
+        auto&          union_ref = extract_union_member(var);
+        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+            if (union_ref.tag == i)
+                union_ref.destroy(i);
+        }
+        union_ref.construct(index, std::forward<Args>(args)...);
+        return union_ref.get(index);
+    }
+
+
 public:
+    ~trait_variant_impl() {
+        auto& union_ref = extract_union_member(*this);
+        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+            if (union_ref.tag == i)
+                union_ref.destroy(i);
+        }
+    }
+
     template<typename Impl>
         requires(ImplHolder::template type_count<Impl> == 1)
     constexpr explicit trait_variant_impl(Impl value) noexcept(std::is_nothrow_move_constructible_v<Impl>) {
         constexpr auto index = ImplHolder::template type_index<Impl>;
-        extract_union_member(*this).template construct<index>(std::move(value));
+        extract_union_member(*this).construct(cw<index>, std::move(value));
     }
     template<typename Impl, typename... Args>
         requires(ImplHolder::template type_count<Impl> == 1)
     constexpr trait_variant_impl(std::in_place_type_t<Impl>,
                                  Args&&... args) noexcept(std::is_nothrow_constructible_v<Impl, Args...>) {
         constexpr auto index = ImplHolder::template type_index<Impl>;
-        extract_union_member(*this).template construct<index>(std::forward<Args>(args)...);
+        extract_union_member(*this).construct(cw<index>, std::forward<Args>(args)...);
     }
     template<uZ I, typename... Args>
         requires(I < ImplHolder::count)
     constexpr trait_variant_impl(std::in_place_index_t<I>, Args&&... args) noexcept(
         std::is_nothrow_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>) {
-        extract_union_member(*this).template construct<I>(std::forward<Args>(args)...);
+        extract_union_member(*this).construct(cw<I>, std::forward<Args>(args)...);
     }
 
     template<typename Impl>
         requires(ImplHolder::template type_count<std::remove_cvref_t<Impl>> == 1)
     constexpr trait_variant_impl& operator=(Impl&& other) {
         using impl_t             = std::remove_cvref_t<Impl>;
-        constexpr auto index     = ImplHolder::template type_index<impl_t>;
+        constexpr auto index     = cw<ImplHolder::template type_index<impl_t>>;
         auto&&         union_ref = extract_union_member(*this);
         auto const     tag       = union_ref.tag;
         if (tag == index) {
-            union_ref.template get<index>() = std::forward<Impl>(other);
+            union_ref.get(index) = std::forward<Impl>(other);
             return *this;
         }
-        template for (constexpr auto i: stdv::iota(0UZ, ImplHolder::count)) {
+        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
             if (tag == i)
-                union_ref.template destroy<i>();
+                union_ref.destroy(i);
         }
-        union_ref.template construct<index>(std::forward<Impl>(other));
+        union_ref.construct(index, std::forward<Impl>(other));
         return *this;
     }
 };
