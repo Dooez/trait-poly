@@ -14,7 +14,7 @@ template<typename... Impl>
 struct impl_holder {
     struct empty {};
 
-    static constexpr auto move_constructible          = (... and std::is_copy_constructible_v<Impl>);
+    static constexpr auto move_constructible          = (... and std::is_move_constructible_v<Impl>);
     static constexpr auto copy_constructible          = (... and std::is_copy_constructible_v<Impl>);
     static constexpr auto noexcept_copy_constructible = (... and std::is_nothrow_copy_constructible_v<Impl>);
     static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
