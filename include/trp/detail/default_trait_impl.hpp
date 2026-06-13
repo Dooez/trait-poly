@@ -46,7 +46,7 @@ consteval auto find_explicit_trait_method_impl(meta::info ncv_trait, meta::info 
     -> meta::info {
     auto const nsm =
         subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
-    for (auto const m: nsm)
+    for (auto const m: nsm | stdv::filter(std::meta::is_template))
         if (explicit_impl_to_method_identity(m, ncv_trait) == method_idt)
             return m;
 

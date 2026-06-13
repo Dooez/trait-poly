@@ -11,12 +11,27 @@ namespace detail {
 namespace var {
 
 template<typename... Impl>
-struct impl_union_definer {
+struct impl_holder {
     struct empty {};
+
+    /**
+     * @brief While P3074 is not implemented, we need a wrapper to handle types 
+     * with nontrivial destructors in undefined unions
+     */
+    template<typename T>
+    union uninit {
+        alignas(T) std::array<std::byte, sizeof(T)> storage;
+
+        auto ptr(this auto&& self) {
+            using this_t    = std::remove_reference_t<decltype(self)>;
+            using value_ptr = [:add_pointer(copy_cv_to(^^this_t, ^^T)):];
+            return std::launder(reinterpret_cast<value_ptr>(self.storage.data()));
+        }
+    };
     union impls_union;
     consteval {
         define_aggregate(^^impls_union,
-                         {data_member_spec(^^empty, {.name = "empty"}), anon_member_spec(^^Impl)...});
+                         {data_member_spec(^^empty, {.name = "empty"}), anon_member_spec(^^uninit<Impl>)...});
     }
     using tag_t = [:[] {
         constexpr auto n = sizeof...(Impl);
@@ -29,47 +44,44 @@ struct impl_union_definer {
         return ^^u64;
     }():];
 
-    struct impls {
-        using tag_t = impl_union_definer::tag_t;
+    static constexpr tag_t invalid_tag = std::numeric_limits<tag_t>::max();
 
-        static constexpr tag_t invalid_tag = std::numeric_limits<tag_t>::max();
+    impls_union storage{.empty = {}};
+    tag_t       tag;
 
-        impls_union storage{.empty = {}};
-        tag_t       tag;
+    static constexpr uZ   count        = sizeof...(Impl);
+    static constexpr auto type_infos   = std::array{^^Impl...};
+    static constexpr auto member_infos = std::define_static_array(
+        nonstatic_data_members_of(^^impls_union, std::meta::access_context::current())    //
+        | stdv::drop(1));
 
-        static constexpr uZ   count        = sizeof...(Impl);
-        static constexpr auto type_infos   = std::array{^^Impl...};
-        static constexpr auto member_infos = std::define_static_array(
-            nonstatic_data_members_of(^^impls_union, std::meta::access_context::current())    //
-            | stdv::drop(1));
+    template<typename T>
+    static constexpr uZ type_count = stdr::count(type_infos, ^^T);
 
-        template<typename T>
-        static constexpr uZ type_count = stdr::count(type_infos, ^^T);
+    template<typename T>
+    static constexpr uZ type_index = stdr::distance(type_infos.begin(), stdr::find(type_infos, ^^T));
 
-        template<typename T>
-        static constexpr uZ type_index = stdr::distance(type_infos.begin(), stdr::find(type_infos, ^^T));
-
-        template<uZ I, typename... Args>
-        void construct(constant_wrapper<I>, Args&&... args) {
-            std::construct_at(&storage.[:member_infos[I]:], std::forward<Args>(args)...);
-            tag = I;
-        };
-
-        template<uZ I>
-            requires(I < count)
-        void destroy(constant_wrapper<I>) {
-            std::destroy_at(&storage.[:member_infos[I]:]);
-            tag = invalid_tag;
-        }
-
-        template<uZ I>
-        auto get(this auto&& self, constant_wrapper<I>) -> auto&& {
-            using this_t = decltype(self);
-            static_assert(not is_rvalue_reference_type(^^this_t));
-            return std::forward_like<decltype(self)>(self.storage.[:member_infos[I]:]);
-        }
+    template<uZ I, typename... Args>
+    void construct(constant_wrapper<I>, Args&&... args) {
+        std::construct_at(storage.[:member_infos[I]:].ptr(), std::forward<Args>(args)...);
+        tag = I;
     };
+
+    template<uZ I>
+        requires(I < count)
+    void destroy(constant_wrapper<I>) {
+        std::destroy_at(storage.[:member_infos[I]:].ptr());
+        tag = invalid_tag;
+    }
+
+    template<uZ I>
+    auto get(this auto&& self, constant_wrapper<I>) -> auto&& {
+        using this_t = decltype(self);
+        static_assert(not is_rvalue_reference_type(^^this_t));
+        return std::forward_like<decltype(self)>(*self.storage.[:member_infos[I]:].ptr());
+    }
 };
+
 inline constexpr struct {
 } obj_union_anno;
 template<non_cvref Var>
@@ -239,6 +251,7 @@ public:
         constexpr auto index = ImplHolder::template type_index<Impl>;
         extract_union_member(*this).construct(cw<index>, std::move(value));
     }
+
     template<typename Impl, typename... Args>
         requires(ImplHolder::template type_count<Impl> == 1)
     constexpr trait_variant_impl(std::in_place_type_t<Impl>,
@@ -246,6 +259,7 @@ public:
         constexpr auto index = ImplHolder::template type_index<Impl>;
         extract_union_member(*this).construct(cw<index>, std::forward<Args>(args)...);
     }
+
     template<uZ I, typename... Args>
         requires(I < ImplHolder::count)
     constexpr trait_variant_impl(std::in_place_index_t<I>, Args&&... args) noexcept(
@@ -281,7 +295,7 @@ struct var_definer {
     struct var_cv;
 
     static constexpr auto impls = [] {
-        using impl_holder_t = impl_union_definer<Impls...>::impls;
+        using impl_holder_t = impl_holder<Impls...>;
         auto var_targs      = std::vector{^^impl_holder_t};
         auto var_targs_c    = std::vector{^^impl_holder_t};
         auto var_targs_v    = std::vector{^^impl_holder_t};

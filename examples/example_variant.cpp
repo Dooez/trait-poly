@@ -30,6 +30,9 @@ struct s1 {
     void bar(int v) {
         std::println("s1::bar({})", v);
     }
+    ~s1(){
+        std::println("~s1()");
+    }
 };
 
 int main() {
