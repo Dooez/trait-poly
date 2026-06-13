@@ -75,7 +75,7 @@ inline constexpr auto union_member_info = [] {
 template<typename Union, uZ I>
 inline constexpr auto member_type_info = Union::type_infos[I];
 
-auto extract_union_member(auto&& variant) -> auto&&
+constexpr auto extract_union_member(auto&& variant) -> auto&&
     requires(union_member_info<std::remove_cvref_t<decltype(variant)>> != meta::info{})
 {
     return std::forward_like<decltype(variant)>(
@@ -86,147 +86,97 @@ consteval auto extract_var_type_info(meta::info variant, uZ i) -> meta::info {
     return extract<meta::info>(substitute(^^member_type_info, {type_of(mem_inf), meta::reflect_constant(i)}));
 }
 
-template<non_cvref Variant, non_cv_trait Trait, trait_method_idt MethodIdt>
-struct overload_spec {};
-
-template<non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref OvSpec>
-struct cvo_invoker;
-template<non_cvref           MethodHolder,
-         non_cvref           MethodInvoker,
-         non_cvref           Variant,
-         non_cv_trait        Trait,
-         char const*         Identifier,
-         method_qualifiers_t Quals,
-         typename Ret,
-         typename... Args>
-struct cvo_invoker<MethodHolder,
-                   MethodInvoker,
-                   overload_spec<Variant, Trait, method_identity_t<Identifier, Quals, Ret, Args...>>> {
-    auto operator()(Args... args) noexcept(Quals.is_noexcept) -> Ret
-        requires(not Quals.is_const and not Quals.is_volatile)
-    {
-        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
-        auto const tag    = extract_union_member(get_var_ref()).tag;
-
-        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
-        template for (constexpr auto i: is) {
-            if (tag == i) {
-                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
-                using this_t   = std::remove_reference_t<decltype(*this)>;
-                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
-                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
-
-                return cvts_trait::call_method_via_id<Identifier>(
-                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
-                    std::forward<Args>(args)...);
-            }
-        }
-        throw std::runtime_error(std::format("impossible tag {}", tag));
-    }
-    auto operator()(Args... args) const noexcept(Quals.is_noexcept) -> Ret
-        requires(Quals.is_const and not Quals.is_volatile)
-    {
-        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
-        auto const tag    = extract_union_member(get_var_ref()).tag;
-
-        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
-        template for (constexpr auto i: is) {
-            if (tag == i) {
-                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
-                using this_t   = std::remove_reference_t<decltype(*this)>;
-                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
-                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
-
-                return cvts_trait::call_method_via_id<Identifier>(
-                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
-                    std::forward<Args>(args)...);
-            }
-        }
-        throw std::runtime_error(std::format("impossible tag {}", tag));
-    }
-
-    auto operator()(Args... args) volatile noexcept(Quals.is_noexcept) -> Ret
-        requires(not Quals.is_const and Quals.is_volatile)
-    {
-        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
-        auto const tag    = extract_union_member(get_var_ref()).tag;
-
-        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
-        template for (constexpr auto i: is) {
-            if (tag == i) {
-                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
-                using this_t   = std::remove_reference_t<decltype(*this)>;
-                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
-                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
-
-                return cvts_trait::call_method_via_id<Identifier>(
-                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
-                    std::forward<Args>(args)...);
-            }
-        }
-        throw std::runtime_error(std::format("impossible tag {}", tag));
-    }
-    auto operator()(Args... args) const volatile noexcept(Quals.is_noexcept) -> Ret
-        requires(Quals.is_const and Quals.is_volatile)
-    {
-        using impl_holder = std::remove_cvref_t<decltype(extract_union_member(get_var_ref()))>;
-        auto const tag    = extract_union_member(get_var_ref()).tag;
-
-        static constexpr auto is = std::define_static_array(stdv::iota(0U, impl_holder::count));
-        template for (constexpr auto i: is) {
-            if (tag == i) {
-                static_assert(not is_rvalue_reference_type(^^decltype(*this)));
-                using this_t   = std::remove_reference_t<decltype(*this)>;
-                using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];
-                using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];
-                using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];
-
-                return cvts_trait::call_method_via_id<Identifier>(
-                    cvts_ref(extract_union_member(get_var_ref()).template get<i>()),
-                    std::forward<Args>(args)...);
-            }
-        }
-        throw std::runtime_error(std::format("impossible tag {}", tag));
-    }
-
-private:
-    auto get_var_ref(this auto&& self) -> decltype(auto) {
+template<non_cvref Variant, non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref CvoInvoker>
+struct cvo_invoker_mixin {
+protected:
+    auto get_union_ref(this auto&& self) -> auto&& {
         constexpr auto add_cvp = [](meta::info type) {
             using this_t = std::remove_reference_t<decltype(self)>;
             return add_pointer(copy_cv_to(^^this_t, type));
         };
-
-        static_assert(std::derived_from<MethodInvoker, cvo_invoker>);
+        static_assert(std::derived_from<MethodInvoker, cvo_invoker_mixin>);
         auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
 
         constexpr auto invoker_ptr = [] {
             auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
-            if (mems.size() != 1)
+            if (stdr::size(mems) != 1)
                 throw "Method holder is expected to have only a single method.";
             if (type_of(mems[0]) != ^^MethodInvoker)
                 throw "Method invoker type does not match method holders first member type.";
             return extract<MethodInvoker MethodHolder::*>(mems[0]);
         }();
+
+        static_assert(std::is_standard_layout_v<MethodHolder>);
 #ifdef __cpp_lib_is_pointer_interconvertible
         static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
 #endif
-        static_assert(std::is_standard_layout_v<MethodHolder>);
         auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);
 
         static_assert(std::derived_from<Variant, MethodHolder>);
-        return *static_cast<[:add_cvp(^^Variant):]>(mh_ptr);
+        return extract_union_member(*static_cast<[:add_cvp(^^Variant):]>(mh_ptr));
     }
 };
+
+template<non_cvref Variant, non_cv_trait Trait, trait_method_idt MethodIdt>
+struct cvo_spec {
+    using method_idt = MethodIdt;
+};
+
+template<non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref OvSpec>
+struct cvo_invoker;
+
+#define TRP_CV_OVERLOAD(Req, C, V)                                                                           \
+    template<non_cvref           MethodHolder,                                                               \
+             non_cvref           MethodInvoker,                                                              \
+             non_cvref           Variant,                                                                    \
+             non_cv_trait        Trait,                                                                      \
+             char const*         Id,                                                                         \
+             method_qualifiers_t Quals,                                                                      \
+             typename Ret,                                                                                   \
+             typename... Args>                                                                               \
+        requires(Req)                                                                                        \
+    struct cvo_invoker<MethodHolder,                                                                         \
+                       MethodInvoker,                                                                        \
+                       cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>>                 \
+    : cvo_invoker_mixin<Variant,                                                                             \
+                        MethodHolder,                                                                        \
+                        MethodInvoker,                                                                       \
+                        cvo_invoker<MethodHolder,                                                            \
+                                    MethodInvoker,                                                           \
+                                    cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>>> { \
+        using cvo_invoker_mixin<Variant, MethodHolder, MethodInvoker, cvo_invoker>::get_union_ref;           \
+                                                                                                             \
+        auto operator()(Args... args) C V noexcept(Quals.is_noexcept) -> Ret {                               \
+            using impl_holder = std::remove_cvref_t<decltype(get_union_ref())>;                              \
+            auto const tag    = get_union_ref().tag;                                                         \
+                                                                                                             \
+            template for (constexpr auto i: make_cw_idxs<impl_holder::count>()) {                            \
+                if (tag == i) {                                                                              \
+                    using this_t   = std::remove_reference_t<decltype(*this)>;                               \
+                    using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];          \
+                    using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];                                      \
+                    using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];          \
+                                                                                                             \
+                    return cvts_trait::call_method_via_id<Id>(cvts_ref(get_union_ref().template get<i>()),   \
+                                                              std::forward<Args>(args)...);                  \
+                }                                                                                            \
+            }                                                                                                \
+            std::unreachable();                                                                              \
+        }                                                                                                    \
+    };
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile, , );
+TRP_CV_OVERLOAD(Quals.is_const and not Quals.is_volatile, const, );
+TRP_CV_OVERLOAD(not Quals.is_const and Quals.is_volatile, , volatile);
+TRP_CV_OVERLOAD(Quals.is_const and Quals.is_volatile, const, volatile);
+#undef TRP_CV_OVERLOAD
+
 template<non_cvref MethodHolder, non_cvref... OvSpecs>
-struct cvm_invoker : cvo_invoker<MethodHolder, cvm_invoker<MethodHolder, OvSpecs...>, OvSpecs>... {
+struct cvm_invoker : public cvo_invoker<MethodHolder, cvm_invoker<MethodHolder, OvSpecs...>, OvSpecs>... {
     using cvo_invoker<MethodHolder, cvm_invoker<MethodHolder, OvSpecs...>, OvSpecs>::operator()...;
 };
 
-
-template<char const* id, non_cvref... OvSpecs>
+template<non_cvref... OvSpecs>
 struct method_holder_definer {
     struct method_holder;
     consteval {
@@ -234,14 +184,14 @@ struct method_holder_definer {
         define_aggregate(^^method_holder,
                          {data_member_spec(^^invoker_t,
                                            {
-                                               .name              = id,
+                                               .name              = OvSpecs...[0] ::method_idt::identifier,
                                                .no_unique_address = true,
                                                //  .attributes = {^^[[no_unique_address]] },
                                            })});
     }
 };
-template<char const* id, non_cvref... OvSpecs>
-inline constexpr auto method_holder_info = ^^typename method_holder_definer<id, OvSpecs...>::method_holder;
+template<non_cvref... OvSpecs>
+inline constexpr auto method_holder_info = ^^typename method_holder_definer<OvSpecs...>::method_holder;
 
 template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
@@ -317,21 +267,15 @@ struct var_definer {
         auto holder_targs_cv = std::vector<meta::info>{};
 
         for (auto const grp: trait_method_groups<Trait>) {
-            char const* const id      = grp.name;
-            auto const        id_refl = meta::reflect_constant(id);
-            holder_targs.push_back(id_refl);
-            holder_targs_c.push_back(id_refl);
-            holder_targs_v.push_back(id_refl);
-            holder_targs_cv.push_back(id_refl);
             auto const raw_methods = all_trait_methods<Trait>     //
                                      | stdv::take(grp.end_idx)    //
                                      | stdv::drop(grp.begin_idx);
             for (auto mem: raw_methods) {
                 auto const quals     = extract_method_qualifiers(mem);
-                auto const maybe_add = [=, mem = mem](auto& targs, meta::info var_info, bool do_add) {
+                auto const maybe_add = [=](auto& targs, meta::info var_info, bool do_add) {
                     if (not do_add)
                         return;
-                    auto const spec = substitute(^^overload_spec, {var_info, ^^Trait, mem});
+                    auto const spec = substitute(^^cvo_spec, {var_info, ^^Trait, mem});
                     targs.push_back(spec);
                 };
                 maybe_add(holder_targs, ^^var, true);
@@ -361,9 +305,6 @@ struct var_definer {
             substitute(^^trait_variant_impl, var_targs_c),
             substitute(^^trait_variant_impl, var_targs_v),
             substitute(^^trait_variant_impl, var_targs_cv),
-            // substitute(^^trait_variant_impl, var_targs),
-            // substitute(^^trait_variant_impl, var_targs),
-            // substitute(^^trait_variant_impl, var_targs),
         };
     }();
     using impl_t    = [:impls[0]:];
@@ -403,7 +344,6 @@ using trait_variant = [:[] {
 }():];
 }    // namespace var
 }    // namespace detail
-
 
 template<any_trait Trait, implements_trait<Trait>... Impls>
 using trait_variant = detail::var::trait_variant<Trait, Impls...>;
