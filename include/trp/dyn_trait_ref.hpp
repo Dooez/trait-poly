@@ -29,39 +29,31 @@ concept any_dyn_trait_ref = has_template_arguments(^^T) and template_of(^^T) == 
 
 template<uZ Index, trait_method_idt MethodId>
 struct cvo_invoker;
-template<uZ Index, auto Identifier, method_qualifiers_t Quals, typename Ret, typename... Args>
-struct cvo_invoker<Index, method_identity_t<Identifier, Quals, Ret, Args...>> {
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) noexcept(Quals.is_noexcept) -> Ret
-        requires(not Quals.is_const and not Quals.is_volatile)
-    {
-        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
-    }
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) const noexcept(Quals.is_noexcept)
-        -> Ret
-        requires(Quals.is_const and not Quals.is_volatile)
-    {
-        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
-    }
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) volatile noexcept(Quals.is_noexcept)
-        -> Ret
-        requires(not Quals.is_const and Quals.is_volatile)
-    {
-        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
-    }
-    auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) const
-        volatile noexcept(Quals.is_noexcept) -> Ret
-        requires(Quals.is_const and Quals.is_volatile)
-    {
-        return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);
-    }
 
-private:
-    template<typename VTable>
-    static auto get_method(VTable* vt) {
-        constexpr auto m = nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unchecked)[Index];
-        return vt->[:m:];
-    }
-};
+#define TRP_CV_OVERLOAD(Req, C, V)                                                                           \
+    template<uZ Index, auto Identifier, method_qualifiers_t Quals, typename Ret, typename... Args>           \
+        requires(Req)                                                                                        \
+    struct cvo_invoker<Index, method_identity_t<Identifier, Quals, Ret, Args...>> {                          \
+        auto operator()(auto const* vtable_ptr, void* obj_ptr, Args... args) C V noexcept(Quals.is_noexcept) \
+            -> Ret {                                                                                         \
+            return get_method(vtable_ptr)(obj_ptr, std::forward<Args>(args)...);                             \
+        }                                                                                                    \
+                                                                                                             \
+    private:                                                                                                 \
+        template<typename VTable>                                                                            \
+        static auto get_method(VTable* vt) {                                                                 \
+            constexpr auto m = nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unpriv)[Index]; \
+            return vt->[:m:];                                                                                \
+        }                                                                                                    \
+    };
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile, , );
+TRP_CV_OVERLOAD(Quals.is_const and not Quals.is_volatile, const, );
+TRP_CV_OVERLOAD(not Quals.is_const and Quals.is_volatile, , volatile);
+TRP_CV_OVERLOAD(Quals.is_const and Quals.is_volatile, const, volatile);
+#undef TRP_CV_OVERLOAD
+
+
 template<uZ I, trait_method_idt MethodId>
 struct overload_spec {
     using id                  = MethodId;
@@ -106,7 +98,7 @@ private:
         };
 
         constexpr auto invoker_ptr = [] {
-            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
+            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);
             if (mems.size() != 1)
                 throw "Method holder is expected to have only a single method.";
             if (type_of(mems[0]) != ^^method_invoker)
@@ -264,7 +256,7 @@ struct dyn_cv_ref_wrappers {
     };
 };
 template<any_trait Trait>
-using dyn_trait_ref_wrapper = [:[] {
+using dyn_trait_ref = [:[] {
     using impls = dyn_cv_ref_wrappers<std::remove_cv_t<Trait>>;
     if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
         return ^^typename impls::ref_cv;
@@ -279,7 +271,7 @@ using dyn_trait_ref_wrapper = [:[] {
 }    // namespace detail
 
 template<any_trait Trait>
-class dyn_trait_ref : public detail::dyn_trait_ref_wrapper<Trait> {
+class dyn_trait_ref : public detail::dyn_trait_ref<Trait> {
     dyn_trait_ref() = default;
 
     template<any_trait>
@@ -316,11 +308,11 @@ class dyn_trait_ref : public detail::dyn_trait_ref_wrapper<Trait> {
     }
 
     dyn_trait_ref(detail::vtable<std::remove_cv_t<Trait>> const* vptr, void* optr)
-    : detail::dyn_trait_ref_wrapper<Trait>(vptr, optr) {};
+    : detail::dyn_trait_ref<Trait>(vptr, optr) {};
 
     template<implements_trait<Trait> Impl>
     explicit dyn_trait_ref(Impl* obj)
-    : detail::dyn_trait_ref_wrapper<Trait>(
+    : detail::dyn_trait_ref<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, obj){};
 
     template<any_trait T, implements_trait<T> Impl, any_trait U>
@@ -330,14 +322,14 @@ public:
     template<any_trait U>
         requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
     dyn_trait_ref(dyn_trait_ref<U> const& ref)    // NOLINT(*-explicit-*)
-    : detail::dyn_trait_ref_wrapper<Trait>(
+    : detail::dyn_trait_ref<Trait>(
           get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(detail::extract_vtable_ptr(ref)),    //
           detail::extract_obj_ptr(ref)){};
 
     template<implements_trait<Trait> Impl>
         requires(not detail::any_dyn_trait_ref<Impl>)
     explicit dyn_trait_ref(Impl& obj)
-    : detail::dyn_trait_ref_wrapper<Trait>(
+    : detail::dyn_trait_ref<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, &obj){};
 
     dyn_trait_ref(dyn_trait_ref const&)            = default;

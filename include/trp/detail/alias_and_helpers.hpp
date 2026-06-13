@@ -48,7 +48,7 @@ namespace detail {
 template<auto V>
 inline constexpr auto cw = constant_wrapper<V>{};
 
-static constexpr auto ctx_unchecked = meta::access_context::unchecked();
+static constexpr auto ctx_unpriv = meta::access_context::unprivileged();
 
 template<typename T>
 concept cw_info =
@@ -245,8 +245,9 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
 }
 
 template<non_cvref T>
-inline constexpr auto nonspecial_members = std::define_static_array(
-    members_of(^^T, ctx_unchecked) | stdv::filter(std::not_fn(meta::is_special_member_function)));
+inline constexpr auto nonspecial_members =
+    std::define_static_array(members_of(^^T, meta::access_context::unprivileged()) |
+                             stdv::filter(std::not_fn(meta::is_special_member_function)));
 
 template<non_cvref T>
 inline constexpr auto direct_base_types = std::define_static_array(

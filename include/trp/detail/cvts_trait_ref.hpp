@@ -150,7 +150,7 @@ private:
         auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);
 
         constexpr auto invoker_ptr = [] {
-            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unchecked);
+            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);
             if (mems.size() != 1)
                 throw "Method holder is expected to have only a single method.";
             if (type_of(mems[0]) != ^^MethodInvoker)

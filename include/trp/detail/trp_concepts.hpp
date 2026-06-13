@@ -102,7 +102,7 @@ concept valid_methods = [] {
 
 template<typename T>
 concept static_data_members_are_constexpr = [] {
-    constexpr auto mems = std::define_static_array(static_data_members_of(^^T, ctx_unchecked));
+    constexpr auto mems = std::define_static_array(static_data_members_of(^^T, ctx_unpriv));
     auto [... Is]       = make_cw_idxs<mems.size()>();
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }();
@@ -111,15 +111,12 @@ template<typename T, typename Trait>
 concept static_methods_are_default_impl_for =
     non_cvref<T>            //
     and non_cvref<Trait>    //
-    and stdr::all_of(nonspecial_members<T> | stdv::filter([](auto r) {
-                         return is_static_member(r)             //
-                                and (is_function_template(r)    //
-                                     or is_function(r));
-                     }),
-                     [](auto r) {
-                         return stdr::contains(all_trait_methods<Trait>,
-                                               explicit_impl_to_method_identity(r, ^^Trait));
-                     });
+    and stdr::all_of(
+            nonspecial_members<T> |
+                stdv::filter([](auto r) { return is_static_member(r) and (is_function_template(r)); }),
+            [](auto r) {
+                return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(r, ^^Trait));
+            });
 
 
 template<typename Trait>

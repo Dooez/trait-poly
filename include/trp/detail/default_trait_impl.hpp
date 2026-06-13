@@ -50,13 +50,13 @@ consteval auto find_explicit_trait_method_impl(meta::info ncv_trait, meta::info 
         if (explicit_impl_to_method_identity(m, ncv_trait) == method_idt)
             return m;
 
-    auto const bases = subextract_info_span(^^direct_base_types, {ncv_trait});
-    for (auto const base: bases)
+    for (auto const base: subextract_base_types(ncv_trait))
         if (auto m = find_explicit_trait_method_impl(base, impl, method_idt); m != meta::info{})
             return m;
-    return {};
+    return meta::info{};
 };
-consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, meta::info method_idt) {
+consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, meta::info method_idt)
+    -> meta::info {
     auto const m = find_explicit_trait_method_impl(ncv_trait, impl, method_idt);
     if (m != meta::info{})
         return m;
