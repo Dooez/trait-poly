@@ -9,9 +9,8 @@
 #include <variant>
 namespace trp {
 
-namespace detail {
+namespace detail::var {
 
-namespace var {
 
 template<typename... Impl>
 struct impl_holder {
@@ -164,7 +163,10 @@ struct cvo_invoker;
                                                               std::forward<Args>(args)...);         \
                 }                                                                                   \
             }                                                                                       \
-            std::unreachable();                                                                     \
+            if constexpr (Quals.is_noexcept)                                                        \
+                std::unreachable();                                                                 \
+            else                                                                                    \
+                throw std::bad_variant_access{};                                                    \
         }                                                                                           \
         auto get_union_ref(this auto&& self) -> auto&& {                                            \
             constexpr auto add_cvp = [](meta::info type) {                                          \
@@ -507,8 +509,7 @@ template<uZ I, any_trait_variant Var>
     requires(I < variant_size<Var>)
 using variant_alternative = [:variant_impl_holder<Var>::type_infos[I]:];
 
-}    // namespace var
-}    // namespace detail
+}    // namespace detail::var
 
 template<any_trait Trait, implements_trait<Trait>... Impls>
 using trait_variant = detail::var::trait_variant<Trait, Impls...>;
