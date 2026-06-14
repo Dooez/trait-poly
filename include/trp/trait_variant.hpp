@@ -144,9 +144,10 @@ struct cvo_invoker;
                        MethodInvoker,                                                               \
                        cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>> {      \
         auto operator()(Args... args) C V noexcept(Quals.is_noexcept) -> Ret {                      \
-            using impl_holder = std::remove_cvref_t<decltype(get_union_ref())>;                     \
-            auto const tag    = get_union_ref().tag;                                                \
-            template for (constexpr auto i: make_cw_idxs<impl_holder::count>()) {                   \
+            using impl_holder          = std::remove_cvref_t<decltype(get_union_ref())>;            \
+            auto const            tag  = get_union_ref().tag;                                       \
+            static constexpr auto idxs = make_cw_idxs<impl_holder::count>();                        \
+            template for (constexpr auto i: idxs) {                                                 \
                 if (tag == i) {                                                                     \
                     using this_t = std::remove_reference_t<decltype(*this)>;                        \
                     /* Use cv-qualified active type because cvts_ref constructs from reference */   \
@@ -230,9 +231,10 @@ class trait_variant_impl : public MethodHolders... {
     template<typename T, typename... Args>
         requires(ImplHolder::template type_count<T> == 1)
     constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> T& {
-        constexpr auto index     = cw<ImplHolder::template type_index<T>>;
-        auto&          union_ref = extract_union_member(var);
-        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+        constexpr auto        index     = cw<ImplHolder::template type_index<T>>;
+        auto&                 union_ref = extract_union_member(var);
+        static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
             if (union_ref.tag == i)
                 union_ref.destroy(i);
         }
@@ -241,8 +243,9 @@ class trait_variant_impl : public MethodHolders... {
     }
     template<uZ I, typename... Args>
     constexpr friend auto emplace(trait_variant_impl& var, constant_wrapper<I> index, Args&&... args) {
-        auto& union_ref = extract_union_member(var);
-        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+        auto&                 union_ref = extract_union_member(var);
+        static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
             if (union_ref.tag == i)
                 union_ref.destroy(i);
         }
@@ -253,8 +256,9 @@ class trait_variant_impl : public MethodHolders... {
 
 public:
     ~trait_variant_impl() {
-        auto& union_ref = extract_union_member(*this);
-        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+        auto&                 union_ref = extract_union_member(*this);
+        static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
             if (union_ref.tag == i)
                 union_ref.destroy(i);
         }
@@ -263,9 +267,10 @@ public:
         ImplHolder::noexcept_copy_constructible)
         requires(ImplHolder::copy_constructible)
     {
-        auto&  this_union  = extract_union_member(*this);
-        auto&& other_union = extract_union_member(other);
-        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+        auto&                 this_union  = extract_union_member(*this);
+        auto&&                other_union = extract_union_member(other);
+        static constexpr auto idxs        = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
             if (other_union.tag == i)
                 this_union.construct(i, other_union.get(i));
         }
@@ -275,9 +280,10 @@ public:
         ImplHolder::noexcept_move_constructible)
         requires(ImplHolder::move_constructible)
     {
-        auto& this_union  = extract_union_member(*this);
-        auto& other_union = extract_union_member(other);
-        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+        auto&                 this_union  = extract_union_member(*this);
+        auto&                 other_union = extract_union_member(other);
+        static constexpr auto idxs        = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
             if (other_union.tag == i)
                 this_union.construct(i, std::move(other_union.get(i)));
         }
@@ -316,7 +322,8 @@ public:
             union_ref.get(index) = std::forward<Impl>(other);
             return *this;
         }
-        template for (constexpr auto i: make_cw_idxs<ImplHolder::count>()) {
+        static constexpr auto idxs = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
             if (tag == i)
                 union_ref.destroy(i);
         }
