@@ -3,7 +3,10 @@
 #include "detail/cvts_trait_ref.hpp"
 #endif
 
+#include <memory>
 #include <type_traits>
+#include <utility>
+#include <variant>
 namespace trp {
 
 namespace detail {
@@ -93,7 +96,7 @@ template<non_cvref Var>
 inline constexpr auto union_member_info = [] {
     auto m = find_annotated_member(^^Var, ^^obj_union_anno);
     if (m == meta::info{})
-        throw "No vtable annotated member found";
+        throw "No variant union annotated member found";
     return m;
 }();
 template<typename Union, uZ I>
@@ -222,11 +225,43 @@ template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
     [[= obj_union_anno]] ImplHolder _;
 
+    static constexpr auto as_impl(auto&& var) -> auto&& {
+        using var_t    = std::remove_reference_t<decltype(var)>;
+        using impl_ref = [:add_lvalue_reference(copy_cv_to(^^var_t, ^^trait_variant_impl)):];
+        return static_cast<impl_ref>(var);
+    }
+
+    template<uZ I>
+        requires(I < ImplHolder::count)
+    static constexpr auto get_impl(auto&& var) -> decltype(auto) {
+        auto&& union_ref = extract_union_member(as_impl(var));
+        if (union_ref.tag != I)
+            throw std::bad_variant_access{};
+        return std::forward_like<decltype(var)>(union_ref.get(cw<I>));
+    }
+
+    template<uZ I, typename T>
+        requires(I < ImplHolder::count)
+    static constexpr auto get_if_impl(T* var) noexcept
+        -> decltype(std::addressof(extract_union_member(as_impl(*var)).get(cw<I>))) {
+        if (var == nullptr)
+            return nullptr;
+
+        auto&& union_ref = extract_union_member(as_impl(*var));
+        if (union_ref.tag != I)
+            return nullptr;
+        return std::addressof(union_ref.get(cw<I>));
+    }
+
     constexpr friend auto index(trait_variant_impl const& var) noexcept -> ImplHolder::tag_t {
         return extract_union_member(var).tag;
     }
     constexpr friend auto valueless_by_exception(trait_variant_impl const& var) noexcept -> bool {
         return index(var) == ImplHolder::invalid_tag;
+    }
+    constexpr friend auto variant_impl_holder_identity(trait_variant_impl const*) noexcept
+        -> std::type_identity<ImplHolder> {
+        return {};
     }
     template<typename T, typename... Args>
         requires(ImplHolder::template type_count<T> == 1)
@@ -251,6 +286,34 @@ class trait_variant_impl : public MethodHolders... {
         }
         union_ref.construct(index, std::forward<Args>(args)...);
         return union_ref.get(index);
+    }
+    template<uZ I, typename Variant>
+        requires(I < ImplHolder::count) and
+                std::derived_from<std::remove_cvref_t<Variant>, trait_variant_impl>
+    constexpr friend auto get(Variant&& var) -> decltype(auto) {
+        return get_impl<I>(std::forward<Variant>(var));
+    }
+    template<typename T, typename Variant>
+        requires(ImplHolder::template type_count<T> == 1) and
+                std::derived_from<std::remove_cvref_t<Variant>, trait_variant_impl>
+    constexpr friend auto get(Variant&& var) -> decltype(auto) {
+        return get_impl<ImplHolder::template type_index<T>>(std::forward<Variant>(var));
+    }
+    template<typename T>
+        requires(ImplHolder::template type_count<T> == 1)
+    [[nodiscard]] constexpr friend auto holds_alternative(trait_variant_impl const& var) noexcept -> bool {
+        return extract_union_member(var).tag == ImplHolder::template type_index<T>;
+    }
+    template<uZ I, typename Variant>
+        requires(I < ImplHolder::count) and std::derived_from<std::remove_cv_t<Variant>, trait_variant_impl>
+    [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
+        return get_if_impl<I>(var);
+    }
+    template<typename T, typename Variant>
+        requires(ImplHolder::template type_count<T> == 1) and
+                std::derived_from<std::remove_cv_t<Variant>, trait_variant_impl>
+    [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
+        return get_if_impl<ImplHolder::template type_index<T>>(var);
     }
 
 
@@ -427,6 +490,23 @@ using trait_variant = [:[] {
         return ^^typename definer::var;
     }
 }():];
+
+template<typename Var>
+concept any_trait_variant = non_cvref<Var>              //
+                            and std::is_class_v<Var>    //
+                            and requires(Var const* var) { variant_impl_holder_identity(var); };
+
+template<any_trait_variant Var>
+using variant_impl_holder =
+    typename decltype(variant_impl_holder_identity(static_cast<Var const*>(nullptr)))::type;
+
+template<any_trait_variant Var>
+inline constexpr auto variant_size = variant_impl_holder<Var>::count;
+
+template<uZ I, any_trait_variant Var>
+    requires(I < variant_size<Var>)
+using variant_alternative = [:variant_impl_holder<Var>::type_infos[I]:];
+
 }    // namespace var
 }    // namespace detail
 
@@ -434,3 +514,17 @@ template<any_trait Trait, implements_trait<Trait>... Impls>
 using trait_variant = detail::var::trait_variant<Trait, Impls...>;
 
 }    // namespace trp
+
+namespace std {
+
+template<typename Var>
+    requires trp::detail::var::any_trait_variant<Var>
+struct variant_size<Var> : std::integral_constant<std::size_t, trp::detail::var::variant_size<Var>> {};
+
+template<std::size_t I, typename Var>
+    requires trp::detail::var::any_trait_variant<Var> and (I < trp::detail::var::variant_size<Var>)
+struct variant_alternative<I, Var> {
+    using type = trp::detail::var::variant_alternative<I, Var>;
+};
+
+}    // namespace std

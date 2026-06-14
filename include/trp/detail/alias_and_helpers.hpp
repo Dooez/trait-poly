@@ -329,5 +329,20 @@ template<non_ref T>
 struct unique_id_struct {
     inline static char value{};
 };
+
+consteval auto find_annotated_member(meta::info type, meta::info annotation) -> meta::info {
+    for (auto m: nonstatic_data_members_of(type, meta::access_context::unchecked())) {
+        for (auto ann: annotations_of(m))
+            if (remove_cv(type_of(ann)) == remove_cv(type_of(annotation)))
+                return m;
+    };
+    for (auto base: subextract_base_types(type)) {
+        auto m = find_annotated_member(base, annotation);
+        if (m != meta::info{})
+            return m;
+    }
+    return {};
+}
+
 }    // namespace detail
 }    // namespace trp

@@ -116,7 +116,7 @@ private:
     }
 };
 
-template<char const* id, typename Ref, typename Trait, typename CVMInvoker>
+template<char const* Id, typename Ref, typename Trait, typename CVMInvoker>
 struct method_holder_definer {
     struct method_holder;
     consteval {
@@ -125,15 +125,15 @@ struct method_holder_definer {
         define_aggregate(^^method_holder,
                          {data_member_spec(method_invoker_info,
                                            {
-                                               .name              = id,
+                                               .name              = Id,
                                                .no_unique_address = true,
                                                //  .attributes = {^^[[no_unique_address]] },
                                            })});
     }
 };
-template<char const* id, typename Ref, typename Trait, typename CVMInvoker>
+template<char const* Id, typename Ref, typename Trait, typename CVMInvoker>
 inline constexpr auto method_holder_info =
-    ^^typename method_holder_definer<id, Ref, Trait, CVMInvoker>::method_holder;
+    ^^typename method_holder_definer<Id, Ref, Trait, CVMInvoker>::method_holder;
 
 template<any_trait Trait, typename... MethodHolders>
 class dyn_trait_ref_impl : public MethodHolders... {
@@ -184,7 +184,7 @@ void ref_default_delete(dyn_trait_ref_impl<Trait, MethodHolders...> const& ref) 
     extract_vtable_ptr(ref)->default_delete(extract_obj_ptr(ref));
 }
 template<non_cv_trait Trait>
-struct dyn_cv_ref_wrappers {
+struct dyn_cv_ref_definer {
     struct ref;
     struct ref_c;
     struct ref_v;
@@ -257,7 +257,7 @@ struct dyn_cv_ref_wrappers {
 };
 template<any_trait Trait>
 using dyn_trait_ref = [:[] {
-    using impls = dyn_cv_ref_wrappers<std::remove_cv_t<Trait>>;
+    using impls = dyn_cv_ref_definer<std::remove_cv_t<Trait>>;
     if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
         return ^^typename impls::ref_cv;
     } else if constexpr (std::is_volatile_v<Trait>) {

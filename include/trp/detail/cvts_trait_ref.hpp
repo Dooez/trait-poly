@@ -10,20 +10,6 @@ inline constexpr struct {
 inline constexpr struct {
 } obj_ptr_anno;
 
-consteval auto find_annotated_member(meta::info type, meta::info annotation) -> meta::info {
-    for (auto m: nonstatic_data_members_of(type, meta::access_context::unchecked())) {
-        for (auto ann: annotations_of(m))
-            if (remove_cv(type_of(ann)) == remove_cv(type_of(annotation)))
-                return m;
-    };
-    for (auto base: subextract_info_span(^^direct_base_types, {type})) {
-        auto m = find_annotated_member(base, annotation);
-        if (m != meta::info{})
-            return m;
-    }
-    return {};
-}
-
 template<non_cvref TRef>
 inline constexpr auto vtable_member_info = [] {
     auto m = find_annotated_member(^^TRef, ^^vtable_ptr_anno);
