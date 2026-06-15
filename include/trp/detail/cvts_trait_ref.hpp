@@ -281,7 +281,7 @@ inline constexpr auto all_cvref_methods = [] {
     auto next_types = std::vector<meta::info>{};
     while (not stdr::empty(types)) {
         for (auto t: types) {
-            mems.append_range(nonstatic_data_members_of(dealias(t), meta::access_context::unprivileged()) |
+            mems.append_range(nonstatic_data_members_of(t, meta::access_context::unprivileged()) |
                               stdv::transform([](meta::info m) {
                                   return name_info_pair{std::define_static_string(identifier_of(m)), m};
                               }));
