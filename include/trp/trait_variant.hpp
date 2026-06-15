@@ -98,6 +98,7 @@ inline constexpr auto union_member_info = [] {
 template<typename Union, uZ I>
 inline constexpr auto member_type_info = Union::type_infos[I];
 
+namespace{ // disable ADL
 constexpr auto extract_union_member(auto&& variant) -> auto&&
     requires(union_member_info<std::remove_cvref_t<decltype(variant)>> != meta::info{})
 {
@@ -107,7 +108,7 @@ constexpr auto extract_union_member(auto&& variant) -> auto&&
 consteval auto extract_var_type_info(meta::info variant, uZ i) -> meta::info {
     auto const mem_inf = extract<meta::info>(substitute(^^union_member_info, {variant}));
     return extract<meta::info>(substitute(^^member_type_info, {type_of(mem_inf), meta::reflect_constant(i)}));
-}
+}}
 
 template<non_cvref Variant, non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref CvoInvoker>
 struct cvo_invoker_mixin {
@@ -220,34 +221,18 @@ struct method_holder_definer {
 template<non_cvref... OvSpecs>
 inline constexpr auto method_holder_info = ^^typename method_holder_definer<OvSpecs...>::method_holder;
 
-template<non_cvref ImplHolder, non_cvref... MethodHolders>
-class trait_variant_impl;
-
-consteval auto try_extract_variant_impl(meta::info type) {
-    if (has_template_arguments(type) and template_of(type) == ^^trait_variant_impl)
-        return type;
-    for (auto base: subextract_base_types(type))
-        if (auto m = try_extract_variant_impl(base); m != meta::info{})
-            return m;
-    return meta::info{};
+template<typename T>
+struct alternative_union_of {
+    static constexpr auto value = meta::info{};
 };
 template<typename T>
-inline constexpr auto variant_impl_for = try_extract_variant_impl(^^T);
-
-template<typename T>
-concept any_trait_variant = non_cvref<T> and std::is_class_v<T> and variant_impl_for<T> != meta::info{};
+concept any_trait_variant =
+    non_cvref<T> and std::is_class_v<T> and alternative_union_of<T>::value != meta::info{};
 template<typename T>
 concept any_trait_variant_cvref = any_trait_variant<std::remove_cvref_t<T>>;
 template<typename T, typename Var>
 concept unique_alternative_of =
-    any_trait_variant<Var> and ([:variant_impl_for<Var>:] ::template type_count<T> == 1);
-
-template<any_trait_variant Var>
-inline constexpr auto variant_size = [:variant_impl_for<Var>:] ::count;
-template<uZ I, any_trait_variant Var>
-    requires(I < variant_size<Var>)
-using variant_alternative = [:[:variant_impl_for<Var>:] ::type_infos[I]:];
-
+    any_trait_variant<Var> and ([:alternative_union_of<Var>::value:] ::template type_count<T> == 1);
 
 template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
@@ -308,7 +293,6 @@ class trait_variant_impl : public MethodHolders... {
     [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
         return get_if<ImplHolder::template type_index<T>>(var);
     }
-
 
 public:
     ~trait_variant_impl() {
@@ -387,7 +371,10 @@ public:
         return *this;
     }
 };
-
+namespace { // disable ADL
+template<non_cvref ImplHolder, non_cvref... MethodHolders>
+auto get_var_impl_holder(trait_variant_impl<ImplHolder, MethodHolders...> const&) -> ImplHolder;
+}
 template<non_cv_trait Trait, non_ref... Impls>
 struct var_definer {
     struct var;
@@ -470,6 +457,12 @@ struct var_definer {
         using impl_cv_t::operator=;
     };
 };
+template<typename T>
+    requires requires(T v) { get_var_impl_holder(v); }
+struct alternative_union_of<T> {
+    static constexpr auto value = ^^decltype(get_var_impl_holder(std::declval<T>()));
+};
+
 template<any_trait Trait, implements_trait<Trait>... Impls>
 using trait_variant = [:[] {
     using definer = var_definer<std::remove_cvref_t<Trait>, Impls...>;
@@ -483,6 +476,12 @@ using trait_variant = [:[] {
         return ^^typename definer::var;
     }
 }():];
+
+template<any_trait_variant Var>
+inline constexpr auto variant_size = [:alternative_union_of<Var>::value:] ::count;
+template<uZ I, any_trait_variant Var>
+    requires(I < variant_size<Var>)
+using variant_alternative = [:[:alternative_union_of<Var>::value:] ::type_infos[I]:];
 
 }    // namespace detail::var
 
