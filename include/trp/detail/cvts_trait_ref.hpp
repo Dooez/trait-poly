@@ -60,9 +60,7 @@ public:
 
 template<non_ref Impl, meta::info Method, trait_method_idt MethodIdt>
 struct cvts_overload_spec {
-    using impl_t                      = Impl;
-    static constexpr auto impl_method = Method;
-    using idt                         = MethodIdt;
+    using method_idt = MethodIdt;
 };
 
 // cv-transient static cv-overload invoker
@@ -158,7 +156,7 @@ struct cvts_holder_definer {
         define_aggregate(^^cvts_method_holder,
                          {data_member_spec(^^invoker_t,
                                            {
-                                               .name              = OvSpecs...[0] ::idt::identifier,
+                                               .name              = OvSpecs...[0] ::method_idt::identifier,
                                                .no_unique_address = true,
                                                //  .attributes = {^^[[no_unique_address]] },
                                            })});
