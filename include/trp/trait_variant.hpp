@@ -18,7 +18,7 @@ struct impl_holder {
     static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
 
     /**
-     * @brief While P3074(P4104?) is not implemented, we need a wrapper to handle types
+     * @brief While P4101 is not implemented, we need a wrapper to handle types
      * with nontrivial destructors in undefined unions
      */
     template<typename T>
@@ -109,11 +109,6 @@ consteval auto extract_var_type_info(meta::info variant, uZ i) -> meta::info {
     return extract<meta::info>(substitute(^^member_type_info, {type_of(mem_inf), meta::reflect_constant(i)}));
 }
 
-template<non_cvref Variant, non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref CvoInvoker>
-struct cvo_invoker_mixin {
-protected:
-};
-
 template<non_cvref Variant, non_cv_trait Trait, trait_method_idt MethodIdt>
 struct cvo_spec {
     using method_idt = MethodIdt;
@@ -165,6 +160,8 @@ struct cvo_invoker;
             else                                                                                    \
                 throw std::bad_variant_access{};                                                    \
         }                                                                                           \
+                                                                                                    \
+    private:                                                                                        \
         auto get_union_ref(this auto&& self) -> auto&& {                                            \
             constexpr auto add_cvp = [](meta::info type) {                                          \
                 using this_t = std::remove_reference_t<decltype(self)>;                             \
@@ -394,20 +391,16 @@ struct var_definer {
                 maybe_add(holder_targs_cv, ^^var_cv, quals.is_const and quals.is_volatile);
             };
 
-            auto const add_nonempty = [=](auto& targs, auto const& holder_targs) {
+            auto const add_nonempty = [=](auto& targs, auto& holder_targs) {
                 if (stdr::empty(holder_targs))
                     return;
                 targs.push_back(extract<meta::info>(substitute(^^method_holder_info, holder_targs)));
+                holder_targs.clear();
             };
             add_nonempty(var_targs, holder_targs);
             add_nonempty(var_targs_c, holder_targs_c);
             add_nonempty(var_targs_v, holder_targs_v);
             add_nonempty(var_targs_cv, holder_targs_cv);
-
-            holder_targs.clear();
-            holder_targs_c.clear();
-            holder_targs_v.clear();
-            holder_targs_cv.clear();
         }
 
         return std::array{

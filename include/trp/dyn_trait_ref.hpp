@@ -256,7 +256,7 @@ struct dyn_cv_ref_definer {
     };
 };
 template<any_trait Trait>
-using dyn_trait_ref = [:[] {
+using dyn_trait_ref_alias = [:[] {
     using impls = dyn_cv_ref_definer<std::remove_cv_t<Trait>>;
     if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
         return ^^typename impls::ref_cv;
@@ -271,7 +271,7 @@ using dyn_trait_ref = [:[] {
 }    // namespace detail
 
 template<any_trait Trait>
-class dyn_trait_ref : public detail::dyn_trait_ref<Trait> {
+class dyn_trait_ref : public detail::dyn_trait_ref_alias<Trait> {
     dyn_trait_ref() = default;
 
     template<any_trait>
@@ -308,11 +308,11 @@ class dyn_trait_ref : public detail::dyn_trait_ref<Trait> {
     }
 
     dyn_trait_ref(detail::vtable<std::remove_cv_t<Trait>> const* vptr, void* optr)
-    : detail::dyn_trait_ref<Trait>(vptr, optr) {};
+    : detail::dyn_trait_ref_alias<Trait>(vptr, optr) {};
 
     template<implements_trait<Trait> Impl>
     explicit dyn_trait_ref(Impl* obj)
-    : detail::dyn_trait_ref<Trait>(
+    : detail::dyn_trait_ref_alias<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, obj){};
 
     template<any_trait T, implements_trait<T> Impl, any_trait U>
@@ -322,14 +322,14 @@ public:
     template<any_trait U>
         requires explicit_supertrait_of<Trait, U> and (not std::same_as<Trait, U>)
     dyn_trait_ref(dyn_trait_ref<U> const& ref)    // NOLINT(*-explicit-*)
-    : detail::dyn_trait_ref<Trait>(
+    : detail::dyn_trait_ref_alias<Trait>(
           get_explicit_supertrait_vtable_ptr<std::remove_cv_t<Trait>>(detail::extract_vtable_ptr(ref)),    //
           detail::extract_obj_ptr(ref)){};
 
     template<implements_trait<Trait> Impl>
         requires(not detail::any_dyn_trait_ref<Impl>)
     explicit dyn_trait_ref(Impl& obj)
-    : detail::dyn_trait_ref<Trait>(
+    : detail::dyn_trait_ref_alias<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, &obj){};
 
     dyn_trait_ref(dyn_trait_ref const&)            = default;
