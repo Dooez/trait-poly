@@ -63,6 +63,7 @@ static_assert(std::same_as<decltype(emplace<second_impl>(std::declval<variant_t&
 
 int main() {
     auto direct = variant_t(first_impl{5});
+
     test::expect_eq("trait_variant", "direct value ctor index", static_cast<int>(index(direct)), 0);
     test::expect_eq("trait_variant", "direct value ctor", direct.value(), 5);
 

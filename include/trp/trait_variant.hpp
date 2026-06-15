@@ -98,7 +98,6 @@ inline constexpr auto union_member_info = [] {
 template<typename Union, uZ I>
 inline constexpr auto member_type_info = Union::type_infos[I];
 
-namespace{ // disable ADL
 constexpr auto extract_union_member(auto&& variant) -> auto&&
     requires(union_member_info<std::remove_cvref_t<decltype(variant)>> != meta::info{})
 {
@@ -108,7 +107,7 @@ constexpr auto extract_union_member(auto&& variant) -> auto&&
 consteval auto extract_var_type_info(meta::info variant, uZ i) -> meta::info {
     auto const mem_inf = extract<meta::info>(substitute(^^union_member_info, {variant}));
     return extract<meta::info>(substitute(^^member_type_info, {type_of(mem_inf), meta::reflect_constant(i)}));
-}}
+}
 
 template<non_cvref Variant, non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref CvoInvoker>
 struct cvo_invoker_mixin {
@@ -238,20 +237,16 @@ template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
     [[= obj_union_anno]] ImplHolder _;
 
-    [[nodiscard]] constexpr friend auto index(trait_variant_impl const& var) noexcept -> ImplHolder::tag_t {
+    [[nodiscard]] constexpr friend auto trait_variant_index(trait_variant_impl const& var) noexcept
+        -> ImplHolder::tag_t {
         return extract_union_member(var).tag;
     }
-    [[nodiscard]] constexpr friend auto valueless_by_exception(trait_variant_impl const& var) noexcept
-        -> bool {
-        return index(var) == ImplHolder::invalid_tag;
-    }
-    template<unique_alternative_of<trait_variant_impl> T, typename... Args>
-    constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> T& {
-        constexpr auto index = cw<ImplHolder::template type_index<T>>;
-        return emplace<index>(var, std::forward<Args>(args)...);
+    [[nodiscard]] constexpr friend auto
+    trait_variant_valueless_by_exception(trait_variant_impl const& var) noexcept -> bool {
+        return extract_union_member(var).tag == ImplHolder::invalid_tag;
     }
     template<uZ I, typename... Args>
-    constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> auto&& {
+    constexpr friend auto trait_variant_emplace(trait_variant_impl& var, Args&&... args) -> auto&& {
         auto&                 union_ref = extract_union_member(var);
         static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
         template for (constexpr auto i: idxs) {
@@ -263,24 +258,16 @@ class trait_variant_impl : public MethodHolders... {
     }
     template<uZ I, any_trait_variant_cvref Variant>
         requires(I < ImplHolder::count)
-    [[nodiscard]] constexpr friend auto get(Variant&& var) -> decltype(auto) {
+    [[nodiscard]] constexpr friend auto trait_variant_get(Variant&& var) -> decltype(auto) {
         auto&& union_ref = extract_union_member(var);
         if (union_ref.tag != I)
             throw std::bad_variant_access{};
         return std::forward_like<decltype(var)>(union_ref.get(cw<I>));
     }
 
-    template<unique_alternative_of<trait_variant_impl> T, any_trait_variant_cvref Variant>
-    [[nodiscard]] constexpr friend auto get(Variant&& var) -> decltype(auto) {
-        return get<ImplHolder::template type_index<T>>(std::forward<Variant>(var));
-    }
-    template<unique_alternative_of<trait_variant_impl> T>
-    [[nodiscard]] constexpr friend auto holds_alternative(trait_variant_impl const& var) noexcept -> bool {
-        return extract_union_member(var).tag == ImplHolder::template type_index<T>;
-    }
     template<uZ I, any_trait_variant_cvref Variant>
         requires(I < ImplHolder::count)
-    [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
+    [[nodiscard]] constexpr friend auto trait_variant_get_if(Variant* var) noexcept {
         using pointer_t = decltype(std::addressof(extract_union_member(*var).get(cw<I>)));
         if (var == nullptr)
             return pointer_t{};
@@ -288,10 +275,6 @@ class trait_variant_impl : public MethodHolders... {
         if (union_ref.tag != I)
             return pointer_t{};
         return std::addressof(union_ref.get(cw<I>));
-    }
-    template<unique_alternative_of<trait_variant_impl> T, any_trait_variant_cvref Variant>
-    [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
-        return get_if<ImplHolder::template type_index<T>>(var);
     }
 
 public:
@@ -371,10 +354,9 @@ public:
         return *this;
     }
 };
-namespace { // disable ADL
 template<non_cvref ImplHolder, non_cvref... MethodHolders>
 auto get_var_impl_holder(trait_variant_impl<ImplHolder, MethodHolders...> const&) -> ImplHolder;
-}
+
 template<non_cv_trait Trait, non_ref... Impls>
 struct var_definer {
     struct var;
@@ -464,7 +446,7 @@ struct alternative_union_of<T> {
 };
 
 template<any_trait Trait, implements_trait<Trait>... Impls>
-using trait_variant = [:[] {
+using trait_variant_alias = [:[] {
     using definer = var_definer<std::remove_cvref_t<Trait>, Impls...>;
     if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
         return ^^typename definer::var_cv;
@@ -482,11 +464,74 @@ inline constexpr auto variant_size = [:alternative_union_of<Var>::value:] ::coun
 template<uZ I, any_trait_variant Var>
     requires(I < variant_size<Var>)
 using variant_alternative = [:[:alternative_union_of<Var>::value:] ::type_infos[I]:];
+template<typename T, any_trait_variant Var>
+inline constexpr auto
+    variant_alternative_index = [:alternative_union_of<Var>::value:] ::template type_index<T>;
 
 }    // namespace detail::var
 
 template<any_trait Trait, implements_trait<Trait>... Impls>
-using trait_variant = detail::var::trait_variant<Trait, Impls...>;
+class trait_variant : public detail::var::trait_variant_alias<Trait, Impls...> {
+public:
+    using detail::var::trait_variant_alias<Trait, Impls...>::trait_variant_alias;
+    using detail::var::trait_variant_alias<Trait, Impls...>::operator=;
+};
+
+template<detail::var::any_trait_variant Var>
+[[nodiscard]] constexpr auto index(Var const& var) noexcept {
+    return trait_variant_index(var);
+}
+
+template<detail::var::any_trait_variant Var>
+[[nodiscard]] constexpr auto valueless_by_exception(Var const& var) noexcept -> bool {
+    return trait_variant_valueless_by_exception(var);
+}
+
+template<uZ I, detail::var::any_trait_variant Var, typename... Args>
+    requires(I < detail::var::variant_size<Var>)
+constexpr auto emplace(Var& var, Args&&... args) -> decltype(auto) {
+    return trait_variant_emplace<I>(var, std::forward<Args>(args)...);
+}
+
+template<typename T, detail::var::any_trait_variant Var, typename... Args>
+    requires detail::var::unique_alternative_of<T, Var>
+constexpr auto emplace(Var& var, Args&&... args) -> T& {
+    constexpr auto i = detail::var::variant_alternative_index<T, Var>;
+    return emplace<i>(var, std::forward<Args>(args)...);
+}
+
+template<uZ I, detail::var::any_trait_variant_cvref Variant>
+    requires(I < detail::var::variant_size<std::remove_cvref_t<Variant>>)
+[[nodiscard]] constexpr auto get(Variant&& var) -> decltype(auto) {
+    return trait_variant_get<I>(std::forward<Variant>(var));
+}
+
+template<typename T, detail::var::any_trait_variant_cvref Variant>
+    requires detail::var::unique_alternative_of<T, std::remove_cvref_t<Variant>>
+[[nodiscard]] constexpr auto get(Variant&& var) -> decltype(auto) {
+    constexpr auto i = detail::var::variant_alternative_index<T, std::remove_cvref_t<Variant>>;
+    return get<i>(std::forward<Variant>(var));
+}
+
+template<typename T, detail::var::any_trait_variant Var>
+    requires detail::var::unique_alternative_of<T, Var>
+[[nodiscard]] constexpr auto holds_alternative(Var const& var) noexcept -> bool {
+    constexpr auto i = detail::var::variant_alternative_index<T, Var>;
+    return index(var) == i;
+}
+
+template<uZ I, detail::var::any_trait_variant_cvref Variant>
+    requires(I < detail::var::variant_size<std::remove_cvref_t<Variant>>)
+[[nodiscard]] constexpr auto get_if(Variant* var) noexcept {
+    return trait_variant_get_if<I>(var);
+}
+
+template<typename T, detail::var::any_trait_variant_cvref Variant>
+    requires detail::var::unique_alternative_of<T, std::remove_cvref_t<Variant>>
+[[nodiscard]] constexpr auto get_if(Variant* var) noexcept {
+    constexpr auto i = detail::var::variant_alternative_index<T, std::remove_cvref_t<Variant>>;
+    return get_if<i>(var);
+}
 
 }    // namespace trp
 
