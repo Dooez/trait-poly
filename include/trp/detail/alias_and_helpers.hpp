@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -330,18 +331,64 @@ struct unique_id_struct {
     inline static char value{};
 };
 
-consteval auto find_annotated_member(meta::info type, meta::info annotation) -> meta::info {
-    for (auto m: nonstatic_data_members_of(type, meta::access_context::unchecked())) {
-        for (auto ann: annotations_of(m))
-            if (remove_cv(type_of(ann)) == remove_cv(type_of(annotation)))
+template<auto A, auto B>
+inline constexpr bool equal_values = [] {
+    if constexpr (std::equality_comparable_with<decltype(A), decltype(B)>) {
+        return A == B;
+    } else
+    if constexpr (std::same_as<decltype(A), decltype(B)>) {
+        return true;
+    } else {
+        return false;
+    }
+}();
+consteval auto compare_annotations(meta::info a, meta::info b) -> bool {
+    if (is_annotation(a))
+        a = constant_of(a);
+    if (is_annotation(b))
+        b = constant_of(b);
+    return extract<bool>(substitute(^^equal_values, {a, b}));
+}
+
+consteval auto find_annotated_member(meta::info           type,
+                                     meta::info           annotation,
+                                     meta::access_context ctx = meta::access_context::current())
+    -> meta::info {
+    for (auto m: nonstatic_data_members_of(type, ctx)) {
+        for (auto const ann: annotations_of(m))
+            if (compare_annotations(ann, annotation))
                 return m;
-    };
+
+        for (auto const ann: annotations_of(type_of(m)))
+            if (compare_annotations(ann, annotation))
+                return m;
+    }
     for (auto base: subextract_base_types(type)) {
-        auto m = find_annotated_member(base, annotation);
+        auto m = find_annotated_member(base, annotation, ctx);
         if (m != meta::info{})
             return m;
     }
-    return {};
+    return meta::info{};
+}
+
+consteval auto find_annotated_base(meta::info           type,
+                                   meta::info           annotation,
+                                   meta::access_context ctx = meta::access_context::current()) -> meta::info {
+    auto const bases = subextract_base_types(type);
+    for (auto const base: bases) {
+        for (auto const ann: annotations_of(base))
+            if (compare_annotations(ann, annotation))
+                return base;
+        for (auto const ann: annotations_of(type_of(base)))
+            if (compare_annotations(ann, annotation))
+                return base;
+    }
+    for (auto const base: bases) {
+        auto const m = find_annotated_member(base, annotation);
+        if (m != meta::info{})
+            return m;
+    }
+    return meta::info{};
 }
 
 }    // namespace detail

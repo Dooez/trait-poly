@@ -18,7 +18,7 @@ struct impl_holder {
     static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
 
     /**
-     * @brief While P3074(P4104?) is not implemented, we need a wrapper to handle types 
+     * @brief While P3074(P4104?) is not implemented, we need a wrapper to handle types
      * with nontrivial destructors in undefined unions
      */
     template<typename T>
@@ -239,14 +239,14 @@ concept any_trait_variant = non_cvref<T> and std::is_class_v<T> and variant_impl
 template<typename T>
 concept any_trait_variant_cvref = any_trait_variant<std::remove_cvref_t<T>>;
 template<typename T, typename Var>
-concept unique_alternative_of = any_trait_variant<Var> and
-[:variant_impl_for<Var>:] ::template type_count<T> == 1;
+concept unique_alternative_of =
+    any_trait_variant<Var> and ([:variant_impl_for<Var>:] ::template type_count<T> == 1);
 
 template<any_trait_variant Var>
-inline constexpr auto variant_size = [:variant_impl_for<Var>:]::count;
+inline constexpr auto variant_size = [:variant_impl_for<Var>:] ::count;
 template<uZ I, any_trait_variant Var>
     requires(I < variant_size<Var>)
-using variant_alternative = [:[:variant_impl_for<Var>:]::type_infos[I]:];
+using variant_alternative = [:[:variant_impl_for<Var>:] ::type_infos[I]:];
 
 
 template<non_cvref ImplHolder, non_cvref... MethodHolders>
@@ -273,8 +273,8 @@ class trait_variant_impl : public MethodHolders... {
             if (union_ref.tag == i)
                 union_ref.destroy(i);
         }
-        union_ref.construct(index, std::forward<Args>(args)...);
-        return union_ref.get(index);
+        union_ref.construct(cw<I>, std::forward<Args>(args)...);
+        return union_ref.get(cw<I>);
     }
     template<uZ I, any_trait_variant_cvref Variant>
         requires(I < ImplHolder::count)
@@ -296,11 +296,12 @@ class trait_variant_impl : public MethodHolders... {
     template<uZ I, any_trait_variant_cvref Variant>
         requires(I < ImplHolder::count)
     [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
+        using pointer_t = decltype(std::addressof(extract_union_member(*var).get(cw<I>)));
         if (var == nullptr)
-            return nullptr;
+            return pointer_t{};
         auto&& union_ref = extract_union_member(*var);
         if (union_ref.tag != I)
-            return nullptr;
+            return pointer_t{};
         return std::addressof(union_ref.get(cw<I>));
     }
     template<unique_alternative_of<trait_variant_impl> T, any_trait_variant_cvref Variant>

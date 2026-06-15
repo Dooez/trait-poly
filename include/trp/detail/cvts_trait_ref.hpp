@@ -12,7 +12,7 @@ inline constexpr struct {
 
 template<non_cvref TRef>
 inline constexpr auto vtable_member_info = [] {
-    auto m = find_annotated_member(^^TRef, ^^vtable_ptr_anno);
+    auto m = find_annotated_member(^^TRef, meta::reflect_constant(vtable_ptr_anno), meta::access_context::unchecked());
     if (m == meta::info{})
         throw "No vtable annotated member found";
     return m;
@@ -20,7 +20,7 @@ inline constexpr auto vtable_member_info = [] {
 
 template<non_cvref TRef>
 inline constexpr auto obj_member_info = [] {
-    auto m = find_annotated_member(^^TRef, ^^obj_ptr_anno);
+    auto m = find_annotated_member(^^TRef, meta::reflect_constant(obj_ptr_anno), meta::access_context::unchecked());
     if (m == meta::info{})
         throw "No object annotated member found";
     return m;
