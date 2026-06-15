@@ -2,11 +2,7 @@
 #ifndef TRP_GODBOLT
 #include "detail/cvts_trait_ref.hpp"
 #endif
-
-#include <memory>
 #include <type_traits>
-#include <utility>
-#include <variant>
 namespace trp {
 
 namespace detail::var {
@@ -22,7 +18,7 @@ struct impl_holder {
     static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
 
     /**
-     * @brief While P3074 is not implemented, we need a wrapper to handle types 
+     * @brief While P3074(P4104?) is not implemented, we need a wrapper to handle types 
      * with nontrivial destructors in undefined unions
      */
     template<typename T>
@@ -93,7 +89,8 @@ inline constexpr struct {
 } obj_union_anno;
 template<non_cvref Var>
 inline constexpr auto union_member_info = [] {
-    auto m = find_annotated_member(^^Var, ^^obj_union_anno);
+    auto m = find_annotated_member(
+        ^^Var, meta::reflect_constant(obj_union_anno), meta::access_context::unchecked());
     if (m == meta::info{})
         throw "No variant union annotated member found";
     return m;
@@ -224,98 +221,91 @@ template<non_cvref... OvSpecs>
 inline constexpr auto method_holder_info = ^^typename method_holder_definer<OvSpecs...>::method_holder;
 
 template<non_cvref ImplHolder, non_cvref... MethodHolders>
+class trait_variant_impl;
+
+consteval auto try_extract_variant_impl(meta::info type) {
+    if (has_template_arguments(type) and template_of(type) == ^^trait_variant_impl)
+        return type;
+    for (auto base: subextract_base_types(type))
+        if (auto m = try_extract_variant_impl(base); m != meta::info{})
+            return m;
+    return meta::info{};
+};
+template<typename T>
+inline constexpr auto variant_impl_for = try_extract_variant_impl(^^T);
+
+template<typename T>
+concept any_trait_variant = non_cvref<T> and std::is_class_v<T> and variant_impl_for<T> != meta::info{};
+template<typename T>
+concept any_trait_variant_cvref = any_trait_variant<std::remove_cvref_t<T>>;
+template<typename T, typename Var>
+concept unique_alternative_of = any_trait_variant<Var> and
+[:variant_impl_for<Var>:] ::template type_count<T> == 1;
+
+template<any_trait_variant Var>
+inline constexpr auto variant_size = [:variant_impl_for<Var>:]::count;
+template<uZ I, any_trait_variant Var>
+    requires(I < variant_size<Var>)
+using variant_alternative = [:[:variant_impl_for<Var>:]::type_infos[I]:];
+
+
+template<non_cvref ImplHolder, non_cvref... MethodHolders>
 class trait_variant_impl : public MethodHolders... {
     [[= obj_union_anno]] ImplHolder _;
 
-    static constexpr auto as_impl(auto&& var) -> auto&& {
-        using var_t    = std::remove_reference_t<decltype(var)>;
-        using impl_ref = [:add_lvalue_reference(copy_cv_to(^^var_t, ^^trait_variant_impl)):];
-        return static_cast<impl_ref>(var);
+    [[nodiscard]] constexpr friend auto index(trait_variant_impl const& var) noexcept -> ImplHolder::tag_t {
+        return extract_union_member(var).tag;
     }
-
-    template<uZ I>
+    [[nodiscard]] constexpr friend auto valueless_by_exception(trait_variant_impl const& var) noexcept
+        -> bool {
+        return index(var) == ImplHolder::invalid_tag;
+    }
+    template<unique_alternative_of<trait_variant_impl> T, typename... Args>
+    constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> T& {
+        constexpr auto index = cw<ImplHolder::template type_index<T>>;
+        return emplace<index>(var, std::forward<Args>(args)...);
+    }
+    template<uZ I, typename... Args>
+    constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> auto&& {
+        auto&                 union_ref = extract_union_member(var);
+        static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
+        template for (constexpr auto i: idxs) {
+            if (union_ref.tag == i)
+                union_ref.destroy(i);
+        }
+        union_ref.construct(index, std::forward<Args>(args)...);
+        return union_ref.get(index);
+    }
+    template<uZ I, any_trait_variant_cvref Variant>
         requires(I < ImplHolder::count)
-    static constexpr auto get_impl(auto&& var) -> decltype(auto) {
-        auto&& union_ref = extract_union_member(as_impl(var));
+    [[nodiscard]] constexpr friend auto get(Variant&& var) -> decltype(auto) {
+        auto&& union_ref = extract_union_member(var);
         if (union_ref.tag != I)
             throw std::bad_variant_access{};
         return std::forward_like<decltype(var)>(union_ref.get(cw<I>));
     }
 
-    template<uZ I, typename T>
+    template<unique_alternative_of<trait_variant_impl> T, any_trait_variant_cvref Variant>
+    [[nodiscard]] constexpr friend auto get(Variant&& var) -> decltype(auto) {
+        return get<ImplHolder::template type_index<T>>(std::forward<Variant>(var));
+    }
+    template<unique_alternative_of<trait_variant_impl> T>
+    [[nodiscard]] constexpr friend auto holds_alternative(trait_variant_impl const& var) noexcept -> bool {
+        return extract_union_member(var).tag == ImplHolder::template type_index<T>;
+    }
+    template<uZ I, any_trait_variant_cvref Variant>
         requires(I < ImplHolder::count)
-    static constexpr auto get_if_impl(T* var) noexcept
-        -> decltype(std::addressof(extract_union_member(as_impl(*var)).get(cw<I>))) {
+    [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
         if (var == nullptr)
             return nullptr;
-
-        auto&& union_ref = extract_union_member(as_impl(*var));
+        auto&& union_ref = extract_union_member(*var);
         if (union_ref.tag != I)
             return nullptr;
         return std::addressof(union_ref.get(cw<I>));
     }
-
-    constexpr friend auto index(trait_variant_impl const& var) noexcept -> ImplHolder::tag_t {
-        return extract_union_member(var).tag;
-    }
-    constexpr friend auto valueless_by_exception(trait_variant_impl const& var) noexcept -> bool {
-        return index(var) == ImplHolder::invalid_tag;
-    }
-    constexpr friend auto variant_impl_holder_identity(trait_variant_impl const*) noexcept
-        -> std::type_identity<ImplHolder> {
-        return {};
-    }
-    template<typename T, typename... Args>
-        requires(ImplHolder::template type_count<T> == 1)
-    constexpr friend auto emplace(trait_variant_impl& var, Args&&... args) -> T& {
-        constexpr auto        index     = cw<ImplHolder::template type_index<T>>;
-        auto&                 union_ref = extract_union_member(var);
-        static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
-        template for (constexpr auto i: idxs) {
-            if (union_ref.tag == i)
-                union_ref.destroy(i);
-        }
-        union_ref.construct(index, std::forward<Args>(args)...);
-        return union_ref.get(index);
-    }
-    template<uZ I, typename... Args>
-    constexpr friend auto emplace(trait_variant_impl& var, constant_wrapper<I> index, Args&&... args) {
-        auto&                 union_ref = extract_union_member(var);
-        static constexpr auto idxs      = make_cw_idxs<ImplHolder::count>();
-        template for (constexpr auto i: idxs) {
-            if (union_ref.tag == i)
-                union_ref.destroy(i);
-        }
-        union_ref.construct(index, std::forward<Args>(args)...);
-        return union_ref.get(index);
-    }
-    template<uZ I, typename Variant>
-        requires(I < ImplHolder::count) and
-                std::derived_from<std::remove_cvref_t<Variant>, trait_variant_impl>
-    constexpr friend auto get(Variant&& var) -> decltype(auto) {
-        return get_impl<I>(std::forward<Variant>(var));
-    }
-    template<typename T, typename Variant>
-        requires(ImplHolder::template type_count<T> == 1) and
-                std::derived_from<std::remove_cvref_t<Variant>, trait_variant_impl>
-    constexpr friend auto get(Variant&& var) -> decltype(auto) {
-        return get_impl<ImplHolder::template type_index<T>>(std::forward<Variant>(var));
-    }
-    template<typename T>
-        requires(ImplHolder::template type_count<T> == 1)
-    [[nodiscard]] constexpr friend auto holds_alternative(trait_variant_impl const& var) noexcept -> bool {
-        return extract_union_member(var).tag == ImplHolder::template type_index<T>;
-    }
-    template<uZ I, typename Variant>
-        requires(I < ImplHolder::count) and std::derived_from<std::remove_cv_t<Variant>, trait_variant_impl>
+    template<unique_alternative_of<trait_variant_impl> T, any_trait_variant_cvref Variant>
     [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
-        return get_if_impl<I>(var);
-    }
-    template<typename T, typename Variant>
-        requires(ImplHolder::template type_count<T> == 1) and
-                std::derived_from<std::remove_cv_t<Variant>, trait_variant_impl>
-    [[nodiscard]] constexpr friend auto get_if(Variant* var) noexcept {
-        return get_if_impl<ImplHolder::template type_index<T>>(var);
+        return get_if<ImplHolder::template type_index<T>>(var);
     }
 
 
@@ -492,22 +482,6 @@ using trait_variant = [:[] {
         return ^^typename definer::var;
     }
 }():];
-
-template<typename Var>
-concept any_trait_variant = non_cvref<Var>              //
-                            and std::is_class_v<Var>    //
-                            and requires(Var const* var) { variant_impl_holder_identity(var); };
-
-template<any_trait_variant Var>
-using variant_impl_holder =
-    typename decltype(variant_impl_holder_identity(static_cast<Var const*>(nullptr)))::type;
-
-template<any_trait_variant Var>
-inline constexpr auto variant_size = variant_impl_holder<Var>::count;
-
-template<uZ I, any_trait_variant Var>
-    requires(I < variant_size<Var>)
-using variant_alternative = [:variant_impl_holder<Var>::type_infos[I]:];
 
 }    // namespace detail::var
 
