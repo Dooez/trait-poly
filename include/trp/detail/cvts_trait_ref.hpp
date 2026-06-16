@@ -13,7 +13,7 @@ inline constexpr struct {
 template<non_cvref TRef>
 inline constexpr auto vtable_member_info = [] {
     auto m = find_annotated_member(^^TRef,    //
-                                   meta::reflect_constant(vtable_ptr_anno),
+                                   vtable_ptr_anno,
                                    meta::access_context::unchecked());
     if (m == meta::info{})
         throw "No vtable annotated member found";
@@ -23,7 +23,7 @@ inline constexpr auto vtable_member_info = [] {
 template<non_cvref TRef>
 inline constexpr auto obj_member_info = [] {
     auto m = find_annotated_member(^^TRef,    //
-                                   meta::reflect_constant(obj_ptr_anno),
+                                   obj_ptr_anno,
                                    meta::access_context::unchecked());
     if (m == meta::info{})
         throw "No object annotated member found";
@@ -118,7 +118,7 @@ struct cvts_cvo_invoker;
             auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                           \
                                                                                                             \
             constexpr auto invoker_ptr = [] {                                                               \
-                auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);                          \
+                auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);                        \
                 if (mems.size() != 1)                                                                       \
                     throw "Method holder is expected to have only a single method.";                        \
                 if (type_of(mems[0]) != ^^MethodInvoker)                                                    \
@@ -281,8 +281,7 @@ inline constexpr auto all_cvref_methods = [] {
     auto next_types = std::vector<meta::info>{};
     while (not stdr::empty(types)) {
         for (auto t: types) {
-            mems.append_range(nonstatic_data_members_of(t, meta::access_context::unprivileged()) |
-                              stdv::transform([](meta::info m) {
+            mems.append_range(nonstatic_data_members_of(t, unprivileged) | stdv::transform([](meta::info m) {
                                   return name_info_pair{std::define_static_string(identifier_of(m)), m};
                               }));
             next_types.append_range(subextract_base_types(t));

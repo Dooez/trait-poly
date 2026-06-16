@@ -51,20 +51,19 @@ consteval bool check_constexpr_static_data_member() {
 template<typename Trait>
 concept no_private_members =
     non_cvref<Trait> and stdr::size(members_of(^^Trait, meta::access_context::unchecked())) ==
-                             stdr::size(members_of(^^Trait, meta::access_context::unprivileged()));
+                             stdr::size(members_of(^^Trait, unprivileged));
 template<typename Trait>
 concept no_private_bases =
     non_cvref<Trait> and
     stdr::size(bases_of(^^Trait, meta::access_context::unchecked())) == stdr::size(direct_base_types<Trait>);
 template<typename Trait>
 concept no_nonstatic_data_members =
-    non_cvref<Trait> and
-    stdr::empty(nonstatic_data_members_of(^^Trait, meta::access_context::unprivileged()));
+    non_cvref<Trait> and stdr::empty(nonstatic_data_members_of(^^Trait, unprivileged));
 
 template<typename Trait>
 concept no_explicit_special_members =
     non_cvref<Trait>    //
-    and stdr::none_of(members_of(^^Trait, meta::access_context::unprivileged()), [](auto m) {
+    and stdr::none_of(members_of(^^Trait, unprivileged), [](auto m) {
             return is_special_member_function(m)    //
                    and not is_defaulted(m);
         });    //
@@ -102,7 +101,7 @@ concept valid_methods = [] {
 
 template<typename T>
 concept static_data_members_are_constexpr = [] {
-    constexpr auto mems = std::define_static_array(static_data_members_of(^^T, ctx_unpriv));
+    constexpr auto mems = std::define_static_array(static_data_members_of(^^T, unprivileged));
     auto [... Is]       = make_cw_idxs<mems.size()>();
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }();
@@ -176,8 +175,7 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 namespace detail {
 template<non_cvref Impl, auto Id>
 inline constexpr auto matching_id_direct_public_members = std::define_static_array(
-    members_of(^^Impl,
-               meta::access_context::unprivileged())    //
+    members_of(^^Impl, unprivileged)    //
     | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; }));
 
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId>

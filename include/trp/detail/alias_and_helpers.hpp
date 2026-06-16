@@ -49,7 +49,7 @@ namespace detail {
 template<auto V>
 inline constexpr auto cw = constant_wrapper<V>{};
 
-static constexpr auto ctx_unpriv = meta::access_context::unprivileged();
+static constexpr auto unprivileged = meta::access_context::unprivileged();
 
 template<typename T>
 concept cw_info =
@@ -246,13 +246,12 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
 }
 
 template<non_cvref T>
-inline constexpr auto nonspecial_members =
-    std::define_static_array(members_of(^^T, meta::access_context::unprivileged()) |
-                             stdv::filter(std::not_fn(meta::is_special_member_function)));
+inline constexpr auto nonspecial_members = std::define_static_array(
+    members_of(^^T, unprivileged) | stdv::filter(std::not_fn(meta::is_special_member_function)));
 
 template<non_cvref T>
-inline constexpr auto direct_base_types = std::define_static_array(
-    bases_of(^^T, meta::access_context::unprivileged()) | stdv::transform(meta::type_of));
+inline constexpr auto direct_base_types =
+    std::define_static_array(bases_of(^^T, unprivileged) | stdv::transform(meta::type_of));
 
 consteval auto subextract_base_types(meta::info type) {
     return subextract_info_span(^^direct_base_types, {type});
@@ -268,8 +267,8 @@ inline constexpr auto direct_trait_methods = [] {
                and (is_volatile(method) or not is_volatile(^^T));
     };
 
-    return define_static_array(members_of(^^T, std::meta::access_context::unprivileged())    //
-                               | stdv::filter(is_relevant_method)                            //
+    return define_static_array(members_of(^^T, unprivileged)         //
+                               | stdv::filter(is_relevant_method)    //
                                | stdv::transform(method_identity) | stdv::transform(as_lref_method_identity));
 }();
 
@@ -335,32 +334,25 @@ template<auto A, auto B>
 inline constexpr bool equal_values = [] {
     if constexpr (std::equality_comparable_with<decltype(A), decltype(B)>) {
         return A == B;
-    } else
-    if constexpr (std::same_as<decltype(A), decltype(B)>) {
+    } else if constexpr (std::same_as<decltype(A), decltype(B)>) {
         return true;
     } else {
         return false;
     }
 }();
-consteval auto compare_annotations(meta::info a, meta::info b) -> bool {
-    if (is_annotation(a))
-        a = constant_of(a);
-    if (is_annotation(b))
-        b = constant_of(b);
-    return extract<bool>(substitute(^^equal_values, {a, b}));
-}
 
+template<typename T>
 consteval auto find_annotated_member(meta::info           type,
-                                     meta::info           annotation,
+                                     T                    annotation,
                                      meta::access_context ctx = meta::access_context::current())
     -> meta::info {
+    auto const target_ann = meta::reflect_constant(annotation);
     for (auto m: nonstatic_data_members_of(type, ctx)) {
-        for (auto const ann: annotations_of(m))
-            if (compare_annotations(ann, annotation))
+        for (auto const ann: annotations_of(m) | stdv::transform(meta::constant_of))
+            if (ann == target_ann)
                 return m;
-
-        for (auto const ann: annotations_of(type_of(m)))
-            if (compare_annotations(ann, annotation))
+        for (auto const ann: annotations_of(type_of(m)) | stdv::transform(meta::constant_of))
+            if (ann == target_ann)
                 return m;
     }
     for (auto base: subextract_base_types(type)) {
@@ -371,20 +363,22 @@ consteval auto find_annotated_member(meta::info           type,
     return meta::info{};
 }
 
+template<typename T>
 consteval auto find_annotated_base(meta::info           type,
-                                   meta::info           annotation,
+                                   T                    annotation,
                                    meta::access_context ctx = meta::access_context::current()) -> meta::info {
-    auto const bases = subextract_base_types(type);
+    auto const target_ann = meta::reflect_constant(annotation);
+    auto const bases      = subextract_base_types(type);
     for (auto const base: bases) {
-        for (auto const ann: annotations_of(base))
-            if (compare_annotations(ann, annotation))
+        for (auto const ann: annotations_of(base) | stdv::transform(meta::constant_of))
+            if (ann == target_ann)
                 return base;
-        for (auto const ann: annotations_of(type_of(base)))
-            if (compare_annotations(ann, annotation))
+        for (auto const ann: annotations_of(type_of(base)) | stdv::transform(meta::constant_of))
+            if (ann == target_ann)
                 return base;
     }
     for (auto const base: bases) {
-        auto const m = find_annotated_member(base, annotation);
+        auto const m = find_annotated_base(base, annotation);
         if (m != meta::info{})
             return m;
     }

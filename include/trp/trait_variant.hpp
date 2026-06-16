@@ -89,8 +89,7 @@ inline constexpr struct {
 } obj_union_anno;
 template<non_cvref Var>
 inline constexpr auto union_member_info = [] {
-    auto m = find_annotated_member(
-        ^^Var, meta::reflect_constant(obj_union_anno), meta::access_context::unchecked());
+    auto m = find_annotated_member(^^Var, obj_union_anno, meta::access_context::unchecked());
     if (m == meta::info{})
         throw "No variant union annotated member found";
     return m;
@@ -171,7 +170,7 @@ struct cvo_invoker;
             auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                   \
                                                                                                     \
             constexpr auto invoker_ptr = [] {                                                       \
-                auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);                  \
+                auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);                \
                 if (stdr::size(mems) != 1)                                                          \
                     throw "Method holder is expected to have only a single method.";                \
                 if (type_of(mems[0]) != ^^MethodInvoker)                                            \

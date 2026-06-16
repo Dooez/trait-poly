@@ -42,7 +42,8 @@ struct cvo_invoker;
     private:                                                                                                 \
         template<typename VTable>                                                                            \
         static auto get_method(VTable* vt) {                                                                 \
-            constexpr auto m = nonstatic_data_members_of(^^typename VTable::vtable_impl, ctx_unpriv)[Index]; \
+            constexpr auto m =                                                                               \
+                nonstatic_data_members_of(^^typename VTable::vtable_impl, unprivileged)[Index];              \
             return vt->[:m:];                                                                                \
         }                                                                                                    \
     };
@@ -98,7 +99,7 @@ private:
         };
 
         constexpr auto invoker_ptr = [] {
-            auto mems = nonstatic_data_members_of(^^MethodHolder, ctx_unpriv);
+            auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);
             if (mems.size() != 1)
                 throw "Method holder is expected to have only a single method.";
             if (type_of(mems[0]) != ^^method_invoker)

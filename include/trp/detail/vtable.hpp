@@ -154,9 +154,9 @@ constexpr auto get_explicit_supertrait_vtable_ptr(vtable<Trait> const* ptr) -> v
     }():];
 
     auto const next_ptr = [=] -> vtable<next_supertrait_t> const* {
-        using supertraits_t        = decltype(vtable<Trait>::direct_supertraits);
-        static constexpr auto mems = std::define_static_array(
-            nonstatic_data_members_of(^^supertraits_t, meta::access_context::unprivileged()));
+        using supertraits_t = decltype(vtable<Trait>::direct_supertraits);
+        static constexpr auto mems =
+            std::define_static_array(nonstatic_data_members_of(^^supertraits_t, unprivileged));
         template for (constexpr auto m: mems) {
             if constexpr (type_of(m) == substitute(^^vtable, {^^next_supertrait_t}))
                 return &(ptr->direct_supertraits.[:m:]);
