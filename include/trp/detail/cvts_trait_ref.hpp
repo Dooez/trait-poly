@@ -255,9 +255,9 @@ struct cvts_ref_definer {
     };
 };
 
-template<any_trait Trait, implements_trait<Trait>... Impls>
+template<any_trait Trait, implements_trait<Trait> Impl>
 using cvts_trait_ref = [:[] {
-    using definer = cvts_ref_definer<std::remove_cvref_t<Trait>, Impls...>;
+    using definer = cvts_ref_definer<std::remove_cvref_t<Trait>, Impl>;
     if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
         return ^^typename definer::ref_cv;
     } else if constexpr (std::is_volatile_v<Trait>) {

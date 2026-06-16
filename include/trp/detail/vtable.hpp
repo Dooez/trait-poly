@@ -93,33 +93,34 @@ consteval auto fill_vtable() {
         constexpr auto m =
             stdr::find(full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt)
                 ->fn;
-        if (m == meta::info{}) {
+        if constexpr (m == meta::info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
             if (trait_method_idt_t::is_volatile)
                 quals.has_volatile = false;
             quals.has_full = false;
             return typename trait_method_idt_t::wrapper_fptr_type{nullptr};
-        }
-
-        auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
-        if constexpr (concepts::explicit_template_method_impl_of<m, SESubtrait>) {
-            using cvts_ref                     = cvts_trait_ref<SESubtrait, Impl>;
-            constexpr auto method              = substitute(m, {^^cvts_ref});
-            constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
-                                                            {reflect_constant(method),
-                                                             ^^Impl,
-                                                             ^^cvts_ref,
-                                                             trait_method_idt,
-                                                             trait_method_idt_t::param_infos[is]...});
-            using wrapper_struct               = [:wrapper_struct_info:];
-            return &wrapper_struct::invoke;
         } else {
-            constexpr auto wrapper_struct_info = substitute(
-                ^^invoke_wrapper_struct,
-                {^^Impl, reflect_constant(m), trait_method_idt, trait_method_idt_t::param_infos[is]...});
-            using wrapper_struct = [:wrapper_struct_info:];
-            return &wrapper_struct::invoke;
+            auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
+            if constexpr (concepts::explicit_template_method_impl_of<m, SESubtrait>) {
+                using cv_subtrait                  = [:trait_method_idt_t::add_obj_cv(^^SESubtrait):];
+                using cvts_ref                     = cvts_trait_ref<cv_subtrait, Impl>;
+                constexpr auto method              = substitute(m, {^^cvts_ref});
+                constexpr auto wrapper_struct_info = substitute(^^explicit_invoke_wrapper_struct,    //
+                                                                {reflect_constant(method),
+                                                                 ^^Impl,
+                                                                 ^^cvts_ref,
+                                                                 trait_method_idt,
+                                                                 trait_method_idt_t::param_infos[is]...});
+                using wrapper_struct               = [:wrapper_struct_info:];
+                return &wrapper_struct::invoke;
+            } else {
+                constexpr auto wrapper_struct_info = substitute(
+                    ^^invoke_wrapper_struct,
+                    {^^Impl, reflect_constant(m), trait_method_idt, trait_method_idt_t::param_infos[is]...});
+                using wrapper_struct = [:wrapper_struct_info:];
+                return &wrapper_struct::invoke;
+            }
         }
     };
 

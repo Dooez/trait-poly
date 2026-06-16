@@ -52,11 +52,10 @@ struct impl_holder {
     impls_union storage{.empty = {}};
     tag_t       tag{invalid_tag};
 
-    static constexpr uZ   count        = sizeof...(Impl);
-    static constexpr auto type_infos   = std::array{^^Impl...};
-    static constexpr auto member_infos = std::define_static_array(
-        nonstatic_data_members_of(^^impls_union, std::meta::access_context::current())    //
-        | stdv::drop(1));
+    static constexpr uZ   count      = sizeof...(Impl);
+    static constexpr auto type_infos = std::array{^^Impl...};
+    static constexpr auto member_infos =
+        std::define_static_array(nonstatic_data_members_of(^^impls_union, unprivileged) | stdv::drop(1));
 
     template<typename T>
     static constexpr uZ type_count = stdr::count(type_infos, ^^T);
