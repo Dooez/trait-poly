@@ -330,17 +330,6 @@ struct unique_id_struct {
     inline static char value{};
 };
 
-template<auto A, auto B>
-inline constexpr bool equal_values = [] {
-    if constexpr (std::equality_comparable_with<decltype(A), decltype(B)>) {
-        return A == B;
-    } else if constexpr (std::same_as<decltype(A), decltype(B)>) {
-        return true;
-    } else {
-        return false;
-    }
-}();
-
 template<typename T>
 consteval auto find_annotated_member(meta::info           type,
                                      T                    annotation,
