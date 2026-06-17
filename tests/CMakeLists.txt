@@ -21,4 +21,5 @@ function(add_trp_test target source)
 endfunction()
 
 add_trp_test(trp_test_default_trait_impls default_trait_impl_matrix.cpp)
+add_trp_test(trp_test_dyn_trait_ref dyn_trait_ref.cpp)
 add_trp_test(trp_test_trait_variant trait_variant.cpp)
