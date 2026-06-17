@@ -45,7 +45,6 @@ namespace cvts_trait {
 
 template<typename Trait, typename Impl, typename... MethodHolders>
 class cvts_trait_ref_impl : public MethodHolders... {
-protected:
     [[= obj_ptr_anno]] Impl* _;
 
     template<non_cvref, non_cvref, non_cvref, non_cvref>
@@ -55,6 +54,14 @@ public:
     explicit cvts_trait_ref_impl(Impl& optr) {
         extract_obj_ptr(*this) = &optr;
     };
+    cvts_trait_ref_impl(cvts_trait_ref_impl const&) = delete;
+    cvts_trait_ref_impl(cvts_trait_ref_impl&&)      = delete;
+
+    template<std::common_reference_with<Impl> T, typename S>
+        requires std::constructible_from<T, typename[:copy_cv_to(^^S, ^^Impl):]>
+    explicit operator T(this S&& self) {
+        return *extract_obj_ptr(std::forward<S>(self));
+    }
 };
 
 
@@ -231,27 +238,15 @@ struct cvts_ref_definer {
 
     struct ref : public ref_impl_t {
         using ref_impl_t::ref_impl_t;
-        operator Impl&() const volatile {
-            return *extract_obj_ptr(*this);
-        }
     };
     struct ref_c : public ref_c_impl_t {
         using ref_c_impl_t::ref_c_impl_t;
-        operator Impl&() const volatile {
-            return *extract_obj_ptr(*this);
-        }
     };
     struct ref_v : public ref_v_impl_t {
         using ref_v_impl_t::ref_v_impl_t;
-        operator Impl&() const volatile {
-            return *extract_obj_ptr(*this);
-        }
     };
     struct ref_cv : public ref_cv_impl_t {
         using ref_cv_impl_t::ref_cv_impl_t;
-        operator Impl&() const volatile {
-            return *extract_obj_ptr(*this);
-        }
     };
 };
 
