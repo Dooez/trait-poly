@@ -197,38 +197,43 @@ struct dyn_cv_ref_definer {
         auto ref_targs_v  = std::vector{add_volatile(^^Trait)};
         auto ref_targs_cv = std::vector{add_cv(^^Trait)};
 
-        auto methods = std::vector<meta::info>{};
-        bool is_c    = false;
-        bool is_v    = false;
-        bool is_cv   = false;
+        auto holder_targs    = std::vector<meta::info>{};
+        auto holder_targs_c  = std::vector<meta::info>{};
+        auto holder_targs_v  = std::vector<meta::info>{};
+        auto holder_targs_cv = std::vector<meta::info>{};
+
         for (auto grp: trait_method_groups<Trait>) {
             auto const id          = grp.name;
             auto const raw_methods = all_trait_methods<Trait>     //
                                      | stdv::take(grp.end_idx)    //
                                      | stdv::drop(grp.begin_idx);
             for (auto [i, mem]: stdv::zip(stdv::iota(grp.begin_idx), raw_methods)) {
-                auto const quals = extract_method_qualifiers(mem);
-                auto const spec  = substitute(^^overload_spec, {meta::reflect_constant(i), mem});
-                methods.push_back(spec);
-                is_c  = is_c or quals.is_const;
-                is_v  = is_v or quals.is_volatile;
-                is_cv = is_cv or (quals.is_const and quals.is_volatile);
+                auto const quals     = extract_method_qualifiers(mem);
+                auto const spec      = substitute(^^overload_spec, {meta::reflect_constant(i), mem});
+                auto const maybe_add = [=](auto& targs, bool do_add) {
+                    if (not do_add)
+                        return;
+                    targs.push_back(spec);
+                };
+                maybe_add(holder_targs, true);
+                maybe_add(holder_targs_c, quals.is_const);
+                maybe_add(holder_targs_v, quals.is_volatile);
+                maybe_add(holder_targs_cv, quals.is_const and quals.is_volatile);
             };
 
-            auto const id_refl   = meta::reflect_constant(id);
-            auto const invoker   = substitute(^^cvm_invoker, methods);
-            auto const maybe_add = [=](auto& targs, auto ref, auto trait, bool do_add) {
-                if (not do_add)
+            auto const id_refl      = meta::reflect_constant(id);
+            auto const add_nonempty = [=](auto& targs, auto ref, auto trait, auto& holder_targs) {
+                if (holder_targs.empty())
                     return;
+                auto const invoker = substitute(^^cvm_invoker, holder_targs);
                 targs.push_back(
                     extract<meta::info>(substitute(^^method_holder_info, {id_refl, ref, trait, invoker})));
+                holder_targs.clear();
             };
-            maybe_add(ref_targs, ^^ref, ^^Trait, true);
-            maybe_add(ref_targs_c, ^^ref_c, add_const(^^Trait), is_c);
-            maybe_add(ref_targs_v, ^^ref_v, add_volatile(^^Trait), is_v);
-            maybe_add(ref_targs_cv, ^^ref_cv, add_cv(^^Trait), is_cv);
-
-            methods.clear();
+            add_nonempty(ref_targs, ^^ref, ^^Trait, holder_targs);
+            add_nonempty(ref_targs_c, ^^ref_c, add_const(^^Trait), holder_targs_c);
+            add_nonempty(ref_targs_v, ^^ref_v, add_volatile(^^Trait), holder_targs_v);
+            add_nonempty(ref_targs_cv, ^^ref_cv, add_cv(^^Trait), holder_targs_cv);
         }
 
         return std::array{
