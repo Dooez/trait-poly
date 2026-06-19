@@ -58,6 +58,12 @@ public:
     cvts_trait_ref_impl(cvts_trait_ref_impl&&)      = delete;
 
     template<std::common_reference_with<Impl> T, typename S>
+        requires std::constructible_from<T&, typename[:copy_cv_to(^^S, ^^Impl):]>
+    explicit operator T&(this S&& self) {
+        return *extract_obj_ptr(std::forward<S>(self));
+    }
+
+    template<std::common_reference_with<Impl> T, typename S>
         requires std::constructible_from<T, typename[:copy_cv_to(^^S, ^^Impl):]>
     explicit operator T(this S&& self) {
         return *extract_obj_ptr(std::forward<S>(self));

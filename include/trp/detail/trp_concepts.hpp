@@ -53,20 +53,18 @@ concept no_private_members =
     non_cvref<Trait> and stdr::size(members_of(^^Trait, meta::access_context::unchecked())) ==
                              stdr::size(members_of(^^Trait, unprivileged));
 template<typename Trait>
-concept no_private_bases =
-    non_cvref<Trait> and
-    stdr::size(bases_of(^^Trait, meta::access_context::unchecked())) == stdr::size(direct_base_types<Trait>);
+concept no_private_bases = non_cvref<Trait> and not has_inaccessible_bases(^^Trait, unprivileged);
+
 template<typename Trait>
 concept no_nonstatic_data_members =
     non_cvref<Trait> and stdr::empty(nonstatic_data_members_of(^^Trait, unprivileged));
 
 template<typename Trait>
-concept no_explicit_special_members =
-    non_cvref<Trait>    //
-    and stdr::none_of(members_of(^^Trait, unprivileged), [](auto m) {
-            return is_special_member_function(m)    //
-                   and not is_defaulted(m);
-        });    //
+concept no_explicit_special_members = non_cvref<Trait>    //
+                                      and stdr::none_of(members_of(^^Trait, unprivileged), [](auto m) {
+                                              return is_special_member_function(m)    //
+                                                     and not is_defaulted(m);
+                                          });    //
 //
 template<typename Trait>
 concept no_operators = non_cvref<Trait>    //
