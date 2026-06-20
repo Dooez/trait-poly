@@ -112,7 +112,8 @@ struct method_qualifiers_t {
     bool is_noexcept;
 };
 template<method_qualifiers_t quals>
-concept valid_quals = (quals.is_lvalue + quals.is_rvalue + quals.is_value) <= 1;
+concept valid_quals = (quals.is_lvalue + quals.is_rvalue + quals.is_value) <= 1    //
+                      and (not quals.is_value or not quals.is_volatile);
 
 template<char const* Identifier, method_qualifiers_t Quals, typename Ret, typename... Params>
     requires valid_quals<Quals>
@@ -139,8 +140,86 @@ struct method_identity_t {
         return inf;
     };
 
+    template<typename Impl>
+    using exact_method_type = [:[] {
+#define TRP_FQUAL_FPTR(C, V, R)                                                     \
+    {                                                                               \
+        using mfptr_t = auto (Impl::*)(Params...) C V R noexcept(is_noexcept)->Ret; \
+        return dealias(^^mfptr_t);                                                  \
+    }
+        if (is_value)
+            return ^^void;
+
+        if (is_cv) {
+            if (is_rvalue)
+                TRP_FQUAL_FPTR(const, volatile, &&)
+            if (is_lvalue)
+                TRP_FQUAL_FPTR(const, volatile, &)
+            TRP_FQUAL_FPTR(const, volatile, )
+        }
+        if (is_const) {
+            if (is_rvalue)
+                TRP_FQUAL_FPTR(const, , &&)
+            if (is_lvalue)
+                TRP_FQUAL_FPTR(const, , &)
+            TRP_FQUAL_FPTR(const, , )
+        }
+        if (is_volatile) {
+            if (is_rvalue)
+                TRP_FQUAL_FPTR(, volatile, &&)
+            if (is_lvalue)
+                TRP_FQUAL_FPTR(, volatile, &)
+            TRP_FQUAL_FPTR(, volatile, )
+        }
+        if (is_rvalue)
+            TRP_FQUAL_FPTR(, , &&)
+        if (is_lvalue)
+            TRP_FQUAL_FPTR(, , &)
+        TRP_FQUAL_FPTR(, , )
+#undef TRP_FQUAL_FPTR
+    }():];
+
+    template<typename Impl>
+    using exact_eop_method_type = [:[] {
+#define TRP_FQUAL_FPTR(C, V, R)                                                     \
+    {                                                                               \
+        using mfptr_t = auto (*)(Impl C V R, Params...) noexcept(is_noexcept)->Ret; \
+        return dealias(^^mfptr_t);                                                  \
+    }
+        if (not(is_value or is_rvalue or is_lvalue))
+            return ^^void;
+
+        if (is_cv) {
+            if (is_rvalue)
+                TRP_FQUAL_FPTR(const, volatile, &&)
+            if (is_lvalue)
+                TRP_FQUAL_FPTR(const, volatile, &)
+            throw "volatile value parameters are deprecated";
+        }
+        if (is_const) {
+            if (is_rvalue)
+                TRP_FQUAL_FPTR(const, , &&)
+            if (is_lvalue)
+                TRP_FQUAL_FPTR(const, , &)
+            TRP_FQUAL_FPTR(const, , )
+        }
+        if (is_volatile) {
+            if (is_rvalue)
+                TRP_FQUAL_FPTR(, volatile, &&)
+            if (is_lvalue)
+                TRP_FQUAL_FPTR(, volatile, &)
+            throw "volatile value parameters are deprecated";
+        }
+        if (is_rvalue)
+            TRP_FQUAL_FPTR(, , &&)
+        if (is_lvalue)
+            TRP_FQUAL_FPTR(, , &)
+        TRP_FQUAL_FPTR(, , )
+#undef TRP_FQUAL_FPTR
+    }():];
     using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(is_noexcept) -> Ret;
 };
+
 consteval auto method_identity(meta::info method_info) -> meta::info {
     auto is_nsmf = is_function(method_info)                 //
                    and not is_static_member(method_info)    //
@@ -269,7 +348,7 @@ inline constexpr auto direct_trait_methods = [] {
 
     return define_static_array(members_of(^^T, unprivileged)         //
                                | stdv::filter(is_relevant_method)    //
-                               | stdv::transform(method_identity) | stdv::transform(as_lref_method_identity));
+                               | stdv::transform(method_identity));
 }();
 
 /**

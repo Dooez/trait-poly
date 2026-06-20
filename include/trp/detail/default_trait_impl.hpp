@@ -47,7 +47,7 @@ consteval auto find_explicit_trait_method_impl(meta::info ncv_trait, meta::info 
     auto const nsm =
         subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
     for (auto const m: nsm | stdv::filter(std::meta::is_template))
-        if (explicit_impl_to_method_identity(m, ncv_trait) == method_idt)
+        if (matching_explicit_impl(explicit_impl_to_method_identity(m, ncv_trait), method_idt))
             return m;
 
     for (auto const base: subextract_base_types(ncv_trait))
@@ -62,6 +62,11 @@ consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, met
         return m;
     auto const id_mems =
         subextract_info_span(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt});
+    for (auto const m: id_mems) {
+        auto matches = extract<bool>(substitute(^^exactly_matches, {impl, reflect_constant(m), method_idt}));
+        if (matches)
+            return m;
+    }
     for (auto const m: id_mems) {
         auto matches = extract<bool>(substitute(^^strictly_matches, {impl, reflect_constant(m), method_idt}));
         if (matches)
@@ -103,7 +108,7 @@ inline constexpr auto full_impls_for = [] {
         }
         if (m == meta::info{}) {
             for (auto const bind: all_default_impls<Trait>)
-                if (bind.idt == method_idt) {
+                if (matching_explicit_impl(bind.idt, method_idt)) {
                     m = bind.fn;
                     break;
                 }

@@ -31,6 +31,9 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     idt_targs.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
     return substitute(^^method_identity_t, idt_targs);
 }
+consteval auto matching_explicit_impl(meta::info impl, meta::info method_idt) -> bool {
+    return impl == method_idt or impl == as_lref_method_identity(method_idt);
+}
 
 namespace concepts {
 
@@ -112,7 +115,8 @@ concept static_methods_are_default_impl_for =
             nonspecial_members<T> |
                 stdv::filter([](auto r) { return is_static_member(r) and (is_function_template(r)); }),
             [](auto r) {
-                return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(r, ^^Trait));
+                return stdr::contains(all_trait_methods<Trait> | stdv::transform(as_lref_method_identity),
+                                      explicit_impl_to_method_identity(r, ^^Trait));
             });
 
 
@@ -208,6 +212,21 @@ inline constexpr bool strictly_matches = [] {
             impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
         } -> std::same_as<return_type>;
     };
+}();
+template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId>
+inline constexpr bool exactly_matches = [] {
+    using return_type       = MethodId::return_type;
+    using impl_invocation_t = [:MethodId::add_obj_cv(^^Impl):];
+
+    auto const exact_method = (^^MethodId::template eaxct_method_type<Impl> != ^^void)    //
+        and requires() {
+            { MethodId::template eaxct_method_type<Impl>(&[:ImplMethod:]) };
+        };
+    auto const exact_eop_method = (^^MethodId::template eaxct_eop_method_type<Impl> != ^^void)    //
+        and requires() {
+            { MethodId::template eaxct_eop_method_type<Impl>(&[:ImplMethod:]) };
+        };
+    return exact_method or exact_eop_method;
 }();
 
 template<typename ParamType>
