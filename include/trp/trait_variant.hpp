@@ -18,7 +18,7 @@ struct impl_holder {
     static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
 
     /**
-     * @brief While P4101 is not implemented, we need a wrapper to handle types
+     * @brief While P3074 is not implemented, we need a wrapper to handle types
      * with nontrivial destructors in undefined unions
      */
     template<typename T>
