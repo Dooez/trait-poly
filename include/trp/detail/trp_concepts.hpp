@@ -214,35 +214,18 @@ inline constexpr bool strictly_matches = [] {
     };
 }();
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt>
-consteval auto exactly_matches_fn() -> bool {
-    using return_type       = MethodIdt::return_type;
-    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
-
-    auto const exact_method = (^^MethodIdt::template eaxct_method_type<Impl> != ^^void)    //
-        and requires() {
-            { MethodIdt::template eaxct_method_type<Impl>(&[:ImplMethod:]) };
-        };
-    auto const exact_eop_method = (^^MethodIdt::template eaxct_eop_method_type<Impl> != ^^void)    //
-        and requires() {
-            { MethodIdt::template eaxct_eop_method_type<Impl>(&[:ImplMethod:]) };
-        };
-    return exact_method or exact_eop_method;
-}
-template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt>
-// inline constexpr auto exactly_matches = exactly_matches_fn<Impl, ImplMethod, MethodIdt>();
 inline constexpr auto exactly_matches = [] {
-    using return_type       = MethodIdt::return_type;
-    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
-    using exact_type        = MethodIdt::template exact_method_type<Impl>;
-    using exact_eop_type    = MethodIdt::template exact_eop_method_type<Impl>;
+    using return_type    = MethodIdt::return_type;
+    using exact_type     = MethodIdt::template exact_method_type<Impl>;
+    using exact_eop_type = MethodIdt::template exact_eop_method_type<Impl>;
 
     auto const exact_method = (dealias(^^exact_type) != ^^void)    //
-        and requires() {
-            { exact_type(&[:ImplMethod:]) };
+        and requires(exact_type mptr) {
+            { mptr = &[:ImplMethod:] };
         };
     auto const exact_eop_method = (dealias(^^exact_eop_type) != ^^void)    //
-        and requires() {
-            { exact_eop_type(&[:ImplMethod:]) };
+        and requires(exact_eop_type mptr) {
+            { mptr = &[:ImplMethod:] };
         };
     return exact_method or exact_eop_method;
 }();

@@ -142,29 +142,31 @@ struct method_identity_t {
 
     template<typename Impl>
     using exact_method_type = [:[] {
-#define TRP_FQUAL_FPTR(C, V, R)                                                     \
-    {                                                                               \
-        using mfptr_t = auto (Impl::*)(Params...) C V R noexcept(is_noexcept)->Ret; \
-        return dealias(^^mfptr_t);                                                  \
+#define TRP_FQUAL_FPTR(C, V, R)                                                                          \
+    {                                                                                                    \
+        using mfptr_t = auto (std::remove_cvref_t<Impl>::*)(Params...) C V R noexcept(is_noexcept)->Ret; \
+        return dealias(^^mfptr_t);                                                                       \
     }
+        auto const c = is_const or meta::is_const(^^Impl);
+        auto const v = is_volatile or meta::is_volatile(^^Impl);
         if (is_value)
             return ^^void;
 
-        if (is_cv) {
+        if (c and v) {
             if (is_rvalue)
                 TRP_FQUAL_FPTR(const, volatile, &&)
             if (is_lvalue)
                 TRP_FQUAL_FPTR(const, volatile, &)
             TRP_FQUAL_FPTR(const, volatile, )
         }
-        if (is_const) {
+        if (c) {
             if (is_rvalue)
                 TRP_FQUAL_FPTR(const, , &&)
             if (is_lvalue)
                 TRP_FQUAL_FPTR(const, , &)
             TRP_FQUAL_FPTR(const, , )
         }
-        if (is_volatile) {
+        if (v) {
             if (is_rvalue)
                 TRP_FQUAL_FPTR(, volatile, &&)
             if (is_lvalue)
@@ -186,24 +188,26 @@ struct method_identity_t {
         using mfptr_t = auto (*)(Impl C V R, Params...) noexcept(is_noexcept)->Ret; \
         return dealias(^^mfptr_t);                                                  \
     }
+        auto const c = is_const or meta::is_const(^^Impl);
+        auto const v = is_volatile or meta::is_volatile(^^Impl);
         if (not(is_value or is_rvalue or is_lvalue))
             return ^^void;
 
-        if (is_cv) {
+        if (c and v) {
             if (is_rvalue)
                 TRP_FQUAL_FPTR(const, volatile, &&)
             if (is_lvalue)
                 TRP_FQUAL_FPTR(const, volatile, &)
             throw "volatile value parameters are deprecated";
         }
-        if (is_const) {
+        if (c) {
             if (is_rvalue)
                 TRP_FQUAL_FPTR(const, , &&)
             if (is_lvalue)
                 TRP_FQUAL_FPTR(const, , &)
             TRP_FQUAL_FPTR(const, , )
         }
-        if (is_volatile) {
+        if (v) {
             if (is_rvalue)
                 TRP_FQUAL_FPTR(, volatile, &&)
             if (is_lvalue)

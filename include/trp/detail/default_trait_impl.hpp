@@ -64,10 +64,8 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
     if (std::size(callable_methods) == 1)
         return callable_methods[0];
 
-    auto const quals  = extract_method_qualifiers(method_idt);
     auto const params = extract_method_params(method_idt);
-    auto const c_arg  = meta::reflect_constant(quals.is_const);
-    auto const v_arg  = meta::reflect_constant(quals.is_volatile);
+    auto const quals  = extract_method_qualifiers(method_idt);
 
     auto proxies = std::vector<meta::info>{};
     for (auto [i, m]: stdv::zip(stdv::iota(0), callable_methods)) {
@@ -76,7 +74,9 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
             // if the template is the only callable member, it's already handled
             return meta::info{};
         }
-        auto proxy_targs = std::vector{meta::reflect_constant(i), c_arg, v_arg};
+        auto const c_arg       = meta::reflect_constant(is_const(m));
+        auto const v_arg       = meta::reflect_constant(is_volatile(m));
+        auto       proxy_targs = std::vector{meta::reflect_constant(i), c_arg, v_arg};
         proxy_targs.append_range(parameters_of(m) | stdv::transform(meta::type_of));
         proxies.push_back(substitute(^^overload_proxy, proxy_targs));
     }
@@ -109,6 +109,8 @@ consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, met
             return m;
     auto const id_mems =
         subextract_info_span(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt});
+    if (id_mems.empty())
+        return std::nullopt;
     for (auto const m: id_mems) {
         auto matches = extract<bool>(substitute(^^exactly_matches, {impl, reflect_constant(m), method_idt}));
         if (matches)
@@ -123,8 +125,6 @@ consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, met
         if (auto m = resolve_method_overload_set(method_idt, callable_mems); m != meta::info{})
             return m;
     }
-    if (id_mems.empty())
-        return std::nullopt;
     return meta::info{};
 };
 
@@ -132,10 +132,9 @@ template<non_ref Impl, non_cv_trait Trait>
 inline constexpr auto full_impls_for = [] {
     auto impls = std::vector<impl_method_bind>();
     for (auto method_idt: all_trait_methods<Trait>) {
-        auto const o_m = find_trait_method_impl(^^Trait, ^^Impl, method_idt);
-        auto       m   = meta::info{};
+        auto o_m = find_trait_method_impl(^^Trait, ^^Impl, method_idt);
         if (not o_m) {
-            m = [=] {
+            o_m = [=] -> std::optional<meta::info> {
                 auto       checked_bases = std::vector<meta::info>{};
                 auto       next_bases    = std::vector<meta::info>{};
                 auto const apply_cv = stdv::transform([](auto base) { return copy_cv_to(^^Impl, base); });
@@ -154,10 +153,12 @@ inline constexpr auto full_impls_for = [] {
                         }
                         auto const o_m = find_trait_method_impl(^^Trait, base, method_idt);
                         if (o_m) {
-                            if (m != meta::info{} or *o_m == meta::info{}) {
-                                // If multiple bases have matching id methods call is ambiguous
-                                // If any base has unresolvable mathcing id function, call is either ambiguous or impossible
-                                // Mabye throw to signalize the problem
+                            if (m != meta::info{}) {
+                                throw "method present in multiple bases, call would be ambiguous";
+                                return meta::info{};
+                            }
+                            if (*o_m == meta::info{}) {
+                                throw "could not resolve method for a base";
                                 return meta::info{};
                             }
                             m              = *o_m;
@@ -174,17 +175,19 @@ inline constexpr auto full_impls_for = [] {
                     bases = next_bases;
                     next_bases.clear();
                 }
-                return m;
+                if (m != meta::info{})
+                    return m;
+                return std::nullopt;
             }();
         }
-        if (m == meta::info{}) {
+        if (not o_m) {
             for (auto const bind: all_default_impls<Trait>)
                 if (matching_explicit_impl(bind.idt, method_idt)) {
-                    m = bind.fn;
+                    o_m = bind.fn;
                     break;
                 }
         }
-        impls.emplace_back(m, method_idt);
+        impls.emplace_back(o_m.value_or(meta::info{}), method_idt);
     }
     return std::define_static_array(impls);
 }();
