@@ -154,11 +154,11 @@ inline constexpr auto full_impls_for = [] {
                         auto const o_m = find_trait_method_impl(^^Trait, base, method_idt);
                         if (o_m) {
                             if (m != meta::info{}) {
-                                throw "method present in multiple bases, call would be ambiguous";
+                                // method present in multiple bases, call would be ambiguous
                                 return meta::info{};
                             }
                             if (*o_m == meta::info{}) {
-                                throw "could not resolve method for a base";
+                                // could not resolve method for a base
                                 return meta::info{};
                             }
                             m              = *o_m;
@@ -180,14 +180,14 @@ inline constexpr auto full_impls_for = [] {
                 return std::nullopt;
             }();
         }
-        if (not o_m) {
+        auto m = o_m.value_or(meta::info{});
+        if (m == meta::info{})
             for (auto const bind: all_default_impls<Trait>)
                 if (matching_explicit_impl(bind.idt, method_idt)) {
-                    o_m = bind.fn;
+                    m = bind.fn;
                     break;
                 }
-        }
-        impls.emplace_back(o_m.value_or(meta::info{}), method_idt);
+        impls.emplace_back(m, method_idt);
     }
     return std::define_static_array(impls);
 }();

@@ -183,10 +183,10 @@ struct method_identity_t {
 
     template<typename Impl>
     using exact_eop_method_type = [:[] {
-#define TRP_FQUAL_FPTR(C, V, R)                                                     \
-    {                                                                               \
-        using mfptr_t = auto (*)(Impl C V R, Params...) noexcept(is_noexcept)->Ret; \
-        return dealias(^^mfptr_t);                                                  \
+#define TRP_FQUAL_FPTR(C, V, R)                                                                          \
+    {                                                                                                    \
+        using mfptr_t = auto (*)(std::remove_cvref_t<Impl> C V R, Params...) noexcept(is_noexcept)->Ret; \
+        return dealias(^^mfptr_t);                                                                       \
     }
         auto const c = is_const or meta::is_const(^^Impl);
         auto const v = is_volatile or meta::is_volatile(^^Impl);
