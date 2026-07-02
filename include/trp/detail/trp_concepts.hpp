@@ -213,21 +213,44 @@ inline constexpr bool strictly_matches = [] {
         } -> std::same_as<return_type>;
     };
 }();
-template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId>
-inline constexpr bool exactly_matches = [] {
-    using return_type       = MethodId::return_type;
-    using impl_invocation_t = [:MethodId::add_obj_cv(^^Impl):];
+template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt>
+consteval auto exactly_matches_fn() -> bool {
+    using return_type       = MethodIdt::return_type;
+    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
 
-    auto const exact_method = (^^MethodId::template eaxct_method_type<Impl> != ^^void)    //
+    auto const exact_method = (^^MethodIdt::template eaxct_method_type<Impl> != ^^void)    //
         and requires() {
-            { MethodId::template eaxct_method_type<Impl>(&[:ImplMethod:]) };
+            { MethodIdt::template eaxct_method_type<Impl>(&[:ImplMethod:]) };
         };
-    auto const exact_eop_method = (^^MethodId::template eaxct_eop_method_type<Impl> != ^^void)    //
+    auto const exact_eop_method = (^^MethodIdt::template eaxct_eop_method_type<Impl> != ^^void)    //
         and requires() {
-            { MethodId::template eaxct_eop_method_type<Impl>(&[:ImplMethod:]) };
+            { MethodIdt::template eaxct_eop_method_type<Impl>(&[:ImplMethod:]) };
+        };
+    return exact_method or exact_eop_method;
+}
+template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt>
+// inline constexpr auto exactly_matches = exactly_matches_fn<Impl, ImplMethod, MethodIdt>();
+inline constexpr auto exactly_matches = [] {
+    using return_type       = MethodIdt::return_type;
+    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
+    using exact_type        = MethodIdt::template exact_method_type<Impl>;
+    using exact_eop_type    = MethodIdt::template exact_eop_method_type<Impl>;
+
+    auto const exact_method = (dealias(^^exact_type) != ^^void)    //
+        and requires() {
+            { exact_type(&[:ImplMethod:]) };
+        };
+    auto const exact_eop_method = (dealias(^^exact_eop_type) != ^^void)    //
+        and requires() {
+            { exact_eop_type(&[:ImplMethod:]) };
         };
     return exact_method or exact_eop_method;
 }();
+
+template<any_trait Trait>
+inline constexpr auto requires_exact_method_return = true;
+template<any_trait Trait>
+inline constexpr auto requires_exact_method_arguments = false;
 
 template<typename ParamType>
 consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {

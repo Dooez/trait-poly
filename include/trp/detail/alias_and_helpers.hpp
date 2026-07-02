@@ -268,6 +268,9 @@ inline constexpr char const* method_identifier = MethodIdt::identifier;
 template<typename MethodIdt>
 inline constexpr auto method_qualifiers = MethodIdt::qualifiers;
 
+template<typename MethodIdt>
+inline constexpr auto method_params = std::span<meta::info const>(MethodIdt::param_infos);
+
 
 consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
@@ -289,6 +292,11 @@ consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t 
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
     return extract<method_qualifiers_t>(substitute(^^method_qualifiers, {idt}));
+};
+consteval auto extract_method_params(meta::info idt) -> std::span<meta::info const> {
+    if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
+        throw "Expected method_identity_t specialization";
+    return subextract_info_span(^^method_params, {idt});
 };
 
 template<typename T>
