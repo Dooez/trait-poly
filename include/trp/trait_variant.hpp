@@ -52,7 +52,11 @@ struct impl_holder {
     impls_union storage{.empty = {}};
     tag_t       tag{invalid_tag};
 
-    static constexpr uZ   count      = sizeof...(Impl);
+    static constexpr uZ count = sizeof...(Impl);
+    template<uZ I>
+        requires(I < sizeof...(Impl))
+    using type = Impl...[I];
+
     static constexpr auto type_infos = std::array{^^Impl...};
     static constexpr auto member_infos =
         std::define_static_array(nonstatic_data_members_of(^^impls_union, unprivileged) | stdv::drop(1));
@@ -281,7 +285,8 @@ public:
                 union_ref.destroy(i);
         }
     }
-    constexpr explicit trait_variant_impl(trait_variant_impl const& other) noexcept(
+
+    constexpr trait_variant_impl(trait_variant_impl const& other) noexcept(
         ImplHolder::noexcept_copy_constructible)
         requires(ImplHolder::copy_constructible)
     {
@@ -294,8 +299,7 @@ public:
         }
     }
 
-    constexpr explicit trait_variant_impl(trait_variant_impl&& other) noexcept(
-        ImplHolder::noexcept_move_constructible)
+    constexpr trait_variant_impl(trait_variant_impl&& other) noexcept(ImplHolder::noexcept_move_constructible)
         requires(ImplHolder::move_constructible)
     {
         auto&                 this_union  = extract_union_member(*this);
@@ -329,6 +333,69 @@ public:
         extract_union_member(*this).construct(cw<I>, std::forward<Args>(args)...);
     }
 
+    constexpr trait_variant_impl&
+    operator=(trait_variant_impl&& other) noexcept(ImplHolder::noexcept_move_constructible)
+        requires(ImplHolder::move_constructible)
+    {
+        if (this == &other)
+            return *this;
+        auto&                 this_union  = extract_union_member(*this);
+        auto&                 other_union = extract_union_member(other);
+        static constexpr auto idxs        = make_cw_idxs<ImplHolder::count>();
+
+        template for (constexpr auto i: idxs) {
+            if (other_union.tag == i) {
+                if constexpr (std::is_move_assignable_v<typename ImplHolder::template type<i>> and
+                              (not ImplHolder::noexcept_move_constructible or
+                               std::is_nothrow_move_assignable_v<typename ImplHolder::template type<i>>)) {
+                    if (this_union.tag == other_union.tag) {
+                        this_union.get(i) = std::move(other_union.get(i));
+                        return *this;
+                    }
+                }
+                template for (constexpr auto j: idxs) {
+                    if (this_union.tag == j)
+                        this_union.destroy(j);
+                }
+                this_union.construct(i, std::move(other_union.get(i)));
+                return *this;
+            }
+        }
+        std::unreachable();
+    }
+
+    constexpr trait_variant_impl&
+    operator=(trait_variant_impl const& other) noexcept(ImplHolder::noexcept_copy_constructible)
+        requires(ImplHolder::copy_constructible)
+    {
+        if (this == &other)
+            return *this;
+        auto&                 this_union  = extract_union_member(*this);
+        auto&                 other_union = extract_union_member(other);
+        static constexpr auto idxs        = make_cw_idxs<ImplHolder::count>();
+
+        template for (constexpr auto i: idxs) {
+            if (other_union.tag == i) {
+                if constexpr (std::is_copy_assignable_v<typename ImplHolder::template type<i>> and
+                              (not ImplHolder::noexcept_copy_constructible or
+                               std::is_nothrow_copy_assignable_v<typename ImplHolder::template type<i>>)) {
+                    if (this_union.tag == other_union.tag) {
+                        this_union.get(i) = other_union.get(i);
+                        return *this;
+                    }
+                }
+                template for (constexpr auto j: idxs) {
+                    if (this_union.tag == j)
+                        this_union.destroy(j);
+                }
+                this_union.construct(i, other_union.get(i));
+                return *this;
+            }
+        }
+        std::unreachable();
+    }
+
+
     template<typename Impl>
         requires(ImplHolder::template type_count<std::remove_cvref_t<Impl>> == 1)
     constexpr trait_variant_impl& operator=(Impl&& other) {
@@ -336,9 +403,11 @@ public:
         constexpr auto index     = cw<ImplHolder::template type_index<impl_t>>;
         auto&&         union_ref = extract_union_member(*this);
         auto const     tag       = union_ref.tag;
-        if (tag == index) {
-            union_ref.get(index) = std::forward<Impl>(other);
-            return *this;
+        if constexpr (std::is_assignable_v<std::remove_cvref_t<Impl>, Impl>) {
+            if (tag == index) {
+                union_ref.get(index) = std::forward<Impl>(other);
+                return *this;
+            }
         }
         static constexpr auto idxs = make_cw_idxs<ImplHolder::count>();
         template for (constexpr auto i: idxs) {

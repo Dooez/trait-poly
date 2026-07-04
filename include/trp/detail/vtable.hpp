@@ -67,11 +67,11 @@ struct invoke_wrapper_struct {
     using obj_ptr     = [:add_pointer(MethodId::add_obj_cv(^^Impl)):];
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
-        auto* impl = static_cast<obj_ptr>(ptr);
+        decltype(auto) impl = *static_cast<obj_ptr>(ptr);
         if constexpr (is_template(ImplMethod)) {
-            return impl->template[:ImplMethod:](std::forward<Params>(params)...);
+            return impl.template[:ImplMethod:](std::forward<Params>(params)...);
         } else {
-            return impl->[:ImplMethod:](std::forward<Params>(params)...);
+            return impl.[:ImplMethod:](std::forward<Params>(params)...);
         }
     }
 };

@@ -128,10 +128,10 @@ concept any_immediate_trait = non_cvref<Trait>                                  
                               and no_nonstatic_data_members<Trait>                     //
                               and no_explicit_special_members<Trait>                   //
                               and static_data_members_are_constexpr<Trait>             // only in gcc atm
+                              and static_methods_are_templates<Trait>                  //
                               and no_operators<Trait>                                  //
                               and nonstatic_methods_are_not_templates<Trait>           //
                               and valid_methods<Trait>                                 //
-                              and static_methods_are_templates<Trait>                  //
                               and static_methods_are_default_impl_for<Trait, Trait>    //
     ;
 

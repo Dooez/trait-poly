@@ -21,28 +21,26 @@ struct s0 {
     }
 };
 struct s1 {
-    s1() = default;
-    s1& operator=(s1 const&) =default;
-    s1& operator=(s1 &&) =default;
+    s1()                     = default;
+    s1& operator=(s1 const&) = default;
+    s1& operator=(s1&&)      = default;
 
-    s1(s1 const&){
+    s1(s1 const&) {
         std::println("s1::s1(s1 const&)");
-
     }
-    s1(s1 &&){
+    s1(s1&&) {
         std::println("s1::s1(s1&&)");
-
     }
     void foo() {
         std::println("s1::foo()");
     }
     void foo() const {
-        std::println("s0::foo() const");
+        std::println("s1::foo() const");
     }
     void bar(int v) {
         std::println("s1::bar({})", v);
     }
-    ~s1(){
+    ~s1() {
         std::println("~s1()");
     }
 };

@@ -387,17 +387,17 @@ inline constexpr auto all_trait_methods = [] {
     return define_static_array(result);
 }();
 
-struct name_id_pair {
-    char const* name;    // method identifier
-    uZ begin_idx;        // index from the begining of `all_trait_methods<T>` of the first method in a group
-    uZ end_idx;    // one past the index from the begining of `all_trait_methods<T>` of the last method in a group
+struct method_reference {
+    char const* name;         // method identifier
+    uZ          begin_idx;    // index in the `all_trait_methods<T>` of the first method in a group
+    uZ          end_idx;    // one past the index in the `all_trait_methods<T>` of the last method in a group
 };
 
 template<typename T>
-inline constexpr auto trait_method_groups = [] -> std::span<name_id_pair const> {
+inline constexpr auto trait_method_groups = [] -> std::span<method_reference const> {
     if (stdr::empty(all_trait_methods<T>))
         return {};
-    auto groups = std::vector<name_id_pair>{};
+    auto groups = std::vector<method_reference>{};
     groups.push_back({
         .name      = extract_method_identifier(all_trait_methods<T>[0]),
         .begin_idx = 0,
