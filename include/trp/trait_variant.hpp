@@ -395,7 +395,6 @@ public:
         std::unreachable();
     }
 
-
     template<typename Impl>
         requires(ImplHolder::template type_count<std::remove_cvref_t<Impl>> == 1)
     constexpr trait_variant_impl& operator=(Impl&& other) {
@@ -403,7 +402,7 @@ public:
         constexpr auto index     = cw<ImplHolder::template type_index<impl_t>>;
         auto&&         union_ref = extract_union_member(*this);
         auto const     tag       = union_ref.tag;
-        if constexpr (std::is_assignable_v<std::remove_cvref_t<Impl>, Impl>) {
+        if constexpr (std::is_assignable_v<std::remove_cvref_t<Impl>&, Impl&&>) {
             if (tag == index) {
                 union_ref.get(index) = std::forward<Impl>(other);
                 return *this;
