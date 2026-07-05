@@ -111,17 +111,23 @@ consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, met
         subextract_info_span(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt});
     if (id_mems.empty())
         return std::nullopt;
-    for (auto const m: id_mems) {
+
+    auto const invokable = extract<bool>(substitute(^^requires_exact_method_return, {ncv_trait}))
+                               ? ^^invokable_exact_return
+                               : ^^invokable_convert_return;
+    auto const callable_mems =
+        id_mems    //
+        | stdv::filter([=](auto m) {
+              return extract<bool>(substitute(invokable, {impl, reflect_constant(m), method_idt}));
+          })    //
+        | stdr::to<std::vector>();
+
+    for (auto const m: callable_mems) {
         auto matches = extract<bool>(substitute(^^exactly_matches, {impl, reflect_constant(m), method_idt}));
         if (matches)
             return m;
     }
     if (not extract<bool>(substitute(^^requires_exact_method_arguments, {ncv_trait}))) {
-        auto callable_mems = std::vector<meta::info>{};
-        for (auto const m: id_mems) {
-            if (extract<bool>(substitute(^^strictly_matches, {impl, reflect_constant(m), method_idt})))
-                callable_mems.push_back(m);
-        }
         if (auto m = resolve_method_overload_set(method_idt, callable_mems); m != meta::info{})
             return m;
     }
