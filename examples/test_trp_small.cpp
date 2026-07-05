@@ -148,6 +148,9 @@ static_assert(trp::implements_trait<bar_only_impl, trait_proto>);
 int main() {
     auto simpl = bar_only_impl{};
 
+    void (other_impl_alt_base::bar_t::*x)() const = &[:^^other_impl_alt_base::bar_t::operator():];
+
+
     auto ref = trp::dyn_trait_ref<trait_proto const>(simpl);
     ref.foo();
     std::println("\n---");

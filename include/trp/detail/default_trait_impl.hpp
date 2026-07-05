@@ -123,7 +123,12 @@ consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, met
         | stdr::to<std::vector>();
 
     for (auto const m: callable_mems) {
-        auto matches = extract<bool>(substitute(^^exactly_matches, {impl, reflect_constant(m), method_idt}));
+        auto const matches =
+            extract<bool>(substitute(^^exactly_matches,
+                                     {impl,
+                                      reflect_constant(m),
+                                      method_idt,
+                                      substitute(^^requires_exact_cv_qualifiers, {ncv_trait})}));
         if (matches)
             return m;
     }

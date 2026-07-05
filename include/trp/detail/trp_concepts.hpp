@@ -187,66 +187,117 @@ inline constexpr bool invokable_exact_return = [] {
     using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
 
     if constexpr (meta::is_template(ImplMethod)) {
-        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-            {
-                impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
-            } -> std::same_as<return_type>;
-        };
+        if constexpr (MethodIdt::is_noexcept) {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } noexcept -> std::same_as<return_type>;
+            };
+        } else {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } -> std::same_as<return_type>;
+            };
+        }
     } else {
-        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-            {
-                impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
-            } -> std::same_as<return_type>;
-        };
+        if constexpr (MethodIdt::is_noexcept) {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } noexcept -> std::same_as<return_type>;
+            };
+        } else {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } -> std::same_as<return_type>;
+            };
+        }
     }
 }();
-template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodIdt, meta::info RetConcept>
+template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodIdt>
 inline constexpr bool invokable_convert_return = [] {
     auto [... arg_ids]      = MethodIdt::param_identities;
     using return_type       = MethodIdt::return_type;
     using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
 
     if constexpr (meta::is_template(ImplMethod)) {
-        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-            {
-                impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
-            } -> std::convertible_to<return_type>;
-        };
+        if constexpr (MethodIdt::is_noexcept) {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } noexcept -> std::convertible_to<return_type>;
+            };
+        } else {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } -> std::convertible_to<return_type>;
+            };
+        }
     } else {
-        return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-            {
-                impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
-            } -> std::convertible_to<return_type>;
-        };
+        if constexpr (MethodIdt::is_noexcept) {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } noexcept -> std::convertible_to<return_type>;
+            };
+        } else {
+            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
+                {
+                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                } -> std::convertible_to<return_type>;
+            };
+        }
     }
 }();
 template<non_ref Impl, meta::info ImplMethod, typename... Args>
-using method_return_t = [:[]{
+using method_return_t = [:[] {
     if constexpr (is_template(ImplMethod)) {
-        return ^^decltype(std::declval<Impl>().template [:ImplMethod:](std::declval<Args>()...));
+        return ^^decltype(std::declval<Impl>().template[:ImplMethod:](std::declval<Args>()...));
     } else {
         return ^^decltype(std::declval<Impl>().[:ImplMethod:](std::declval<Args>()...));
     }
 }():];
 
-template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt>
+template<any_trait Trait>
+inline constexpr auto requires_exact_method_return = true;
+template<any_trait Trait>
+inline constexpr auto requires_exact_method_arguments = false;
+template<any_trait Trait>
+inline constexpr auto requires_exact_cv_qualifiers = false;
+
+template<typename T>
+inline constexpr auto call_operators_of =
+    std::define_static_array(members_of(^^T, unprivileged) | stdv::filter([](auto m) {
+                                 return (is_operator_function(m) or is_operator_function_template(m)) and
+                                        operator_of(m) == meta::operators::op_parentheses;
+                             }));
+
+
+template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv>
 inline constexpr auto exactly_matches = [] {
-    auto [... arg_ids] = MethodIdt::param_identities;
-    // return type mathcing is performed earlier. 
-    // This way the return type rules are decoupled from argument rules
-    using return_type =
-    [:substitute(^^method_return_t, {^^Impl, meta::reflect_constant(ImplMethod), ^^typename decltype(arg_ids)::type...}):];
+    auto [... arg_ids]      = MethodIdt::param_identities;
     using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
-    using exact_type        = make_function_member_type<false,
-                                                        impl_invocation_t,
-                                                        return_type,
-                                                        MethodIdt::is_noexcept,
-                                                        typename decltype(arg_ids)::type...>;
-    using exact_eop_type    = make_function_member_type<true,
-                                                        impl_invocation_t&,
-                                                        return_type,
-                                                        MethodIdt::is_noexcept,
-                                                        typename decltype(arg_ids)::type...>;
+
+    // Return type matching is performed earlier.
+    // This way the return type rules are decoupled from argument rules.
+    constexpr auto m_refl  = std::meta::reflect_constant(ImplMethod);
+    constexpr auto cv_refl = meta::reflect_constant(ExactCv);
+
+    using return_type    = [:substitute(^^method_return_t,
+                                        {^^impl_invocation_t, m_refl, ^^typename decltype(arg_ids)::type...}):];
+    using exact_type     = make_function_member_type<false,
+                                                     impl_invocation_t,
+                                                     return_type,
+                                                     MethodIdt::is_noexcept,
+                                                     typename decltype(arg_ids)::type...>;
+    using exact_eop_type = make_function_member_type<true,
+                                                     impl_invocation_t&,
+                                                     return_type,
+                                                     MethodIdt::is_noexcept,
+                                                     typename decltype(arg_ids)::type...>;
 
     // noexcept promotion in pointer conversion is automatic
 
@@ -254,22 +305,58 @@ inline constexpr auto exactly_matches = [] {
     // not needed for now since reference qualification for trait methods is explicitly not allowed
 
     // add static function resolution?
+    if constexpr (not is_function(ImplMethod) and not is_function_template(ImplMethod)) {
+        auto const call_ops        = subextract_info_span(^^call_operators_of, {type_of(ImplMethod)});
+        auto const method_inv_type = copy_cv_to(^^impl_invocation_t, type_of(ImplMethod));
+        for (auto op: call_ops) {
+            if (extract<bool>(
+                    substitute(^^exactly_matches,
+                               {method_inv_type, meta::reflect_constant(op), ^^MethodIdt, cv_refl}))) {
+                return true;
+            }
+        }
+        return false;
+    } else {
+        auto const exact_method = (dealias(^^exact_type) != ^^void)    //
+            and requires(exact_type mptr) {
+                { mptr = &[:ImplMethod:] };
+            };
+        auto const exact_eop_method = (dealias(^^exact_eop_type) != ^^void)    //
+            and requires(exact_eop_type mptr) {
+                { mptr = &[:ImplMethod:] };
+            };
 
-    auto const exact_method = (dealias(^^exact_type) != ^^void)    //
-        and requires(exact_type mptr) {
-            { mptr = &[:ImplMethod:] };
-        };
-    auto const exact_eop_method = (dealias(^^exact_eop_type) != ^^void)    //
-        and requires(exact_eop_type mptr) {
-            { mptr = &[:ImplMethod:] };
-        };
-    return exact_method or exact_eop_method;
+        if (exact_method or exact_eop_method)
+            return true;
+
+        if (ExactCv)
+            return false;
+
+        // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
+        if constexpr (not meta::is_const(remove_reference(^^impl_invocation_t)) and
+                      invokable_convert_return<impl_invocation_t const, ImplMethod, MethodIdt>) {
+            auto const exact_method     = extract<bool>(substitute(
+                ^^exactly_matches, {add_const(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+            auto const exact_eop_method = extract<bool>(substitute(
+                ^^exactly_matches, {add_const(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+            if (exact_method or exact_eop_method)
+                return true;
+        }
+        // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
+        if constexpr (not meta::is_volatile(remove_reference(^^impl_invocation_t)) and
+                      invokable_convert_return<impl_invocation_t volatile, ImplMethod, MethodIdt>) {
+            auto const exact_method     = extract<bool>(substitute(
+                ^^exactly_matches, {add_volatile(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+            auto const exact_eop_method = extract<bool>(substitute(
+                ^^exactly_matches, {add_volatile(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+            if (exact_method or exact_eop_method)
+                return true;
+        }
+
+        return false;
+    }
 }();
 
-template<any_trait Trait>
-inline constexpr auto requires_exact_method_return = true;
-template<any_trait Trait>
-inline constexpr auto requires_exact_method_arguments = false;
 
 template<typename ParamType>
 consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {
