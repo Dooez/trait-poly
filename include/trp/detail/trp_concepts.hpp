@@ -308,14 +308,10 @@ inline constexpr auto exactly_matches = [] {
     if constexpr (not is_function(ImplMethod) and not is_function_template(ImplMethod)) {
         auto const call_ops        = subextract_info_span(^^call_operators_of, {type_of(ImplMethod)});
         auto const method_inv_type = copy_cv_to(^^impl_invocation_t, type_of(ImplMethod));
-        for (auto op: call_ops) {
-            if (extract<bool>(
-                    substitute(^^exactly_matches,
-                               {method_inv_type, meta::reflect_constant(op), ^^MethodIdt, cv_refl}))) {
-                return true;
-            }
-        }
-        return false;
+        return stdr::any_of(call_ops, [=](auto op) {
+            return extract<bool>(substitute(
+                ^^exactly_matches, {method_inv_type, meta::reflect_constant(op), ^^MethodIdt, cv_refl}));
+        });
     } else {
         auto const exact_method = (dealias(^^exact_type) != ^^void)    //
             and requires(exact_type mptr) {
@@ -352,7 +348,6 @@ inline constexpr auto exactly_matches = [] {
             if (exact_method or exact_eop_method)
                 return true;
         }
-
         return false;
     }
 }();

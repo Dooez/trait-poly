@@ -7,6 +7,20 @@ namespace trp {
 
 namespace detail::var {
 
+/**
+ * @brief While P3074 is not implemented, we need a wrapper to handle types
+ * with nontrivial destructors in undefined unions
+ */
+template<typename T>
+union uninit {
+    alignas(T) std::array<std::byte, sizeof(T)> storage;
+
+    auto ptr(this auto&& self) {
+        using this_t    = std::remove_reference_t<decltype(self)>;
+        using value_ptr = [:add_pointer(copy_cv_to(^^this_t, ^^T)):];
+        return std::launder(reinterpret_cast<value_ptr>(self.storage.data()));
+    }
+};
 
 template<typename... Impl>
 struct impl_holder {
@@ -17,20 +31,6 @@ struct impl_holder {
     static constexpr auto noexcept_copy_constructible = (... and std::is_nothrow_copy_constructible_v<Impl>);
     static constexpr auto noexcept_move_constructible = (... and std::is_nothrow_move_constructible_v<Impl>);
 
-    /**
-     * @brief While P3074 is not implemented, we need a wrapper to handle types
-     * with nontrivial destructors in undefined unions
-     */
-    template<typename T>
-    union uninit {
-        alignas(T) std::array<std::byte, sizeof(T)> storage;
-
-        auto ptr(this auto&& self) {
-            using this_t    = std::remove_reference_t<decltype(self)>;
-            using value_ptr = [:add_pointer(copy_cv_to(^^this_t, ^^T)):];
-            return std::launder(reinterpret_cast<value_ptr>(self.storage.data()));
-        }
-    };
     union impls_union;
     consteval {
         define_aggregate(^^impls_union,
