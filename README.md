@@ -117,8 +117,8 @@ To prevent clashing with method object the following free functions are provided
 - `trp::get<I>(Variant&& var) -> decltype(auto)` returns a reference to alternative I
 - `trp::get<T>(Variant&& var) -> decltype(auto)` returns a reference to alternative of type T
 - `auto holds_alternative<T>(Var const& var)-> bool` returns true if current alternative is of type T
-- `trp::get_if<I>(Variant&& var) -> decltype(auto)` returns a pointer to alternative I, nullptr if not active
-- `trp::get_if<T>(Variant&& var) -> decltype(auto)` returns a pointer to alternative of type T, nullptr if not active
+- `trp::get_if<I>(Variant* var) -> decltype(auto)` returns a pointer to alternative I, nullptr if not active
+- `trp::get_if<T>(Variant* var) -> decltype(auto)` returns a pointer to alternative of type T, nullptr if not active
 
 ### Type-erased handles
 The core the type-erased handle is `trp::dyn_trait_ref<Trait>`. It is a non-owning
@@ -192,7 +192,7 @@ Currently, `trp` does not have a clear way to define a custom owning handle.
       inheritance chain of `T`; true for `S == T`;
     - `direct_supertrait_of<S, T>`: `supertrait_of<S, T>` and `S` is a direct
       base class of `T`; false for `S == T`.
-- [x] `variant<T, Alternatives...>`
+- [x] `trait_variant<T, Alternatives...>`
 - [x] Non-owning type-erased trait handle `dyn_trait_ref<T>`
   - [x] `dyn_trait_ref<cv_trait>` where `cv_trait` is cv-qualified
   - [x] Upcasting to `explicit_supertrait_of<S, T>` via `trait_cast<S>`
@@ -265,7 +265,6 @@ Not implemented, but potentially feasible and interesting:
   This can be viewed as speculatively devirtualized dynamic polymorphism.
 - Definition of trait combinations, such as a greatest common supertrait or a
   common subtrait without inheritance and explicit definition
-- Option for return type conversion in implementation methods
 - Small object optimization
 - (?) Non-type-erased reference wrapper to enforce restricted interfaces
 
