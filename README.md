@@ -3,7 +3,7 @@
 This repository is an experimental implementation of runtime polymorphism based
 on structural traits and type-erased trait handles.
 
-[Godbolt example](https://godbolt.org/z/xbx4M494G)
+[Godbolt example](https://godbolt.org/z/K89r8v117)
 
 ## Minimal Example
 
@@ -55,42 +55,73 @@ has a suitable implementation for `Impl`.
 
 Implementation lookup uses this order:
 
-1. `trp::impl_spec_for<Impl, std::remove_cv_t<Trait>>` specialization;
+1. `trp::impl_spec_for<std::remove_cv_t<Impl>, std::remove_cv_t<Trait>>` specialization;
 
    > [!NOTE]
    > `trp::impl_spec_for<I, T>` requires `T` to be cv-unqualified.
 
-2. `trp::impl_spec_for<Impl, TraitBase>` for each base of `Trait`;
+2. `trp::impl_spec_for<std::remove_cv_t<Impl>, TraitBase>` for each base of `Trait`;
 
    > [!NOTE]
-   > This search is depth-first at the moment.
+   > This search is depth-first.
 
-3. Public direct members of `Impl` that satisfy all of these conditions:
+3. Direct public members with matching identifier:
+    1. First direct public members of `Impl` that do not satisfy all of are discarded:
+        - the member is callable through a cv-qualified reference to `Impl` with the
+          arguments specified by the trait method;
+        - the invocation is `noexcept` if the trait method is `noexcept`;
+        - the return type matches type specified by the trait method:  
+          - matches exactly if trait or method are annotated with <not_implemented>, default behavior;
+          - convertible to if trait or method are annotated with <not_implemented>.  
+    3. trait method signature with potentially adjusted return type is checked.
+       return type is adjusted if the method being checked returns a type diffreent 
+       from initial trait signature;
+    4. if cv-promotion is allowed cv qualified signatures are checked
+       e.g. if return adjasted trait method signature is `int foo(int);` 
+       and a member does not match it, then `int foo(int) const` etc. are checked;
+    5. if parameter conversion is allowed an overload set is built and resolved 
+       using normal C++ overload resolution.
 
-   - the identifier matches;
-   - the member is callable through a cv-qualified reference to `Impl` with the
-     arguments specified by the trait method;
-   - the invocation is `noexcept` if the trait method is `noexcept`;
-   - the return type exactly matches the type specified by the trait method.
+4. If there are no direct public members with matching identifier,
+   steps 1-3 are repeated for public bases of `Impl`, breadth-first.
+   If there are multiple fitting candidates, the result is discarded.
+5. Explicit trait defaults `trp::default_impl_spec<std::remove_cv_t<Trait>>`.
+6. Inline trait defaults i.e. static members with matching signature:
+   - method         `       auto foo(int) const -> int`
+   - inline default `static auto foo(const auto&, int) -> int`
 
-4. Steps 1-3 are repeated for public bases of `Impl`, breadth-first.
-5. Trait defaults.
-
-Lookup does not perform overload resolution. Full overload resolution would be
-complex to implement and, as far as I know, is not possible for function
-templates in C++26.
-
-Basic overload resolution is a desired future improvement:
-
-- build the full viable overload set for each source in the lookup list;
-- use a perfect match when one is present.
-
-Return type matching could become a customization point, but it is not
-implemented at the moment.
+Overload resolution limitations:
+- Function templates cannot be inspected in C++ 26. 
+  There's no way to acquire instantiation from a call.
+  The only reliable way to check function template is to check conversion to pointer to a member.
+  Currently member function templates will only be selected if they match the signature exactly in the 3.2 or 3.3
+  or if they are the only candidate and the parameter conversion is allowed.
+  If there is more than one candidate in 3.5 and one of them is a template the overload resolution cannot be done.
+- Reflections of *using-declaration* is not present in C++26. 
+  This means that if there are multiple bases providing `foo` member,
+  and the derived class uses *using-declaration* to disambiguate,
+  the implementation overload resolution cannot be done.
 
 ## Trait Handles
 
-The core handle is the type-erased `dyn_trait_ref<Trait>`. It is a non-owning
+### Variant
+The non-type erased handle is `trp::trait_variant<Trait, Alternatives...>`.
+It is owning wrapper with value semantics.
+
+To prevent clashing with method object the following free functions are provided:
+
+- `trp::index(Var const& var) -> tag_t` returns index of the current alternative
+- `trp::valueless_by_exception(Var const& var) -> bool` returns false if variant holds a value
+- `trp::emplace<I>(Var& var, Args&&... args)` constructs an alternative I in place
+- `trp::emplace<T>(Var& var, Args&&... args)` constructs an alternative of type T in place
+- `trp::get<I>(Variant&& var) -> decltype(auto)` returns a reference to alternative I
+- `trp::get<T>(Variant&& var) -> decltype(auto)` returns a reference to alternative of type T
+- `auto holds_alternative<T>(Var const& var)-> bool` returns true if current alternative is of type T
+- `trp::get_if<I>(Variant&& var) -> decltype(auto)` returns a pointer to alternative I, nullptr if not active
+- `trp::get_if<T>(Variant&& var) -> decltype(auto)` returns a pointer to alternative of type T, nullptr if not active
+
+### Type-erased handles
+The core the type-erased handle is `trp::dyn_trait_ref<Trait>`. It is a non-owning
 view over a trait object.
 
 Method access uses dot notation: `ref.foo();`. Because dot notation is reserved
@@ -118,7 +149,7 @@ The repository also includes these owning handles:
 - `trp::unique_trait_ptr`, a new-allocated non-copyable trait handle;
 - `trp::alloc_unique_trait_ptr`, an allocator-aware non-copyable trait handle.
 
-The owning handles are currently very basic. They share this API:
+The owning handles are currently basic. They share this API:
 
 - `explicit operator bool()` checks whether the handle stores an object;
 - `operator->` and `operator*` access the underlying `dyn_trait_ref`;
@@ -161,6 +192,7 @@ Currently, `trp` does not have a clear way to define a custom owning handle.
       inheritance chain of `T`; true for `S == T`;
     - `direct_supertrait_of<S, T>`: `supertrait_of<S, T>` and `S` is a direct
       base class of `T`; false for `S == T`.
+- [x] `variant<T, Alternatives...>`
 - [x] Non-owning type-erased trait handle `dyn_trait_ref<T>`
   - [x] `dyn_trait_ref<cv_trait>` where `cv_trait` is cv-qualified
   - [x] Upcasting to `explicit_supertrait_of<S, T>` via `trait_cast<S>`
@@ -211,14 +243,12 @@ qualifiers equal to the `Trait` qualifiers is constructed and invoked.
 This uses native C++ overload resolution for both argument types and cv
 resolution.
 
+Variant uses similar technique, except it is cv-transient, and doesn't use 
+
 ## Limitations
 
 Compilation is relatively slow. Some effort was made to minimize repeated
 evaluation in the implementation.
-
-Compilers may require `-fconstexpr-steps` with a high value to compile
-successfully. `static constexpr` trait data members are supported only by GCC.
-`clangd` works but has significant delays when handling trait objects.
 
 Some patterns in the `trp` implementation could be updated to more modern and
 cleaner versions with additional C++26 features as compiler support matures.
@@ -231,7 +261,8 @@ about possible production usability.
 
 Not implemented, but potentially feasible and interesting:
 
-- Partial overload resolution of implementation methods during vtable construction
+- Variant with type-erased extension. 
+  This can be viewed as speculatively devirtualized dynamic polymorphism.
 - Definition of trait combinations, such as a greatest common supertrait or a
   common subtrait without inheritance and explicit definition
 - Option for return type conversion in implementation methods

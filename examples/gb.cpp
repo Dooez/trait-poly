@@ -1,18 +1,18 @@
 #ifdef TRP_GODBOLT
 // clang-format off
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/alias_and_helpers.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/cvtmock_trait_ref.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/trp_concepts.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/explicit_trait_impl.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/default_trait_impl.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/cvts_trait_ref.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/vtable.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/alias_and_helpers.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/cvtmock_trait_ref.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/trp_concepts.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/explicit_trait_impl.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/default_trait_impl.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/cvts_trait_ref.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/vtable.hpp>
                                                                                                         
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/dyn_trait_ref.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/detail/allocator_ctrl_block.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/shared_trait_ptr.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/unique_trait_ptr.hpp>
-#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/value/include/trp/trait_variant.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/dyn_trait_ref.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/detail/allocator_ctrl_block.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/shared_trait_ptr.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/unique_trait_ptr.hpp>
+#include <https://raw.githubusercontent.com/Dooez/trait-poly/refs/heads/main/include/trp/trait_variant.hpp>
 // clang-format on
 #else
 #include "trp/shared_trait_ptr.hpp"
@@ -98,13 +98,6 @@ struct trp::impl_spec_for<other_impl, my_trait> {
     }
 };
 
-#if defined(__clang__)
-// required bacause of clang bug
-// template class trp::dyn_trait_ref<my_trait_base>;
-// template class trp::shared_trait_ptr<my_trait>;
-//template class trp::trait_variant<my_trait, some_impl, other_impl>;
-#endif
-
 void test_base(trp::dyn_trait_ref<my_trait_base> ref) {
     ref.foo(e0{});
 }
@@ -125,8 +118,10 @@ void test_var_bar(var_t& v) {
 
 int main() {
     auto sh_ptr = trp::make_shared_trait<my_trait, some_impl>();
+    std::println("shared some_impl: ");
     test_trait(sh_ptr);
     sh_ptr = trp::make_shared_trait<my_trait, other_impl>();
+    std::println("shared other_impl: ");
     test_trait(sh_ptr);
     static_assert(sizeof(sh_ptr) == 3 * sizeof(void*));
 
@@ -138,7 +133,7 @@ int main() {
 
     static_assert(trp::implements_trait<trp::dyn_trait_ref<my_trait>, my_trait>);
 
-    std::println("Variant: ");
+    std::println("variant: ");
     auto var = var_t(some_impl{});
 
     var.bar();

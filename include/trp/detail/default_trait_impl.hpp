@@ -95,18 +95,39 @@ template<non_cvref Impl, any_method_idt MethodIdt>
 inline constexpr auto matching_id_direct_public_members_for_method =
     matching_id_direct_public_members<Impl, MethodIdt::identifier>;
 
+consteval auto find_explicit_impl(meta::info impl, meta::info ncv_trait, meta::info method_idt) -> meta::info;
+
+template<non_ref Impl, non_cv_trait Trait, any_method_idt MethodIdt>
+inline constexpr auto explicit_impl_for = find_explicit_impl(^^Impl, ^^Trait, ^^MethodIdt);
+
+consteval auto find_explicit_impl(meta::info impl, meta::info ncv_trait, meta::info method_idt)
+    -> meta::info {
+    auto const nsm =
+        subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
+    for (auto const m: nsm | stdv::filter(meta::is_template))
+        if (matching_explicit_impl(explicit_impl_to_method_identity(m, ncv_trait), method_idt))
+            return m;
+    auto const bases = subextract_base_types(ncv_trait);
+    for (auto const b: bases) {
+        auto const m = extract<meta::info>(substitute(^^explicit_impl_for, {impl, b, method_idt}));
+        if (m != meta::info{})
+            return m;
+    }
+    return meta::info{};
+}
+
 /*
  * @return  nullopt if no matching names were found. 
  *          meta::info{} if member overload set could not be resolved.
  *          explicit impl, member function or function template otherwise.
 */
-consteval auto find_trait_method_impl(meta::info ncv_trait, meta::info impl, meta::info method_idt)
+consteval auto find_trait_method_impl(meta::info impl, meta::info ncv_trait, meta::info method_idt)
     -> std::optional<meta::info> {
-    auto const nsm =
-        subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
-    for (auto const m: nsm | stdv::filter(std::meta::is_template))
-        if (matching_explicit_impl(explicit_impl_to_method_identity(m, ncv_trait), method_idt))
-            return m;
+    auto const m =
+        extract<meta::info>(substitute(^^explicit_impl_for, {remove_cv(impl), ncv_trait, method_idt}));
+    if (m != meta::info{})
+        return m;
+
     auto const id_mems =
         subextract_info_span(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt});
     if (id_mems.empty())
@@ -143,7 +164,7 @@ template<non_ref Impl, non_cv_trait Trait>
 inline constexpr auto full_impls_for = [] {
     auto impls = std::vector<impl_method_bind>();
     for (auto method_idt: all_trait_methods<Trait>) {
-        auto o_m = find_trait_method_impl(^^Trait, ^^Impl, method_idt);
+        auto o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt);
         if (not o_m) {
             o_m = [=] -> std::optional<meta::info> {
                 auto       checked_bases = std::vector<meta::info>{};
@@ -162,7 +183,7 @@ inline constexpr auto full_impls_for = [] {
                             //ambiguous because the fitting method found in multiple base-class subobjects
                             return meta::info{};
                         }
-                        auto const o_m = find_trait_method_impl(^^Trait, base, method_idt);
+                        auto const o_m = find_trait_method_impl(base, ^^Trait, method_idt);
                         if (o_m) {
                             if (m != meta::info{}) {
                                 // method present in multiple bases, call would be ambiguous
@@ -219,6 +240,6 @@ template<typename Impl, typename Trait>
 concept implements_trait =
     any_trait<Trait>                                                                      //
     and std::is_class_v<Impl>                                                             //
-    and detail::valid_explicit_impl_spec<impl_spec_for<Impl, std::remove_cv_t<Trait>>>    //
+    and detail::valid_explicit_impl_spec<impl_spec_for<std::remove_cv_t<Impl>, std::remove_cv_t<Trait>>>    //
     and detail::has_impls_for_all_methods<Impl, Trait>;
 }    // namespace trp

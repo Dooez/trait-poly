@@ -3,7 +3,7 @@
 #include "trp_concepts.hpp"
 #endif
 namespace trp {
-template<non_ref Impl, non_cv_trait Trait>
+template<non_cvref Impl, non_cv_trait Trait>
 struct impl_spec_for {};
 
 namespace detail {
