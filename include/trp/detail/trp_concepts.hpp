@@ -286,8 +286,12 @@ inline constexpr auto exactly_matches = [] {
     constexpr auto m_refl  = std::meta::reflect_constant(ImplMethod);
     constexpr auto cv_refl = meta::reflect_constant(ExactCv);
 
-    using return_type    = [:substitute(^^method_return_t,
-                                        {^^impl_invocation_t, m_refl, ^^typename decltype(arg_ids)::type...}):];
+    using return_type    = [:[] {
+        if (invokable_convert_return<int, m_refl, MethodIdt>)
+            return substitute(^^method_return_t,
+                                 {^^impl_invocation_t, m_refl, ^^typename decltype(arg_ids)::type...});
+        return ^^void;
+    }():];
     using exact_type     = make_function_member_type<false,
                                                      impl_invocation_t,
                                                      return_type,
