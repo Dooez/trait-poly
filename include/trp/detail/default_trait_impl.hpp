@@ -121,8 +121,10 @@ consteval auto find_explicit_impl(meta::info impl, meta::info ncv_trait, meta::i
  *          meta::info{} if member overload set could not be resolved.
  *          explicit impl, member function or function template otherwise.
 */
-consteval auto find_trait_method_impl(meta::info impl, meta::info ncv_trait, meta::info method_idt)
-    -> std::optional<meta::info> {
+consteval auto find_trait_method_impl(meta::info                      impl,
+                                      meta::info                      ncv_trait,
+                                      meta::info                      method_idt,
+                                      method_signature_requirements_t reqs) -> std::optional<meta::info> {
     auto const m =
         extract<meta::info>(substitute(^^explicit_impl_for, {remove_cv(impl), ncv_trait, method_idt}));
     if (m != meta::info{})
@@ -133,38 +135,34 @@ consteval auto find_trait_method_impl(meta::info impl, meta::info ncv_trait, met
     if (id_mems.empty())
         return std::nullopt;
 
-    auto const invokable = extract<bool>(substitute(^^requires_exact_method_return, {ncv_trait}))
-                               ? ^^invokable_exact_return
-                               : ^^invokable_convert_return;
+    auto const invokable_concept = reqs.exact_return ? ^^invokable_exact_return : ^^invokable_convert_return;
     auto const callable_mems =
         id_mems    //
         | stdv::filter([=](auto m) {
-              return extract<bool>(substitute(invokable, {impl, reflect_constant(m), method_idt}));
+              return extract<bool>(substitute(invokable_concept, {impl, reflect_constant(m), method_idt}));
           })    //
         | stdr::to<std::vector>();
 
     for (auto const m: callable_mems) {
-        auto const matches =
-            extract<bool>(substitute(^^exactly_matches,
-                                     {impl,
-                                      reflect_constant(m),
-                                      method_idt,
-                                      substitute(^^requires_exact_cv_qualifiers, {ncv_trait})}));
+        auto const matches = extract<bool>(
+            substitute(^^exactly_matches,
+                       {impl, reflect_constant(m), method_idt, meta::reflect_constant(reqs.exact_cv)}));
         if (matches)
             return m;
     }
-    if (not extract<bool>(substitute(^^requires_exact_method_arguments, {ncv_trait}))) {
+
+    if (not reqs.exact_args)
         if (auto m = resolve_method_overload_set(method_idt, callable_mems); m != meta::info{})
             return m;
-    }
+
     return meta::info{};
 };
 
 template<non_ref Impl, non_cv_trait Trait>
 inline constexpr auto full_impls_for = [] {
     auto impls = std::vector<impl_method_bind>();
-    for (auto method_idt: all_trait_methods<Trait>) {
-        auto o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt);
+    for (auto [method_idt, reqs]: all_trait_methods_and_requirements<Trait>.zip()) {
+        auto o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt, reqs);
         if (not o_m) {
             o_m = [=] -> std::optional<meta::info> {
                 auto       checked_bases = std::vector<meta::info>{};
@@ -183,7 +181,7 @@ inline constexpr auto full_impls_for = [] {
                             //ambiguous because the fitting method found in multiple base-class subobjects
                             return meta::info{};
                         }
-                        auto const o_m = find_trait_method_impl(base, ^^Trait, method_idt);
+                        auto const o_m = find_trait_method_impl(base, ^^Trait, method_idt, reqs);
                         if (o_m) {
                             if (m != meta::info{}) {
                                 // method present in multiple bases, call would be ambiguous
@@ -238,8 +236,8 @@ concept has_impls_for_all_methods =
 
 template<typename Impl, typename Trait>
 concept implements_trait =
-    any_trait<Trait>                                                                      //
-    and std::is_class_v<Impl>                                                             //
+    any_trait<Trait>                                                                                        //
+    and std::is_class_v<Impl>                                                                               //
     and detail::valid_explicit_impl_spec<impl_spec_for<std::remove_cv_t<Impl>, std::remove_cv_t<Trait>>>    //
     and detail::has_impls_for_all_methods<Impl, Trait>;
 }    // namespace trp

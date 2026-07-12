@@ -5,6 +5,39 @@
 #endif
 
 namespace trp {
+
+inline constexpr auto relaxed_signature = detail::method_signature_requirements_t{
+    .exact_return = false,
+    .exact_args   = false,
+    .exact_cv     = false,
+
+};
+inline constexpr auto matching_return_signature = detail::method_signature_requirements_t{
+    .exact_return = true,
+    .exact_args   = false,
+    .exact_cv     = false,
+};
+inline constexpr auto matching_args_signature = detail::method_signature_requirements_t{
+    .exact_return = false,
+    .exact_args   = true,
+    .exact_cv     = false,
+};
+inline constexpr auto matching_cv_signature = detail::method_signature_requirements_t{
+    .exact_return = false,
+    .exact_args   = true,
+    .exact_cv     = true,
+};
+inline constexpr auto exact_signature = detail::method_signature_requirements_t{
+    .exact_return = true,
+    .exact_args   = true,
+    .exact_cv     = false,
+};
+inline constexpr auto exact_cv_signature = detail::method_signature_requirements_t{
+    .exact_return = true,
+    .exact_args   = true,
+    .exact_cv     = true,
+};
+
 namespace detail {
 
 consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_inf) {
@@ -252,6 +285,15 @@ inline constexpr bool invokable_convert_return = [] {
         }
     }
 }();
+
+
+template<non_cv_trait Trait>
+inline constexpr auto method_signature_requirements = [] -> method_signature_requirements_t {
+    if (auto o_req = extract_signature_req(^^Trait); o_req)
+        return *o_req;
+    return {};
+}();
+
 template<non_ref Impl, meta::info ImplMethod, typename... Args>
 using method_return_t = [:[] {
     if constexpr (is_template(ImplMethod)) {
@@ -260,14 +302,6 @@ using method_return_t = [:[] {
         return ^^decltype(std::declval<Impl>().[:ImplMethod:](std::declval<Args>()...));
     }
 }():];
-
-template<any_trait Trait>
-inline constexpr auto requires_exact_method_return = true;
-template<any_trait Trait>
-inline constexpr auto requires_exact_method_arguments = false;
-template<any_trait Trait>
-inline constexpr auto requires_exact_cv_qualifiers = false;
-
 template<typename T>
 inline constexpr auto call_operators_of =
     std::define_static_array(members_of(^^T, unprivileged) | stdv::filter([](auto m) {

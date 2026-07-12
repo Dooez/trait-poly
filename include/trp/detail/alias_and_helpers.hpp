@@ -165,7 +165,7 @@ using make_function_member_type = [:[] {
         using mfptr_t = auto (std::remove_cvref_t<Impl>::*)(Params...) C V R noexcept(Noexcept)->Ret;     \
         return dealias(^^mfptr_t);                                                                        \
     }
-#define TRP_FQUAL_FPTR_NON_EOP(C, V, R)                                                                \
+#define TRP_FQUAL_FPTR_NON_EOP(C, V, R)                                                               \
     {                                                                                                 \
         if constexpr (EOP) {                                                                          \
             throw "Volatile value parameter is deprecated";                                           \
@@ -317,6 +317,45 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
     return type;
 }
 
+struct method_signature_requirements_t {
+    bool exact_return =
+#ifdef TRP_DEFAULT_MATCH_METHOD_RETURN
+        true;
+#else
+        false;
+#endif
+    bool exact_args =
+#ifdef TRP_DEFAULT_MATCH_METHOD_ARGS
+        true;
+#else
+        false;
+#endif
+    bool exact_cv =
+#ifdef TRP_DEFAULT_MATCH_METHOD_CV
+        true;
+#else
+        false;
+#endif
+
+    consteval auto operator|=(const method_signature_requirements_t& other) {
+        exact_return |= other.exact_return;
+        exact_args |= other.exact_args;
+        exact_cv |= other.exact_cv;
+        return *this;
+    }
+};
+consteval auto extract_signature_req(meta::info r) -> std::optional<method_signature_requirements_t> {
+    auto const annotations =
+        annotations_of(r)                                                                         //
+        | stdv::filter([](auto r) { return type_of(r) == ^^method_signature_requirements_t; })    //
+        | stdr::to<std::vector>();
+    if (annotations.size() > 1)
+        throw "More than one method requirements annoation.";
+    if (annotations.empty())
+        return std::nullopt;
+    return extract<method_signature_requirements_t>(object_of(annotations.front()));
+}
+
 template<non_cvref T>
 inline constexpr auto nonspecial_members = std::define_static_array(
     members_of(^^T, unprivileged) | stdv::filter(std::not_fn(meta::is_special_member_function)));
@@ -329,9 +368,26 @@ consteval auto subextract_base_types(meta::info type) {
     return subextract_info_span(^^direct_base_types, {type});
 }
 
+struct methods_and_requirements {
+    std::span<meta::info const>                      identities;
+    std::span<method_signature_requirements_t const> requirements;
+
+    static consteval auto to_o_requirements(meta::info trait_member) -> method_signature_requirements_t {
+        if (auto o_req = extract_signature_req(trait_member))
+            return *o_req;
+        auto const trait = parent_of(trait_member);
+        if (auto o_req = extract_signature_req(trait))
+            return *o_req;
+        return {};
+    };
+
+    consteval auto zip() const {
+        return stdv::zip(identities, requirements);
+    }
+};
 
 template<typename T>
-inline constexpr auto direct_trait_methods = [] {
+inline constexpr auto direct_trait_methods_and_requirements = [] {
     constexpr auto is_relevant_method = [](meta::info method) {
         return is_function(method)                            //
                and not is_special_member_function(method)     //
@@ -339,34 +395,60 @@ inline constexpr auto direct_trait_methods = [] {
                and (is_volatile(method) or not is_volatile(^^T));
     };
 
-    return define_static_array(members_of(^^T, unprivileged)         //
-                               | stdv::filter(is_relevant_method)    //
-                               | stdv::transform(method_identity));
+    auto const relevant_methods = members_of(^^T, unprivileged)         //
+                                  | stdv::filter(is_relevant_method)    //
+                                  | stdr::to<std::vector>();
+    return methods_and_requirements{
+        .identities   = define_static_array(relevant_methods | stdv::transform(method_identity)),
+        .requirements = define_static_array(relevant_methods    //
+                                            | stdv::transform(methods_and_requirements::to_o_requirements)),
+    };
 }();
+
+template<typename T>
+inline constexpr auto all_trait_methods_and_requirements = [] {
+    auto res_idts = direct_trait_methods_and_requirements<T>.identities    //
+                    | stdr::to<std::vector>();
+    auto res_reqs = direct_trait_methods_and_requirements<T>.requirements    //
+                    | stdr::to<std::vector>();
+
+    auto const append_unique = [&](auto&& idts, auto&& reqs) {
+        for (auto [m, req]: stdv::zip(idts, reqs)) {
+            auto const it = stdr::find(res_idts, m);
+            if (it == res_idts.end()) {
+                res_idts.push_back(m);
+                res_reqs.push_back(req);
+            }
+            auto const i = stdr::distance(res_idts.begin(), it);
+            res_reqs[i] |= req;
+        }
+    };
+    template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
+        append_unique(all_trait_methods_and_requirements<typename[:base:]>.identities,
+                      all_trait_methods_and_requirements<typename[:base:]>.requirements);
+    }
+    auto const method_id_less = [](auto&& zip_v_l, auto&& zip_v_r) {
+        auto [idt_l, _] = zip_v_l;
+        auto [idt_r, _] = zip_v_r;
+        return std::string_view(extract_method_identifier(idt_l)) <
+               std::string_view(extract_method_identifier(idt_r));
+    };
+    stdr::sort(stdv::zip(res_idts, res_reqs), method_id_less);
+    return methods_and_requirements{
+        .identities   = std::define_static_array(res_idts),
+        .requirements = std::define_static_array(res_reqs),
+    };
+}();
+
+template<typename T>
+inline constexpr auto direct_trait_methods = direct_trait_methods_and_requirements<T>.identities;
 
 /**
  * @brief All reflections of method_identity_t for all methods in a trait T sorted in lexicographical order of identifiers
  * @tparam T 
  */
 template<typename T>
-inline constexpr auto all_trait_methods = [] {
-    auto       result        = direct_trait_methods<T> | stdr::to<std::vector<meta::info>>();
-    auto const append_unique = [&](auto&& method_idts) {
-        for (auto m: method_idts)
-            if (not stdr::contains(result, m))
-                result.push_back(m);
-    };
-    template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
-        using base_t = [:copy_cv_to(^^T, base):];
-        append_unique(all_trait_methods<base_t>);
-    }
-    constexpr auto method_id_less = [](meta::info lhs, meta::info rhs) {
-        return std::string_view(extract_method_identifier(lhs)) <
-               std::string_view(extract_method_identifier(rhs));
-    };
-    stdr::sort(result, method_id_less);
-    return define_static_array(result);
-}();
+inline constexpr auto all_trait_methods = all_trait_methods_and_requirements<T>.identities;
 
 struct method_reference {
     char const* name;         // method identifier
@@ -445,6 +527,5 @@ consteval auto find_annotated_base(meta::info           type,
     }
     return meta::info{};
 }
-
 }    // namespace detail
 }    // namespace trp
