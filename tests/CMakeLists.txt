@@ -20,6 +20,7 @@ function(add_trp_test target source)
 	endif()
 endfunction()
 
+add_trp_test(test_supertraits supertraits.cpp)
 add_trp_test(test_dyn_trait_ref dyn_trait_ref.cpp)
 add_trp_test(test_cv_qualification cv_qualification.cpp)
 add_trp_test(test_unique_trait_ptr_ownership unique_trait_ptr_ownership.cpp)
