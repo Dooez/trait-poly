@@ -353,7 +353,7 @@ consteval auto extract_signature_req(meta::info r) -> std::optional<method_signa
         throw "More than one method requirements annoation.";
     if (annotations.empty())
         return std::nullopt;
-    return extract<method_signature_requirements_t>(object_of(annotations.front()));
+    return extract<method_signature_requirements_t>(constant_of(annotations.front()));
 }
 
 template<non_cvref T>
