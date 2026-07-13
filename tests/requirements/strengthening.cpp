@@ -87,5 +87,5 @@ int main() {
     check_redeclared_strengthened_call();
     check_relaxed_base_call();
 
-    return reqtest::success_exit_code;
+    return 0;
 }
