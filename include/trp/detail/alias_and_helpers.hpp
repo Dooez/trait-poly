@@ -418,6 +418,7 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
             if (it == res_idts.end()) {
                 res_idts.push_back(m);
                 res_reqs.push_back(req);
+                continue;
             }
             auto const i = stdr::distance(res_idts.begin(), it);
             res_reqs[i] |= req;
