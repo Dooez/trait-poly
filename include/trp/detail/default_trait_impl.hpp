@@ -161,7 +161,13 @@ consteval auto find_trait_method_impl(meta::info                      impl,
 template<non_ref Impl, non_cv_trait Trait>
 inline constexpr auto full_impls_for = [] {
     auto impls = std::vector<impl_method_bind>();
-    for (auto [method_idt, reqs]: all_trait_methods_and_requirements<Trait>.zip()) {
+    // for (auto [method_idt, reqs]: all_trait_methods_and_requirements<Trait>.zip()) {
+    auto const idts     = all_trait_methods_and_requirements<Trait>.identities;
+    auto const all_reqs = all_trait_methods_and_requirements<Trait>.requirements;
+    for (auto i: stdv::iota(0U, idts.size())) {
+        auto const method_idt = idts[i];
+        auto const reqs       = all_reqs[i];
+
         auto o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt, reqs);
         if (not o_m) {
             o_m = [=] -> std::optional<meta::info> {

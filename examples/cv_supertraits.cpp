@@ -92,7 +92,7 @@ CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, leaf, leaf);
 CHECK_CV_SUPER    (trp::direct_supertrait_of, midl, leaf);
 CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, base, leaf);
 CHECK_CV_NOT_SUPER(trp::direct_supertrait_of, susp, leaf);
-
+static_assert(!trp::supertrait_of<midl, const leaf>);
 
 // cv qualification may preserve trait equivalence
 struct ping_cv {
@@ -119,7 +119,6 @@ static_assert(trp::supertrait_of<ping_cv,                const volatile ping_cv>
 static_assert(trp::supertrait_of<const ping_cv,          const volatile ping_cv>);
 static_assert(trp::supertrait_of<volatile ping_cv,       const volatile ping_cv>);
 static_assert(trp::supertrait_of<const volatile ping_cv, const volatile ping_cv>);
-
 
 // clang-format on
 
@@ -155,9 +154,9 @@ struct impl_touch {
 static_assert(trp::implements_trait<impl_all_cv, leaf>);
 
 static_assert(trp::implements_trait<impl_touch, trait_touch>);
-static_assert(not trp::implements_trait<const impl_touch, trait_touch>);
-static_assert(not trp::implements_trait<volatile impl_touch, trait_touch>);
-static_assert(trp::implements_trait<const impl_touch, const trait_touch>);
+static_assert(not trp::implements_trait<impl_touch const, trait_touch>);
+static_assert(not trp::implements_trait<impl_touch volatile, trait_touch>);
+static_assert(trp::implements_trait<impl_touch const, trait_touch const>);
 
 }    // namespace testing
 

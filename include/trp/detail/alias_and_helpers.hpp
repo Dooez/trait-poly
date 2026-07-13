@@ -425,8 +425,9 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
         }
     };
     template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
-        append_unique(all_trait_methods_and_requirements<typename[:base:]>.identities,
-                      all_trait_methods_and_requirements<typename[:base:]>.requirements);
+        using base_t = [:copy_cv_to(^^T, base):];
+        append_unique(all_trait_methods_and_requirements<base_t>.identities,
+                      all_trait_methods_and_requirements<base_t>.requirements);
     }
     auto const method_id_less = [](auto&& zip_v_l, auto&& zip_v_r) {
         auto [idt_l, _] = zip_v_l;
