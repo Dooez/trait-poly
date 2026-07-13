@@ -321,7 +321,7 @@ inline constexpr auto exactly_matches = [] {
     constexpr auto cv_refl = meta::reflect_constant(ExactCv);
 
     using return_type    = [:[] {
-        if (invokable_convert_return<int, m_refl, MethodIdt>)
+        if (invokable_convert_return<impl_invocation_t, ImplMethod, MethodIdt>)
             return substitute(^^method_return_t,
                                  {^^impl_invocation_t, m_refl, ^^typename decltype(arg_ids)::type...});
         return ^^void;
@@ -362,7 +362,7 @@ inline constexpr auto exactly_matches = [] {
 
         if (exact_method or exact_eop_method)
             return true;
-
+        
         if (ExactCv)
             return false;
 
