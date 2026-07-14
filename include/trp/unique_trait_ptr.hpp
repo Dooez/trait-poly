@@ -220,8 +220,17 @@ public:
         return static_cast<Impl*>(detail::extract_obj_ptr(dyn_trait_ref_));
     }
 
-    void release() {
+    [[nodiscard]] auto release() -> void* {
+        auto const ptr = get();
         detail::ref_release(dyn_trait_ref_);
+        return ptr;
+    }
+
+    template<typename Impl>
+    [[nodiscard]] auto release() -> Impl* {
+        auto const ptr = get<Impl>();
+        detail::ref_release(dyn_trait_ref_);
+        return ptr;
     }
 
 private:
