@@ -362,7 +362,7 @@ inline constexpr auto exactly_matches = [] {
 
         if (exact_method or exact_eop_method)
             return true;
-        
+
         if (ExactCv)
             return false;
 

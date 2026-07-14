@@ -87,6 +87,8 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
         tester = std::meta::add_volatile(tester);
     auto ov_idx_targs = std::vector{tester};
     ov_idx_targs.append_range(params);
+    if (not extract<bool>(substitute(^^std::invocable, ov_idx_targs)))
+        return meta::info{};
     auto ov_idx = extract<uZ>(substitute(^^overload_idx, ov_idx_targs));
     return callable_methods[ov_idx];
 }

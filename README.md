@@ -71,8 +71,8 @@ Implementation lookup uses this order:
           arguments specified by the trait method;
         - the invocation is `noexcept` if the trait method is `noexcept`;
         - the return type matches type specified by the trait method:  
-          - matches exactly if trait or method are annotated with <not_implemented>, default behavior;
-          - convertible to if trait or method are annotated with <not_implemented>.  
+          - matches exactly if trait or method are annotated accordingly;
+          - convertible to if trait or method are annotated accordingly, default;
     3. trait method signature with potentially adjusted return type is checked.
        return type is adjusted if the method being checked returns a type diffreent 
        from initial trait signature;
@@ -89,6 +89,32 @@ Implementation lookup uses this order:
 6. Inline trait defaults i.e. static members with matching signature:
    - method         `       auto foo(int) const -> int`
    - inline default `static auto foo(const auto&, int) -> int`
+
+
+The signature requirements are managed via annotations.  
+Annotating a trait only affects direct trait methods requirements.  
+
+Signature requirement annotations completely overwrite higher level annotations,  
+meaning method-level requriements overwrite global and trait signature requirements.
+
+If a method is present in multiple supertraits, the requirements are combined to form a most strict form.  
+This means that a requirement cannot be lessened by redeclaration.
+
+By default a relaxed signature is requied i.e. return type, argument and cv conversion is allowed.  
+Global level signature requirements can be controlled via macros:
+```cpp
+#define TRP_DEFAULT_MATCH_METHOD_RETURN 
+#define TRP_DEFAULT_MATCH_METHOD_ARGS   
+#define TRP_DEFAULT_MATCH_METHOD_CV     
+```
+
+The library provides following annotations:
+`trp::relaxed_signature` - default, least restrictive, requires method to be callable with convertible return type 
+`trp::matching_return_signature` - requires only exact return type
+`trp::matching_args_signature` - requires only exact arguments, allows cv-promotion
+`trp::matching_cv_signature` - requires exact arguments and cv-qualifications
+`trp::exact_signature` - requires exact return and arguments, allows cv-promotion
+`trp::exact_cv_signature` - requires exact return, arguments and cv-qualifications
 
 Overload resolution limitations:
 - Function templates cannot be inspected in C++ 26. 
@@ -243,7 +269,7 @@ qualifiers equal to the `Trait` qualifiers is constructed and invoked.
 This uses native C++ overload resolution for both argument types and cv
 resolution.
 
-Variant uses similar technique, except it is cv-transient, and doesn't use 
+Variant uses similar technique, except it is cv-transient, and doesn't use type erasure and vtable.
 
 ## Limitations
 

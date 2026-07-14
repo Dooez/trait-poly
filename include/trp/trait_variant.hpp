@@ -311,15 +311,14 @@ public:
         }
     }
 
-    template<typename Impl>
-        requires(ImplHolder::template type_count<Impl> == 1)
+    template<unique_alternative_of<trait_variant_impl> Impl>
     constexpr explicit trait_variant_impl(Impl value) noexcept(std::is_nothrow_move_constructible_v<Impl>) {
         constexpr auto index = ImplHolder::template type_index<Impl>;
         extract_union_member(*this).construct(cw<index>, std::move(value));
     }
 
-    template<typename Impl, typename... Args>
-        requires(ImplHolder::template type_count<Impl> == 1)
+    template<unique_alternative_of<trait_variant_impl> Impl, typename... Args>
+        requires(std::is_constructible_v<Impl, Args...>)
     constexpr trait_variant_impl(std::in_place_type_t<Impl>,
                                  Args&&... args) noexcept(std::is_nothrow_constructible_v<Impl, Args...>) {
         constexpr auto index = ImplHolder::template type_index<Impl>;
@@ -361,7 +360,11 @@ public:
                 return *this;
             }
         }
-        std::unreachable();
+        template for (constexpr auto j: idxs) {
+            if (this_union.tag == j)
+                this_union.destroy(j);
+        }
+        return *this;
     }
 
     constexpr trait_variant_impl&
@@ -392,11 +395,14 @@ public:
                 return *this;
             }
         }
-        std::unreachable();
+        template for (constexpr auto j: idxs) {
+            if (this_union.tag == j)
+                this_union.destroy(j);
+        }
+        return *this;
     }
 
-    template<typename Impl>
-        requires(ImplHolder::template type_count<std::remove_cvref_t<Impl>> == 1)
+    template<unique_alternative_of<trait_variant_impl> Impl>
     constexpr trait_variant_impl& operator=(Impl&& other) {
         using impl_t             = std::remove_cvref_t<Impl>;
         constexpr auto index     = cw<ImplHolder::template type_index<impl_t>>;
@@ -553,7 +559,7 @@ constexpr auto emplace(Var& var, Args&&... args) -> decltype(auto) {
 }
 
 template<typename T, detail::var::any_trait_variant Var, typename... Args>
-    requires detail::var::unique_alternative_of<T, Var>
+    requires detail::var::unique_alternative_of<T, Var> and std::is_constructible_v<T, Args...>
 constexpr auto emplace(Var& var, Args&&... args) -> T& {
     constexpr auto i = detail::var::variant_alternative_index<T, Var>;
     return emplace<i>(var, std::forward<Args>(args)...);

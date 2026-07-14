@@ -156,7 +156,7 @@ template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
 
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
-auto is_holding_type(shared_trait_ptr<Trait> const& ptr) -> bool {
+[[nodiscard]] auto is_holding_type(shared_trait_ptr<Trait> const& ptr) -> bool {
     return ptr and is_holding_type<Impl>(*ptr);
 }
 
@@ -187,7 +187,7 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
 }
 
 template<any_trait Trait, implements_trait<Trait> Impl, typename... Args>
-auto make_shared_trait(Args&&... args) {
+[[nodiscard]] auto make_shared_trait(Args&&... args) {
     return allocate_shared_trait<Trait, Impl>(std::allocator<std::byte>{}, std::forward<Args>(args)...);
 }
 }    // namespace trp
