@@ -3,6 +3,7 @@
 #include "detail/cvts_trait_ref.hpp"
 #endif
 #include <type_traits>
+#include <exception>
 namespace trp {
 
 namespace detail::var {
