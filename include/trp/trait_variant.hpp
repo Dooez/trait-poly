@@ -158,7 +158,7 @@ struct cvo_invoker;
                 }                                                                                   \
             }                                                                                       \
             if constexpr (Quals.is_noexcept)                                                        \
-                std::unreachable();                                                                 \
+                std::terminate();                                                                   \
             else                                                                                    \
                 throw std::bad_variant_access{};                                                    \
         }                                                                                           \
@@ -326,7 +326,8 @@ public:
     }
 
     template<uZ I, typename... Args>
-        requires(I < ImplHolder::count and std::is_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>)
+        requires(I < ImplHolder::count and
+                 std::is_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>)
     constexpr trait_variant_impl(std::in_place_index_t<I>, Args&&... args) noexcept(
         std::is_nothrow_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>) {
         extract_union_member(*this).construct(cw<I>, std::forward<Args>(args)...);

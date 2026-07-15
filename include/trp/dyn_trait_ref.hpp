@@ -15,7 +15,7 @@ struct dyn_trait_ref;
  */
 template<any_trait Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-[[nodiscard]] auto trait_cast(dyn_trait_ref<Trait> const& ref) -> dyn_trait_ref<Supertrait> noexcept{
+[[nodiscard]] auto trait_cast(dyn_trait_ref<Trait> const& ref) noexcept -> dyn_trait_ref<Supertrait> {
     return ref;
 }
 /**
@@ -29,7 +29,7 @@ template<any_trait Supertrait, typename Trait>
  * @tparam Impl  referenced value's type.
  */
 template<any_trait Trait, implements_trait<Trait> Impl, typename U>
-[[nodiscard]] auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<Trait> noexcept{
+[[nodiscard]] auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<Trait> {
     return {&detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>,
             detail::extract_obj_ptr(ref)};
 }
@@ -38,7 +38,7 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename U>
  */
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
-[[nodiscard]] auto is_holding_type(dyn_trait_ref<Trait> const& ref) -> bool noexcept{
+[[nodiscard]] auto is_holding_type(dyn_trait_ref<Trait> const& ref) noexcept -> bool {
     return detail::extract_obj_ptr(ref)    //
            and detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
 }
@@ -340,7 +340,7 @@ class dyn_trait_ref : public detail::dyn_trait_ref_alias<Trait> {
     : detail::dyn_trait_ref_alias<Trait>(
           &detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>, obj){};
 
-    template<any_trait T, implements_trait<T> Impl, any_trait U>
+    template<any_trait T, implements_trait<T> Impl, typename U>
     friend auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<T>;
 
 public:

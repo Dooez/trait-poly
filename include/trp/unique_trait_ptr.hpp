@@ -176,7 +176,7 @@ public:
     unique_trait_ptr() = default;
     unique_trait_ptr(unique_trait_ptr&& other) noexcept
     : dyn_trait_ref_{other.dyn_trait_ref_} {
-        other.release();
+        (void)other.release();
     }
     unique_trait_ptr& operator=(unique_trait_ptr&& other) noexcept {
         if (this == &other)
@@ -184,7 +184,7 @@ public:
         if (holds_value())
             detail::ref_default_delete(dyn_trait_ref_);
         detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
-        other.release();
+        (void)other.release();
         return *this;
     };
 
@@ -195,7 +195,7 @@ public:
         if (not holds_value())
             return;
         detail::ref_default_delete(dyn_trait_ref_);
-        release();
+        (void)release();
     }
     explicit operator bool() const {
         return holds_value();

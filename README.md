@@ -134,8 +134,9 @@ Overload resolution limitations:
 The non-type erased handle is `trp::trait_variant<Trait, Alternatives...>`.
 It is owning wrapper with value semantics.
 
-To prevent clashing with method object the following free functions are provided:
+Calling noexcept trait methods from a valueless variant calls `std::terminate()`.
 
+To prevent clashing with method object the following free functions are provided:
 - `trp::index(Var const& var) -> tag_t` returns index of the current alternative
 - `trp::valueless_by_exception(Var const& var) -> bool` returns false if variant holds a value
 - `trp::emplace<I>(Var& var, Args&&... args)` constructs an alternative I in place
