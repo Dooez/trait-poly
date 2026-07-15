@@ -326,7 +326,7 @@ public:
     }
 
     template<uZ I, typename... Args>
-        requires(I < ImplHolder::count)
+        requires(I < ImplHolder::count and std::is_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>)
     constexpr trait_variant_impl(std::in_place_index_t<I>, Args&&... args) noexcept(
         std::is_nothrow_constructible_v<typename[:ImplHolder::type_infos[I]:], Args...>) {
         extract_union_member(*this).construct(cw<I>, std::forward<Args>(args)...);
@@ -524,16 +524,17 @@ using trait_variant_alias = [:[] {
     }
 }():];
 
-template<any_trait_variant Var>
-inline constexpr auto variant_size = [:alternative_union_of<Var>::value:] ::count;
-template<uZ I, any_trait_variant Var>
-    requires(I < variant_size<Var>)
-using variant_alternative = [:[:alternative_union_of<Var>::value:] ::type_infos[I]:];
 template<typename T, any_trait_variant Var>
 inline constexpr auto
     variant_alternative_index = [:alternative_union_of<Var>::value:] ::template type_index<T>;
-
 }    // namespace detail::var
+//
+template<detail::var::any_trait_variant Var>
+inline constexpr auto variant_size = [:detail::var::alternative_union_of<Var>::value:] ::count;
+template<uZ I, detail::var::any_trait_variant Var>
+    requires(I < variant_size<Var>)
+using variant_alternative = [:[:detail::var::alternative_union_of<Var>::value:] ::type_infos[I]:];
+
 
 template<any_trait Trait, implements_trait<Trait>... Impls>
 class trait_variant : public detail::var::trait_variant_alias<Trait, Impls...> {
@@ -553,7 +554,7 @@ template<detail::var::any_trait_variant Var>
 }
 
 template<uZ I, detail::var::any_trait_variant Var, typename... Args>
-    requires(I < detail::var::variant_size<Var>)
+    requires(I < variant_size<Var> and std::is_constructible_v<variant_alternative<I, Var>, Args...>)
 constexpr auto emplace(Var& var, Args&&... args) -> decltype(auto) {
     return trait_variant_emplace<I>(var, std::forward<Args>(args)...);
 }
@@ -566,7 +567,7 @@ constexpr auto emplace(Var& var, Args&&... args) -> T& {
 }
 
 template<uZ I, detail::var::any_trait_variant_cvref Variant>
-    requires(I < detail::var::variant_size<std::remove_cvref_t<Variant>>)
+    requires(I < variant_size<std::remove_cvref_t<Variant>>)
 [[nodiscard]] constexpr auto get(Variant&& var) -> decltype(auto) {
     return trait_variant_get<I>(std::forward<Variant>(var));
 }
@@ -586,7 +587,7 @@ template<typename T, detail::var::any_trait_variant Var>
 }
 
 template<uZ I, detail::var::any_trait_variant_cvref Variant>
-    requires(I < detail::var::variant_size<std::remove_cvref_t<Variant>>)
+    requires(I < variant_size<std::remove_cvref_t<Variant>>)
 [[nodiscard]] constexpr auto get_if(Variant* var) noexcept {
     return trait_variant_get_if<I>(var);
 }
@@ -604,12 +605,12 @@ namespace std {
 
 template<typename Var>
     requires trp::detail::var::any_trait_variant<Var>
-struct variant_size<Var> : std::integral_constant<std::size_t, trp::detail::var::variant_size<Var>> {};
+struct variant_size<Var> : std::integral_constant<std::size_t, trp::variant_size<Var>> {};
 
 template<std::size_t I, typename Var>
-    requires trp::detail::var::any_trait_variant<Var> and (I < trp::detail::var::variant_size<Var>)
+    requires trp::detail::var::any_trait_variant<Var> and (I < trp::variant_size<Var>)
 struct variant_alternative<I, Var> {
-    using type = trp::detail::var::variant_alternative<I, Var>;
+    using type = trp::variant_alternative<I, Var>;
 };
 
 }    // namespace std

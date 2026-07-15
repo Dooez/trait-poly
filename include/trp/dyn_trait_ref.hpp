@@ -7,19 +7,38 @@ namespace trp {
 template<any_trait Trait>
 struct dyn_trait_ref;
 
-template<typename Supertrait, any_trait Trait>
+/**
+ * @brief Converts reference from one trait to it's explicit supertrait. 
+ * The resulting vtable uses entries from vtable of `Impl` for `Supertrait`.
+ *
+ * @tparam Supertrait target trait.
+ */
+template<any_trait Supertrait, typename Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
-[[nodiscard]] auto trait_cast(dyn_trait_ref<Trait> const& ref) -> dyn_trait_ref<Supertrait> {
+[[nodiscard]] auto trait_cast(dyn_trait_ref<Trait> const& ref) -> dyn_trait_ref<Supertrait> noexcept{
     return ref;
 }
-template<any_trait Trait, implements_trait<Trait> Impl, any_trait U>
-[[nodiscard]] auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<Trait> {
+/**
+ * @brief Converts reference from one trait to other trait. 
+ * The resulting vtable always matches vtable of `Impl` for `Trait`,
+ * even if `Trait` is an explicit supertrait of `U`.
+ * This differs from `trait_cast` without explicit `Impl` parameter.
+ * If the underlying object's type is not `Impl`, the behavior is undefined.
+ *
+ * @tparam Trait target trait.
+ * @tparam Impl  referenced value's type.
+ */
+template<any_trait Trait, implements_trait<Trait> Impl, typename U>
+[[nodiscard]] auto trait_cast(dyn_trait_ref<U> const& ref) -> dyn_trait_ref<Trait> noexcept{
     return {&detail::trait_vtable_for<std::remove_cv_t<Trait>, std::remove_cv_t<Trait>, Impl>,
             detail::extract_obj_ptr(ref)};
 }
+/**
+ * @brief Checks if the referenced value's type is Impl.
+ */
 template<typename Impl, any_trait Trait>
     requires implements_trait<Impl, Trait>
-[[nodiscard]] auto is_holding_type(dyn_trait_ref<Trait> const& ref) -> bool {
+[[nodiscard]] auto is_holding_type(dyn_trait_ref<Trait> const& ref) -> bool noexcept{
     return detail::extract_obj_ptr(ref)    //
            and detail::extract_vtable_ptr(ref)->id_ptr == &detail::unique_id_struct<Impl>::value;
 }

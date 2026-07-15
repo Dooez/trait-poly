@@ -249,7 +249,7 @@ public:
 
     operator alloc_unique_trait_ptr<Trait>() && {    // NOLINT(*explicit*)
         auto new_ptr = alloc_unique_trait_ptr<Trait>(dyn_trait_ref_);
-        release();
+        (void)release();
         return new_ptr;
     }
 };
@@ -260,7 +260,7 @@ template<typename Supertrait, typename Trait>
     if (not ptr)
         return {};
     auto new_ptr = unique_trait_ptr<Supertrait>(trait_cast<Supertrait>(ptr.dyn_trait_ref_));
-    ptr.release();
+    (void)ptr.release();
     return new_ptr;
 }
 template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
@@ -268,7 +268,7 @@ template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
     if (not ptr or not is_holding_type<Impl>(ptr))
         return {};
     auto new_ptr = unique_trait_ptr<T>(trait_cast<T, Impl>(ptr.dyn_trait_ref_));
-    ptr.release();
+    (void)ptr.release();
     return new_ptr;
 }
 template<typename Impl, any_trait Trait>
