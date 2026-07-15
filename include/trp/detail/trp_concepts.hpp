@@ -213,7 +213,7 @@ inline constexpr auto matching_id_direct_public_members = std::define_static_arr
     members_of(^^Impl, unprivileged)    //
     | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; }));
 
-template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodIdt>
+template<typename Impl, meta::info ImplMethod, any_method_idt MethodIdt>
 inline constexpr bool invokable_exact_return = [] {
     auto [... arg_ids]      = MethodIdt::param_identities;
     using return_type       = MethodIdt::return_type;
@@ -249,7 +249,7 @@ inline constexpr bool invokable_exact_return = [] {
         }
     }
 }();
-template<non_ref Impl, meta::info ImplMethod, any_method_idt MethodIdt>
+template<typename Impl, meta::info ImplMethod, any_method_idt MethodIdt>
 inline constexpr bool invokable_convert_return = [] {
     auto [... arg_ids]      = MethodIdt::param_identities;
     using return_type       = MethodIdt::return_type;
@@ -294,7 +294,7 @@ inline constexpr auto method_signature_requirements = [] -> method_signature_req
     return {};
 }();
 
-template<non_ref Impl, meta::info ImplMethod, typename... Args>
+template<typename Impl, meta::info ImplMethod, typename... Args>
 using method_return_t = [:[] {
     if constexpr (is_template(ImplMethod)) {
         return ^^decltype(std::declval<Impl>().template[:ImplMethod:](std::declval<Args>()...));
@@ -302,6 +302,7 @@ using method_return_t = [:[] {
         return ^^decltype(std::declval<Impl>().[:ImplMethod:](std::declval<Args>()...));
     }
 }():];
+
 template<typename T>
 inline constexpr auto call_operators_of =
     std::define_static_array(members_of(^^T, unprivileged) | stdv::filter([](auto m) {
@@ -311,9 +312,15 @@ inline constexpr auto call_operators_of =
 
 
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv>
-inline constexpr auto exactly_matches = [] {
+inline constexpr auto parameters_match = [] {
     auto [... arg_ids]      = MethodIdt::param_identities;
-    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
+    auto const add_method_cvref = [] (meta::info r){
+        r = MethodIdt::add_obj_cv(r);
+        if (not MethodIdt::is_rvalue)
+            r = add_lvalue_reference(r);
+        return r;
+    };
+    using impl_invocation_t = [:add_method_cvref(^^Impl):];
 
     // Return type matching is performed earlier.
     // This way the return type rules are decoupled from argument rules.
@@ -321,34 +328,33 @@ inline constexpr auto exactly_matches = [] {
     constexpr auto cv_refl = meta::reflect_constant(ExactCv);
 
     using return_type    = [:[] {
+        if (is_function(ImplMethod))
+            return return_type_of(ImplMethod);
         if (invokable_convert_return<impl_invocation_t, ImplMethod, MethodIdt>)
             return substitute(^^method_return_t,
                                  {^^impl_invocation_t, m_refl, ^^typename decltype(arg_ids)::type...});
         return ^^void;
     }():];
     using exact_type     = make_function_member_type<false,
-                                                     impl_invocation_t,
+                                                     typename MethodIdt::template as_obj<Impl>,
                                                      return_type,
                                                      MethodIdt::is_noexcept,
                                                      typename decltype(arg_ids)::type...>;
     using exact_eop_type = make_function_member_type<true,
-                                                     impl_invocation_t&,
+                                                     impl_invocation_t&&,
                                                      return_type,
                                                      MethodIdt::is_noexcept,
                                                      typename decltype(arg_ids)::type...>;
 
     // noexcept promotion in pointer conversion is automatic
 
-    // possibly reference promotion for non-eop methods for `foo() => foo() &` and `foo() => foo() &&`
-    // not needed for now since reference qualification for trait methods is explicitly not allowed
-
     // add static function resolution?
     if constexpr (not is_function(ImplMethod) and not is_function_template(ImplMethod)) {
         auto const call_ops        = subextract_info_span(^^call_operators_of, {type_of(ImplMethod)});
-        auto const method_inv_type = copy_cv_to(^^impl_invocation_t, type_of(ImplMethod));
+        auto const method_inv_type = copy_cv_to(remove_reference(^^impl_invocation_t), type_of(ImplMethod));
         return stdr::any_of(call_ops, [=](auto op) {
             return extract<bool>(substitute(
-                ^^exactly_matches, {method_inv_type, meta::reflect_constant(op), ^^MethodIdt, cv_refl}));
+                ^^parameters_match, {method_inv_type, meta::reflect_constant(op), ^^MethodIdt, cv_refl}));
         });
     } else {
         auto const exact_method = (dealias(^^exact_type) != ^^void)    //
@@ -368,21 +374,21 @@ inline constexpr auto exactly_matches = [] {
 
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
         if constexpr (not meta::is_const(remove_reference(^^impl_invocation_t)) and
-                      invokable_convert_return<impl_invocation_t const, ImplMethod, MethodIdt>) {
+                      invokable_convert_return<typename [:add_method_cvref(^^Impl const):], ImplMethod, MethodIdt>) {
             auto const exact_method     = extract<bool>(substitute(
-                ^^exactly_matches, {add_const(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+                ^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
             auto const exact_eop_method = extract<bool>(substitute(
-                ^^exactly_matches, {add_const(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+                ^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
             if (exact_method or exact_eop_method)
                 return true;
         }
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
         if constexpr (not meta::is_volatile(remove_reference(^^impl_invocation_t)) and
-                      invokable_convert_return<impl_invocation_t volatile, ImplMethod, MethodIdt>) {
+                      invokable_convert_return<typename [:add_method_cvref(^^Impl volatile):], ImplMethod, MethodIdt>) {
             auto const exact_method     = extract<bool>(substitute(
-                ^^exactly_matches, {add_volatile(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+                ^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
             auto const exact_eop_method = extract<bool>(substitute(
-                ^^exactly_matches, {add_volatile(^^impl_invocation_t), m_refl, ^^MethodIdt, cv_refl}));
+                ^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
             if (exact_method or exact_eop_method)
                 return true;
         }

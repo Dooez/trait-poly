@@ -147,7 +147,7 @@ consteval auto find_trait_method_impl(meta::info                      impl,
 
     for (auto const m: callable_mems) {
         auto const matches = extract<bool>(
-            substitute(^^exactly_matches,
+            substitute(^^parameters_match,
                        {impl, reflect_constant(m), method_idt, meta::reflect_constant(reqs.exact_cv)}));
         if (matches)
             return m;

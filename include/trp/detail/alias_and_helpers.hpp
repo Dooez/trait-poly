@@ -147,6 +147,19 @@ struct method_identity_t {
             inf = add_rvalue_reference(inf);
         return inf;
     };
+    template<typename T>
+    using as_obj = [:add_obj_cv(^^T):];
+
+    template<non_ref T>
+    using as_obj_cvref = [:[]{
+        auto o = add_obj_cv(^^T);
+        if (is_rvalue)
+            return add_rvalue_reference(o);
+        if (is_lvalue)
+            return add_rvalue_reference(o);
+        return o;
+    }():];
+
     using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(is_noexcept) -> Ret;
 };
 
@@ -202,8 +215,7 @@ using make_function_member_type = [:[] {
     TRP_FQUAL_FPTR(, , )
 #undef TRP_FQUAL_FPTR
 #undef TRP_FQUAL_FPTR_NONEOP
-}    // namespace detail
-                                   ():];
+}():];
 
 consteval auto method_identity(meta::info method_info) -> meta::info {
     auto is_nsmf = is_function(method_info)                 //

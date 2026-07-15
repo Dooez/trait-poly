@@ -2,8 +2,8 @@
 #ifndef TRP_GODBOLT
 #include "detail/cvts_trait_ref.hpp"
 #endif
-#include <type_traits>
 #include <exception>
+#include <type_traits>
 namespace trp {
 
 namespace detail::var {
@@ -312,9 +312,11 @@ public:
         }
     }
 
-    template<unique_alternative_of<trait_variant_impl> Impl>
-    constexpr explicit trait_variant_impl(Impl value) noexcept(std::is_nothrow_move_constructible_v<Impl>) {
-        constexpr auto index = ImplHolder::template type_index<Impl>;
+    template<typename Impl>
+        requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl>
+    constexpr explicit trait_variant_impl(Impl&& value) noexcept(std::is_nothrow_move_constructible_v<std::remove_cvref_t<Impl>>) {
+        using impl_t = std::remove_cvref_t<Impl>;
+        constexpr auto index = ImplHolder::template type_index<impl_t>;
         extract_union_member(*this).construct(cw<index>, std::move(value));
     }
 
@@ -404,7 +406,8 @@ public:
         return *this;
     }
 
-    template<unique_alternative_of<trait_variant_impl> Impl>
+    template<typename Impl>
+        requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl>
     constexpr trait_variant_impl& operator=(Impl&& other) {
         using impl_t             = std::remove_cvref_t<Impl>;
         constexpr auto index     = cw<ImplHolder::template type_index<impl_t>>;
