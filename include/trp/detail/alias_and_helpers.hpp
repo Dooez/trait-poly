@@ -150,16 +150,6 @@ struct method_identity_t {
     template<typename T>
     using as_obj = [:add_obj_cv(^^T):];
 
-    template<non_ref T>
-    using as_obj_cvref = [:[]{
-        auto o = add_obj_cv(^^T);
-        if (is_rvalue)
-            return add_rvalue_reference(o);
-        if (is_lvalue)
-            return add_rvalue_reference(o);
-        return o;
-    }():];
-
     using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(is_noexcept) -> Ret;
 };
 
