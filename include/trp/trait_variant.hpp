@@ -317,7 +317,7 @@ public:
     constexpr explicit trait_variant_impl(Impl&& value) noexcept(std::is_nothrow_move_constructible_v<std::remove_cvref_t<Impl>>) {
         using impl_t = std::remove_cvref_t<Impl>;
         constexpr auto index = ImplHolder::template type_index<impl_t>;
-        extract_union_member(*this).construct(cw<index>, std::move(value));
+        extract_union_member(*this).construct(cw<index>, std::forward<Impl>(value));
     }
 
     template<unique_alternative_of<trait_variant_impl> Impl, typename... Args>

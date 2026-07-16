@@ -107,7 +107,7 @@ private:
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(alloc_unique_trait_ptr<T>&& ptr) -> alloc_unique_trait_ptr<S>;
 
-    template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
+    template<any_trait T, implements_trait<T> Impl, typename U>
     friend auto trait_cast(alloc_unique_trait_ptr<U>&& ptr) -> alloc_unique_trait_ptr<T>;
 };
 
@@ -121,7 +121,7 @@ template<typename Supertrait, typename Trait>
     ptr.release();
     return new_ptr;
 }
-template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
+template<any_trait T, implements_trait<T> Impl, typename U>
 [[nodiscard]] auto trait_cast(alloc_unique_trait_ptr<U>&& ptr) -> alloc_unique_trait_ptr<T> {
     if (not ptr or not is_holding_type<Impl>(ptr))
         return {};
@@ -226,19 +226,12 @@ public:
         return ptr;
     }
 
-    template<typename Impl>
-    [[nodiscard]] auto release() -> Impl* {
-        auto const ptr = get<Impl>();
-        detail::ref_release(dyn_trait_ref_);
-        return ptr;
-    }
-
 private:
     template<typename S, typename T>
         requires explicit_supertrait_of<S, T>
     friend auto trait_cast(unique_trait_ptr<T>&& ptr) -> unique_trait_ptr<S>;
 
-    template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
+    template<any_trait T, implements_trait<T> Impl, typename U>
     friend auto trait_cast(unique_trait_ptr<U>&& ptr) -> unique_trait_ptr<T>;
 
 public:
@@ -263,7 +256,7 @@ template<typename Supertrait, typename Trait>
     (void)ptr.release();
     return new_ptr;
 }
-template<any_trait T, implements_trait<T> Impl, supertrait_of<T> U>
+template<any_trait T, implements_trait<T> Impl, typename U>
 [[nodiscard]] auto trait_cast(unique_trait_ptr<U>&& ptr) -> unique_trait_ptr<T> {
     if (not ptr or not is_holding_type<Impl>(ptr))
         return {};
