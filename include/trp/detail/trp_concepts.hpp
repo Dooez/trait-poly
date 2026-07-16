@@ -313,8 +313,8 @@ inline constexpr auto call_operators_of =
 
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv>
 inline constexpr auto parameters_match = [] {
-    auto [... arg_ids]      = MethodIdt::param_identities;
-    auto const add_method_cvref = [] (meta::info r){
+    auto [... arg_ids]          = MethodIdt::param_identities;
+    auto const add_method_cvref = [](meta::info r) {
         r = MethodIdt::add_obj_cv(r);
         if (not MethodIdt::is_rvalue)
             r = add_lvalue_reference(r);
@@ -374,21 +374,23 @@ inline constexpr auto parameters_match = [] {
 
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
         if constexpr (not meta::is_const(remove_reference(^^impl_invocation_t)) and
-                      invokable_convert_return<typename [:add_method_cvref(^^Impl const):], ImplMethod, MethodIdt>) {
-            auto const exact_method     = extract<bool>(substitute(
-                ^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
-            auto const exact_eop_method = extract<bool>(substitute(
-                ^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
+                      invokable_convert_return<
+                          typename[:add_method_cvref(^^Impl const):], ImplMethod, MethodIdt>) {
+            auto const exact_method = extract<bool>(
+                substitute(^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
+            auto const exact_eop_method = extract<bool>(
+                substitute(^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
             if (exact_method or exact_eop_method)
                 return true;
         }
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
         if constexpr (not meta::is_volatile(remove_reference(^^impl_invocation_t)) and
-                      invokable_convert_return<typename [:add_method_cvref(^^Impl volatile):], ImplMethod, MethodIdt>) {
-            auto const exact_method     = extract<bool>(substitute(
-                ^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
-            auto const exact_eop_method = extract<bool>(substitute(
-                ^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
+                      invokable_convert_return<
+                          typename[:add_method_cvref(^^Impl volatile):], ImplMethod, MethodIdt>) {
+            auto const exact_method = extract<bool>(
+                substitute(^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
+            auto const exact_eop_method = extract<bool>(
+                substitute(^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
             if (exact_method or exact_eop_method)
                 return true;
         }
