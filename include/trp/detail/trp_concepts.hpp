@@ -313,14 +313,15 @@ inline constexpr auto call_operators_of =
 
 template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv>
 inline constexpr auto parameters_match = [] {
-    auto [... arg_ids]          = MethodIdt::param_identities;
-    auto const add_method_cvref = [](meta::info r) {
+    auto [... arg_ids]              = MethodIdt::param_identities;
+    constexpr auto add_method_cvref = [](meta::info r) {
         r = MethodIdt::add_obj_cv(r);
         if (not MethodIdt::is_rvalue)
             r = add_lvalue_reference(r);
         return r;
     };
-    using impl_invocation_t = [:add_method_cvref(^^Impl):];
+    constexpr auto invokation_info = add_method_cvref(^^Impl);
+    using impl_invocation_t        = [:invokation_info:];
 
     // Return type matching is performed earlier.
     // This way the return type rules are decoupled from argument rules.
