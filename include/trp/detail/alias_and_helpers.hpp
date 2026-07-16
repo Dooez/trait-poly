@@ -349,7 +349,7 @@ struct method_signature_requirements_t {
 consteval auto extract_signature_req(meta::info r) -> std::optional<method_signature_requirements_t> {
     auto const annotations =
         annotations_of(r)                                                                         //
-        | stdv::filter([](auto r) { return type_of(r) == ^^method_signature_requirements_t; })    //
+        | stdv::filter([](auto r) { return remove_cv(type_of(r)) == ^^method_signature_requirements_t; })    //
         | stdr::to<std::vector>();
     if (annotations.size() > 1)
         throw "More than one method requirements annoation.";

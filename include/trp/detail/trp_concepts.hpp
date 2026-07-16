@@ -359,13 +359,17 @@ inline constexpr auto parameters_match = [] {
         });
     } else {
         auto const exact_method = (dealias(^^exact_type) != ^^void)    //
-            and requires(exact_type mptr) {
+            and((is_template(ImplMethod) and requires(exact_type mptr) {
+                    { mptr = &template[:ImplMethod:] };
+                }) or requires(exact_type mptr) {
                 { mptr = &[:ImplMethod:] };
-            };
+            });
         auto const exact_eop_method = (dealias(^^exact_eop_type) != ^^void)    //
-            and requires(exact_eop_type mptr) {
+            and((is_template(ImplMethod) and requires(exact_eop_type mptr) {
+                    { mptr = &template[:ImplMethod:] };
+                }) or requires(exact_eop_type mptr) {
                 { mptr = &[:ImplMethod:] };
-            };
+            });
 
         if (exact_method or exact_eop_method)
             return true;
