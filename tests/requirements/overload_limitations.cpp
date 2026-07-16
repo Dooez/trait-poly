@@ -69,6 +69,7 @@ static_assert(trp::implements_trait<normal_overloads_impl, trait>);
 static_assert(not trp::implements_trait<template_impl, relaxed_trait>);
 // accepts because strict return discards the convertible template before overload resolution.
 static_assert(    trp::implements_trait<template_impl, trait>);
+// need to add test where template can be resolved exactly
 
 // native C++ sees the using declaration.
 static_assert(requires(using_decl_impl impl, int v) { impl.pick(v); });
