@@ -64,7 +64,7 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
     if (std::size(callable_methods) == 1)
         return callable_methods[0];
 
-    auto const params = extract_method_params(method_idt);
+    auto const params = extract_method_param_types(method_idt);
     auto const quals  = extract_method_qualifiers(method_idt);
 
     auto proxies = std::vector<meta::info>{};

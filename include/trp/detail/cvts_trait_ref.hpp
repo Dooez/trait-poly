@@ -87,7 +87,7 @@ struct cvts_cvo_invoker;
 #define TRP_ASSERT_INTERCONVERTIBLE
 #endif
 
-#define TRP_CV_OVERLOAD(Req, C, V)                                                                          \
+#define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                                     \
     template<non_cvref           TRef,                                                                      \
              non_cvref           MethodHolder,                                                              \
              non_cvref           MethodInvoker,                                                             \
@@ -102,11 +102,14 @@ struct cvts_cvo_invoker;
                             MethodHolder,                                                                   \
                             MethodInvoker,                                                                  \
                             cvts_overload_spec<Impl, Method, method_identity_t<Id, Quals, Ret, Args...>>> { \
-        auto operator()(Args... args) C V noexcept(Quals.is_noexcept) -> Ret {                              \
+        auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                          \
             if constexpr (explicit_method<> != meta::info{}) {                                              \
                 return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);                 \
             } else {                                                                                        \
-                return extract_obj_ptr(get_trait_ref())->[:Method:](std::forward<Args>(args)...);           \
+                using effective_ref_t = [:Quals.is_rvalue ? add_rvalue_reference(^^Impl)                    \
+                                                          : add_lvalue_reference(^^Impl):];                 \
+                return static_cast<effective_ref_t>(*extract_obj_ptr(get_trait_ref())).[:Method:](          \
+                    std::forward<Args>(args)...);                                                           \
             }                                                                                               \
         }                                                                                                   \
                                                                                                             \
@@ -147,10 +150,24 @@ struct cvts_cvo_invoker;
         }                                                                                                   \
     };
 
-TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile, , );
-TRP_CV_OVERLOAD(Quals.is_const and not Quals.is_volatile, const, );
-TRP_CV_OVERLOAD(not Quals.is_const and Quals.is_volatile, , volatile);
-TRP_CV_OVERLOAD(Quals.is_const and Quals.is_volatile, const, volatile);
+// clang-format off
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile and not Quals.is_ref(),       ,         ,   );
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile and not Quals.is_ref(),  const,         ,   );
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and not Quals.is_ref(),       , volatile,   );
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and not Quals.is_ref(),  const, volatile,   );
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile and     Quals.is_lvalue,      ,         , & );
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile and     Quals.is_lvalue, const,         , & );
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and     Quals.is_lvalue,      , volatile, & );
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_lvalue, const, volatile, & );
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile and     Quals.is_rvalue,      ,         , &&);
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile and     Quals.is_rvalue, const,         , &&);
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and     Quals.is_rvalue,      , volatile, &&);
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_rvalue, const, volatile, &&);
+
+// clang-format on
 #undef TRP_CV_OVERLOAD
 #undef TRP_ASSERT_INTERCONVERTIBLE
 

@@ -127,7 +127,7 @@ struct cvo_invoker;
 #define TRP_ASSERT_INTERCONVERTIBLE
 #endif
 
-#define TRP_CV_OVERLOAD(Req, C, V)                                                                  \
+#define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                             \
     template<non_cvref           MethodHolder,                                                      \
              non_cvref           MethodInvoker,                                                     \
              non_cvref           Variant,                                                           \
@@ -140,7 +140,7 @@ struct cvo_invoker;
     struct cvo_invoker<MethodHolder,                                                                \
                        MethodInvoker,                                                               \
                        cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>> {      \
-        auto operator()(Args... args) C V noexcept(Quals.is_noexcept) -> Ret {                      \
+        auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                  \
             using impl_holder          = std::remove_cvref_t<decltype(get_union_ref())>;            \
             auto const            tag  = get_union_ref().tag;                                       \
             static constexpr auto idxs = make_cw_idxs<impl_holder::count>();                        \
@@ -191,10 +191,26 @@ struct cvo_invoker;
         }                                                                                           \
     };
 
-TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile, , );
-TRP_CV_OVERLOAD(Quals.is_const and not Quals.is_volatile, const, );
-TRP_CV_OVERLOAD(not Quals.is_const and Quals.is_volatile, , volatile);
-TRP_CV_OVERLOAD(Quals.is_const and Quals.is_volatile, const, volatile);
+//clang-format off
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile and not Quals.is_ref(),       ,         ,   );
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile and not Quals.is_ref(),  const,         ,   );
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and not Quals.is_ref(),       , volatile,   );
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and not Quals.is_ref(),  const, volatile,   );
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile and     Quals.is_lvalue,      ,         , & );
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile and     Quals.is_lvalue, const,         , & );
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and     Quals.is_lvalue,      , volatile, & );
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_lvalue, const, volatile, & );
+
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile and     Quals.is_rvalue,      ,         , &&);
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile and     Quals.is_rvalue, const,         , &&);
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and     Quals.is_rvalue,      , volatile, &&);
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_rvalue, const, volatile, &&);
+
+//clang-format on
+
+
+
 #undef TRP_CV_OVERLOAD
 #undef TRP_ASSERT_INTERCONVERTIBLE
 
@@ -314,8 +330,9 @@ public:
 
     template<typename Impl>
         requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl>
-    constexpr explicit trait_variant_impl(Impl&& value) noexcept(std::is_nothrow_move_constructible_v<std::remove_cvref_t<Impl>>) {
-        using impl_t = std::remove_cvref_t<Impl>;
+    constexpr explicit trait_variant_impl(Impl&& value) noexcept(
+        std::is_nothrow_move_constructible_v<std::remove_cvref_t<Impl>>) {
+        using impl_t         = std::remove_cvref_t<Impl>;
         constexpr auto index = ImplHolder::template type_index<impl_t>;
         extract_union_member(*this).construct(cw<index>, std::forward<Impl>(value));
     }

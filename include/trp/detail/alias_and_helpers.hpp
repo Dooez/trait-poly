@@ -296,7 +296,7 @@ consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t 
     return extract<method_qualifiers_t>(template_arguments_of(idt)[1]);
 }
 
-consteval auto extract_method_params(meta::info idt) -> std::span<meta::info const> {
+consteval auto extract_method_param_types(meta::info idt) -> std::span<meta::info const> {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
     return std::define_static_array(template_arguments_of(idt) | stdv::drop(3));
@@ -333,7 +333,6 @@ static consteval auto add_method_obj_cvref(meta::info method, meta::info inf) {
         inf = add_rvalue_reference(inf);
     return inf;
 };
-
 
 template<typename T>
 concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
