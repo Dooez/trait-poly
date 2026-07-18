@@ -289,7 +289,7 @@ inline constexpr char const* identifier_of_method = MethodIdt::identifier;
 consteval auto extract_method_identifier(meta::info idt) -> char const* {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    // return extract<char const*>(template_arguments_of(idt)[0]); // clang can't handle 
+    // return extract<char const*>(template_arguments_of(idt)[0]); // clang can't handle
     return extract<char const*>(substitute(^^identifier_of_method, {idt}));
 }
 

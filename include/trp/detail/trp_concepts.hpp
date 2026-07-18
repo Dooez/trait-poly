@@ -325,19 +325,16 @@ concept extractable_template = requires(MPtr ptr) {
 
 consteval auto check_parameter_match(
     meta::info impl, meta::info impl_method, meta::info method_idt, bool exact_cv, bool exact_ref) -> bool {
-    auto trait_params = std::span<meta::info const>();
-    auto quals        = method_qualifiers_t();
-    trait_params      = extract_method_param_types(method_idt);
-    quals             = extract_method_qualifiers(method_idt);
+    auto const trait_params = extract_method_param_types(method_idt);
+    auto const quals        = extract_method_qualifiers(method_idt);
 
-    auto add_method_cvref = [=](meta::info r) {
+    auto const add_method_cvref = [=](meta::info r) {
         r = add_method_obj_cv(method_idt, r);
         if (not quals.is_rvalue)
             r = add_lvalue_reference(r);
         return r;
     };
-    meta::info invokation_info;
-    invokation_info = add_method_cvref(impl);
+    auto const invokation_info = add_method_cvref(impl);
 
     // Return type matching is performed earlier.
     // This way the return type rules are decoupled from argument rules.

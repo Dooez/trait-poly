@@ -147,9 +147,9 @@ consteval auto find_trait_method_impl(meta::info                      impl,
         | stdr::to<std::vector>();
 
     for (auto const m: callable_mems) {
-        // auto const matches = check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
-        // if (matches)
-        //     return m;
+        auto const matches = check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
+        if (matches)
+            return m;
     }
 
     if (not reqs.exact_args)
