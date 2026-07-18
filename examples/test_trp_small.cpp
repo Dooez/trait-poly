@@ -101,7 +101,7 @@ struct some_impl {
     };
 };
 struct other_impl_alt_base {
-    using bar_t = decltype([] { std::println("lambda bar other_impl_alt_base"); });
+    using bar_t = decltype([] -> no_def_ctor { std::println("lambda bar other_impl_alt_base"); return no_def_ctor(1);});
     bar_t bar;
 };
 struct other_impl_base {
@@ -148,9 +148,6 @@ static_assert(trp::implements_trait<bar_only_impl, trait_proto>);
 int main() {
     auto simpl = bar_only_impl{};
 
-    void (other_impl_alt_base::bar_t::*x)() const = &[:^^other_impl_alt_base::bar_t::operator():];
-
-
     auto ref = trp::dyn_trait_ref<trait_proto const>(simpl);
     ref.foo();
     std::println("\n---");
@@ -174,6 +171,7 @@ int main() {
     auto rawvoidptr = uptr.get();
     auto rawptr     = uptr.get<other_impl>();
     rawptr->foo();
+    rawptr->bar();
     //
 
     return 0;

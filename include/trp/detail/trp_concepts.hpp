@@ -310,99 +310,158 @@ inline constexpr auto call_operators_of =
                                         operator_of(m) == meta::operators::op_parentheses;
                              }));
 
+template<typename MPtr, meta::info ImplMethod>
+concept extractable_template = requires(MPtr ptr) {
+    { ptr = &template[:ImplMethod:] };
+};
 
-template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv>
-inline constexpr auto parameters_match = [] {
-    auto [... arg_ids]              = MethodIdt::param_identities;
-    constexpr auto add_method_cvref = [](meta::info r) {
-        r = MethodIdt::add_obj_cv(r);
-        if (not MethodIdt::is_rvalue)
+consteval auto check_parameter_match(meta::info Impl,
+                                     meta::info ImplMethod,
+                                     meta::info MethodIdt,
+                                     bool       ExactCv,
+                                     bool       ExactRef = false) -> bool {
+    auto const trait_params = extract_method_params(MethodIdt);
+    auto const quals        = extract_method_qualifiers(MethodIdt);
+
+    auto const add_method_cvref = [=](meta::info r) {
+        r = add_method_obj_cv(MethodIdt, r);
+        if (not quals.is_rvalue)
             r = add_lvalue_reference(r);
         return r;
     };
-    constexpr auto invokation_info = add_method_cvref(^^Impl);
-    using impl_invocation_t        = [:invokation_info:];
+    auto const invokation_info = add_method_cvref(Impl);
 
     // Return type matching is performed earlier.
     // This way the return type rules are decoupled from argument rules.
-    constexpr auto m_refl  = std::meta::reflect_constant(ImplMethod);
-    constexpr auto cv_refl = meta::reflect_constant(ExactCv);
-
-    using return_type    = [:[] {
-        if (is_function(ImplMethod))
-            return return_type_of(ImplMethod);
-        if (invokable_convert_return<impl_invocation_t, ImplMethod, MethodIdt>)
-            return substitute(^^method_return_t,
-                                 {^^impl_invocation_t, m_refl, ^^typename decltype(arg_ids)::type...});
-        return ^^void;
-    }():];
-    using exact_type     = make_function_member_type<false,
-                                                     typename MethodIdt::template as_obj<Impl>,
-                                                     return_type,
-                                                     MethodIdt::is_noexcept,
-                                                     typename decltype(arg_ids)::type...>;
-    using exact_eop_type = make_function_member_type<true,
-                                                     impl_invocation_t&&,
-                                                     return_type,
-                                                     MethodIdt::is_noexcept,
-                                                     typename decltype(arg_ids)::type...>;
-
     // noexcept promotion in pointer conversion is automatic
 
     // add static function resolution?
-    if constexpr (not is_function(ImplMethod) and not is_function_template(ImplMethod)) {
-        auto const call_ops        = subextract_info_span(^^call_operators_of, {type_of(ImplMethod)});
-        auto const method_inv_type = copy_cv_to(remove_reference(^^impl_invocation_t), type_of(ImplMethod));
-        return stdr::any_of(call_ops, [=](auto op) {
-            return extract<bool>(substitute(
-                ^^parameters_match, {method_inv_type, meta::reflect_constant(op), ^^MethodIdt, cv_refl}));
-        });
-    } else {
-        auto const exact_method = (dealias(^^exact_type) != ^^void)    //
-            and((is_template(ImplMethod) and requires(exact_type mptr) {
-                    { mptr = &template[:ImplMethod:] };
-                }) or requires(exact_type mptr) {
-                { mptr = &[:ImplMethod:] };
-            });
-        auto const exact_eop_method = (dealias(^^exact_eop_type) != ^^void)    //
-            and((is_template(ImplMethod) and requires(exact_eop_type mptr) {
-                    { mptr = &template[:ImplMethod:] };
-                }) or requires(exact_eop_type mptr) {
-                { mptr = &[:ImplMethod:] };
-            });
+    if (is_function(ImplMethod)) {
+        auto const impl_params_raw = parameters_of(ImplMethod);
+        auto const is_eop = not impl_params_raw.empty() and is_explicit_object_parameter(impl_params_raw[0]);
+        auto const impl_params = [&] {
+            if (is_eop) {
+                return impl_params_raw | stdv::drop(1) | stdv::take(trait_params.size()) |
+                       stdr::to<std::vector>();
+            };
+            return impl_params_raw | stdv::take(trait_params.size()) | stdr::to<std::vector>();
+        }();
+        for (auto [trait_p, impl_p]: stdv::zip(trait_params, impl_params))
+            if (impl_p != trait_p)
+                return false;
+        if (ExactCv) {
+            if (is_eop) {
+                auto const eop_t = type_of(impl_params_raw[0]);
+                if (quals.is_const != meta::is_const(meta::remove_reference(eop_t)))
+                    return false;
+                if (quals.is_volatile != meta::is_volatile(meta::remove_reference(eop_t)))
+                    return false;
+            } else {
+                if (quals.is_const != is_const(ImplMethod))
+                    return false;
+                if (quals.is_volatile != is_volatile(ImplMethod))
+                    return false;
+            }
+        }
+        if (ExactRef) {
+            if (is_eop) {
+                auto const eop_t = type_of(impl_params_raw[0]);
+                if (quals.is_lvalue != is_lvalue_reference_type(eop_t))
+                    return false;
+                if (quals.is_rvalue != is_rvalue_reference_type(eop_t))
+                    return false;
+            } else {
+                if (quals.is_lvalue != is_lvalue_reference_qualified(ImplMethod))
+                    return false;
+                if (quals.is_rvalue != is_rvalue_reference_qualified(ImplMethod))
+                    return false;
+            }
+        }
+        return true;
+    } else if (is_function_template(ImplMethod)) {
+        auto const return_type = substitute(
+            ^^method_return_t, stdv::concat(std::array{invokation_info, ImplMethod}, trait_params));
+        auto const get_fptr_t = [=](bool eop, meta::info obj_t) {
+            return substitute(^^make_function_member_type,
+                              stdv::concat(std::array{meta::reflect_constant(eop),
+                                                      obj_t,
+                                                      meta::reflect_constant(return_type),
+                                                      meta::reflect_constant(quals.is_noexcept)},
+                                           trait_params));
+        };
+        auto const is_extractable = [=](meta::info fptr_t) {
+            return extract<bool>(substitute(^^extractable_template, {fptr_t, reflect_constant(ImplMethod)}));
+        };
 
-        if (exact_method or exact_eop_method)
+        auto const obj     = add_method_obj_cv(MethodIdt, Impl);
+        auto const obj_ref = add_method_obj_cvref(MethodIdt, Impl);
+
+        auto const mem_fptr = get_fptr_t(false, obj_ref);
+        if (is_extractable(mem_fptr))
             return true;
+
+        if (quals.is_ref()) {
+            auto const mem_fptr = get_fptr_t(false, obj);
+            if (is_extractable(mem_fptr))
+                return true;
+        }
+
+        auto const eop_fptr = get_fptr_t(true, obj_ref);
+        if (is_extractable(eop_fptr))
+            return true;
+
+        if (not ExactRef) {
+            auto const mem_fptr = get_fptr_t(false, add_lvalue_reference(obj));
+            if (is_extractable(mem_fptr))
+                return true;
+
+            if (not quals.is_ref()) {
+                auto const mem_oep_fptr = get_fptr_t(true, add_lvalue_reference(obj));
+                if (is_extractable(mem_oep_fptr))
+                    return true;
+            } else {
+                auto const eop_fptr = get_fptr_t(true, obj);
+                if (is_extractable(eop_fptr))
+                    return true;
+            }
+        }
 
         if (ExactCv)
             return false;
 
+        auto const is_invokable = [=, im = reflect_constant(ImplMethod)](meta::info impl) {
+            return extract<bool>(
+                substitute(^^invokable_convert_return, {add_method_cvref(impl), im, MethodIdt}));
+        };
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
-        if constexpr (not meta::is_const(remove_reference(^^impl_invocation_t)) and
-                      invokable_convert_return<
-                          typename[:add_method_cvref(^^Impl const):], ImplMethod, MethodIdt>) {
-            auto const exact_method = extract<bool>(
-                substitute(^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
-            auto const exact_eop_method = extract<bool>(
-                substitute(^^parameters_match, {add_const(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
-            if (exact_method or exact_eop_method)
+        if (not meta::is_const(remove_reference(invokation_info)) and is_invokable(add_const(Impl))) {
+            auto const exact_method =
+                check_parameter_match(add_const(Impl), ImplMethod, MethodIdt, ExactCv, ExactRef);
+            if (exact_method)
                 return true;
         }
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
-        if constexpr (not meta::is_volatile(remove_reference(^^impl_invocation_t)) and
-                      invokable_convert_return<
-                          typename[:add_method_cvref(^^Impl volatile):], ImplMethod, MethodIdt>) {
-            auto const exact_method = extract<bool>(
-                substitute(^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
-            auto const exact_eop_method = extract<bool>(
-                substitute(^^parameters_match, {add_volatile(^^Impl), m_refl, ^^MethodIdt, cv_refl}));
-            if (exact_method or exact_eop_method)
+        if (not meta::is_volatile(remove_reference(invokation_info)) and is_invokable(add_volatile(Impl))) {
+            auto const exact_method =
+                check_parameter_match(add_volatile(Impl), ImplMethod, MethodIdt, ExactCv, ExactRef);
+            if (exact_method)
                 return true;
         }
         return false;
-    }
-}();
+    } else if (not is_function(ImplMethod) and not is_function_template(ImplMethod)) {
+        auto const call_ops        = subextract_info_span(^^call_operators_of, {type_of(ImplMethod)});
+        auto const method_inv_type = copy_cv_to(remove_reference(invokation_info), type_of(ImplMethod));
 
+        return stdr::any_of(call_ops, [=](auto op) {
+            return check_parameter_match(method_inv_type, op, MethodIdt, ExactCv, ExactRef);
+        });
+    }
+    return false;
+}
+
+template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv, bool ExactRef = false>
+inline constexpr auto parameters_match =
+    check_parameter_match(^^Impl, ImplMethod, ^^MethodIdt, ExactCv, ExactRef);
 
 template<typename ParamType>
 consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {

@@ -110,6 +110,13 @@ struct method_qualifiers_t {
     bool is_rvalue;
     bool is_value;
     bool is_noexcept;
+
+    [[nodiscard]] consteval auto is_cv() const {
+        return is_const and is_volatile;
+    }
+    [[nodiscard]] consteval auto is_ref() const {
+        return is_lvalue and is_rvalue;
+    }
 };
 template<method_qualifiers_t quals>
 concept valid_quals = (quals.is_lvalue + quals.is_rvalue + quals.is_value) <= 1    //
@@ -128,13 +135,29 @@ struct method_identity_t {
     static constexpr bool is_noexcept = Quals.is_noexcept;
     static constexpr auto qualifiers  = Quals;
 
-    using return_type                      = Ret;
-    static constexpr auto param_infos      = std::array<meta::info, sizeof...(Params)>{^^Params...};
+    using return_type = Ret;
+    static constexpr auto param_infos =
+        std::define_static_array(std::array<meta::info, sizeof...(Params)>{^^Params...});
     static constexpr auto param_identities = make_aggregate(std::type_identity<Params>{}...);
 
+    static consteval auto add_obj_cvref(meta::info inf) {
+        if (is_lvalue_reference_type(inf) or is_rvalue_reference_type(inf))
+            throw "Input must be non-ref";
+        inf = remove_reference(inf);
+        if (is_volatile)
+            inf = add_volatile(inf);
+        if (is_const)
+            inf = add_const(inf);
+        if (is_rvalue)
+            inf = add_lvalue_reference(inf);
+        if (is_lvalue)
+            inf = add_rvalue_reference(inf);
+        return inf;
+    };
+
     static consteval auto add_obj_cv(meta::info inf) {
-        auto const is_lref_obj = meta::is_lvalue_reference_type(inf);
-        auto const is_rref_obj = meta::is_rvalue_reference_type(inf);
+        auto const is_lref_obj = is_lvalue_reference_type(inf);
+        auto const is_rref_obj = is_rvalue_reference_type(inf);
 
         inf = remove_reference(inf);
         if (is_volatile)
@@ -208,24 +231,23 @@ using make_function_member_type = [:[] {
 }():];
 
 consteval auto method_identity(meta::info method_info) -> meta::info {
-    auto is_nsmf = is_function(method_info)                 //
-                   and not is_static_member(method_info)    //
-                   and not is_virtual(method_info)          //
-                   and has_identifier(method_info);
+    auto const is_nsmf = is_function(method_info)                 //
+                         and not is_static_member(method_info)    //
+                         and not is_virtual(method_info)          //
+                         and has_identifier(method_info);
     if (not is_nsmf) {
         throw "get_method_identity() can only be called on non-static non-template "
               "member functions with identifiers";
     }
 
 
-    auto       quals      = method_qualifiers_t{};
-    auto const identifier = meta::reflect_constant_string(identifier_of(method_info));
+    auto quals            = method_qualifiers_t{};
     quals.is_noexcept     = is_noexcept(method_info);
+    auto const identifier = meta::reflect_constant_string(identifier_of(method_info));
     auto const ret        = return_type_of(method_info);
-    auto       params     = parameters_of(method_info);
+    auto const params     = parameters_of(method_info);
     if (not params.empty() and is_explicit_object_parameter(params[0])) {
-        auto const eop    = params[0];
-        auto const eop_t  = type_of(eop);
+        auto const eop_t  = type_of(params[0]);
         quals.is_const    = is_const(remove_reference(eop_t));
         quals.is_volatile = is_volatile(remove_reference(eop_t));
         quals.is_lvalue   = is_lvalue_reference_type(eop_t);
@@ -249,15 +271,6 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     arguments.append_range(params | stdv::transform(meta::type_of));
     return substitute(^^method_identity_t, arguments);
 }
-template<typename MethodIdt>
-inline constexpr char const* method_identifier = MethodIdt::identifier;
-
-template<typename MethodIdt>
-inline constexpr auto method_qualifiers = MethodIdt::qualifiers;
-
-template<typename MethodIdt>
-inline constexpr auto method_params = std::span<meta::info const>(MethodIdt::param_infos);
-
 
 consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
@@ -270,45 +283,72 @@ consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     targs[1]        = meta::reflect_constant(quals);
     return substitute(^^method_identity_t, targs);
 }
+
 consteval auto extract_method_identifier(meta::info idt) -> char const* {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    return extract<char const*>(substitute(^^method_identifier, {idt}));
-};
+    return extract<char const*>(template_arguments_of(idt)[0]);
+}
+
 consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    return extract<method_qualifiers_t>(substitute(^^method_qualifiers, {idt}));
-};
+    return extract<method_qualifiers_t>(template_arguments_of(idt)[1]);
+}
+
 consteval auto extract_method_params(meta::info idt) -> std::span<meta::info const> {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    return subextract_info_span(^^method_params, {idt});
+    return std::define_static_array(template_arguments_of(idt) | stdv::drop(3));
+}
+
+consteval auto add_method_obj_cv(meta::info method, meta::info inf) {
+    auto const quals       = extract_method_qualifiers(method);
+    auto const is_lref_obj = is_lvalue_reference_type(inf);
+    auto const is_rref_obj = is_rvalue_reference_type(inf);
+
+    inf = remove_reference(inf);
+    if (quals.is_volatile)
+        inf = add_volatile(inf);
+    if (quals.is_const)
+        inf = add_const(inf);
+    if (is_lref_obj)
+        inf = add_lvalue_reference(inf);
+    if (is_rref_obj)
+        inf = add_rvalue_reference(inf);
+    return inf;
+}
+static consteval auto add_method_obj_cvref(meta::info method, meta::info inf) {
+    auto const quals = extract_method_qualifiers(method);
+    if (is_lvalue_reference_type(inf) or is_rvalue_reference_type(inf))
+        throw "Input must be non-ref";
+    inf = remove_reference(inf);
+    if (quals.is_volatile)
+        inf = add_volatile(inf);
+    if (quals.is_const)
+        inf = add_const(inf);
+    if (quals.is_rvalue)
+        inf = add_lvalue_reference(inf);
+    if (quals.is_lvalue)
+        inf = add_rvalue_reference(inf);
+    return inf;
 };
+
 
 template<typename T>
 concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
 
 template<typename T>
-concept trait_method_idt = any_method_idt<T> and not(T::is_rvalue) and not(T::is_value);
-
-namespace concepts {
-template<typename MethodIdt>
-concept is_const_idt = any_method_idt<MethodIdt> && MethodIdt::is_const;
-template<typename MethodIdt>
-concept is_volatile_idt = any_method_idt<MethodIdt> && MethodIdt::is_volatile;
-template<typename MethodIdt>
-concept is_cv_idt = any_method_idt<MethodIdt> && MethodIdt::is_cv;
-}    // namespace concepts
+concept trait_method_idt = any_method_idt<T> and not(T::is_value);
 
 consteval bool is_const_idt(meta::info idt) {
-    return extract<bool>(substitute(^^concepts::is_const_idt, {idt}));
+    return extract_method_qualifiers(idt).is_const;
 }
 consteval bool is_volatile_idt(meta::info idt) {
-    return extract<bool>(substitute(^^concepts::is_volatile_idt, {idt}));
+    return extract_method_qualifiers(idt).is_volatile;
 }
 consteval bool is_cv_idt(meta::info idt) {
-    return extract<bool>(substitute(^^concepts::is_cv_idt, {idt}));
+    return extract_method_qualifiers(idt).is_const and extract_method_qualifiers(idt).is_volatile;
 }
 
 consteval auto copy_cv_to(meta::info proto, meta::info type) {
@@ -348,8 +388,8 @@ struct method_signature_requirements_t {
 };
 consteval auto extract_signature_req(meta::info r) -> std::optional<method_signature_requirements_t> {
     auto const annotations =
-        annotations_of(r)                                                                         //
-        | stdv::filter([](auto r) { return remove_cv(type_of(r)) == ^^method_signature_requirements_t; })    //
+        annotations_of(r)                                                                                 /**/
+        | stdv::filter([](auto r) { return remove_cv(type_of(r)) == ^^method_signature_requirements_t; }) /**/
         | stdr::to<std::vector>();
     if (annotations.size() > 1)
         throw "More than one method requirements annoation.";
