@@ -283,11 +283,14 @@ consteval auto as_lref_method_identity(meta::info idt) -> meta::info {
     targs[1]        = meta::reflect_constant(quals);
     return substitute(^^method_identity_t, targs);
 }
+template<typename MethodIdt>
+inline constexpr char const* identifier_of_method = MethodIdt::identifier;
 
 consteval auto extract_method_identifier(meta::info idt) -> char const* {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    return extract<char const*>(template_arguments_of(idt)[0]);
+    // return extract<char const*>(template_arguments_of(idt)[0]); // clang can't handle 
+    return extract<char const*>(substitute(^^identifier_of_method, {idt}));
 }
 
 consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t {

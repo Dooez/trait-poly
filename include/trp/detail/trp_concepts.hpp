@@ -330,7 +330,7 @@ consteval auto check_parameter_match(
     trait_params      = extract_method_param_types(method_idt);
     quals             = extract_method_qualifiers(method_idt);
 
-    auto const add_method_cvref = [=](meta::info r) {
+    auto add_method_cvref = [=](meta::info r) {
         r = add_method_obj_cv(method_idt, r);
         if (not quals.is_rvalue)
             r = add_lvalue_reference(r);
