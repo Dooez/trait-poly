@@ -377,11 +377,18 @@ struct method_signature_requirements_t {
 #else
         false;
 #endif
+    bool exact_ref =
+#ifdef TRP_DEFAULT_MATCH_METHOD_REF
+        true;
+#else
+        false;
+#endif
 
     consteval auto operator|=(const method_signature_requirements_t& other) {
         exact_return |= other.exact_return;
         exact_args |= other.exact_args;
         exact_cv |= other.exact_cv;
+        exact_ref |= other.exact_ref;
         return *this;
     }
 };

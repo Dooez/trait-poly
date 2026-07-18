@@ -303,12 +303,20 @@ using method_return_t = [:[] {
     }
 }():];
 
+consteval auto call_operators_of_fn(meta::info type) -> std::vector<meta::info> {
+    auto v = members_of(type, unprivileged) | stdv::filter([](auto m) {
+                 return (is_operator_function(m) or is_operator_function_template(m)) and
+                        operator_of(m) == meta::operators::op_parentheses;
+             }) |
+             stdr::to<std::vector>();
+    if (v.empty()) {
+        for (auto base: subextract_base_types(type))
+            v.append_range(call_operators_of_fn(base));
+    }
+    return v;
+};
 template<typename T>
-inline constexpr auto call_operators_of =
-    std::define_static_array(members_of(^^T, unprivileged) | stdv::filter([](auto m) {
-                                 return (is_operator_function(m) or is_operator_function_template(m)) and
-                                        operator_of(m) == meta::operators::op_parentheses;
-                             }));
+inline constexpr auto call_operators_of = std::define_static_array(call_operators_of_fn(^^T));
 
 template<typename MPtr, meta::info ImplMethod>
 concept extractable_template = requires(MPtr ptr) {
@@ -317,8 +325,10 @@ concept extractable_template = requires(MPtr ptr) {
 
 consteval auto check_parameter_match(
     meta::info impl, meta::info impl_method, meta::info method_idt, bool exact_cv, bool exact_ref) -> bool {
-    auto const trait_params = extract_method_param_types(method_idt);
-    auto const quals        = extract_method_qualifiers(method_idt);
+    auto trait_params = std::span<meta::info const>();
+    auto quals        = method_qualifiers_t();
+    trait_params      = extract_method_param_types(method_idt);
+    quals             = extract_method_qualifiers(method_idt);
 
     auto const add_method_cvref = [=](meta::info r) {
         r = add_method_obj_cv(method_idt, r);
@@ -326,13 +336,15 @@ consteval auto check_parameter_match(
             r = add_lvalue_reference(r);
         return r;
     };
-    auto const invokation_info = add_method_cvref(impl);
+    meta::info invokation_info;
+    invokation_info = add_method_cvref(impl);
 
     // Return type matching is performed earlier.
     // This way the return type rules are decoupled from argument rules.
     // noexcept promotion in pointer conversion is automatic
 
     // add static function resolution?
+    //
     if (is_function(impl_method) and not is_static_member(impl_method)) {
         auto const impl_params_raw = parameters_of(impl_method);
         auto const is_eop = not impl_params_raw.empty() and is_explicit_object_parameter(impl_params_raw[0]);
@@ -375,16 +387,18 @@ consteval auto check_parameter_match(
             }
         }
         return true;
+
     } else if (is_function_template(impl_method)) {
-        auto const return_type = substitute(
-            ^^method_return_t, stdv::concat(std::array{invokation_info, impl_method}, trait_params));
-        auto const get_fptr_t = [=](bool eop, meta::info obj_t) {
-            return substitute(^^make_function_member_type,
-                              stdv::concat(std::array{meta::reflect_constant(eop),
-                                                      obj_t,
-                                                      meta::reflect_constant(return_type),
-                                                      meta::reflect_constant(quals.is_noexcept)},
-                                           trait_params));
+        auto const return_type = [&] {
+            auto targs = std::vector{invokation_info, reflect_constant(impl_method)};
+            targs.append_range(trait_params);
+            return substitute(^^method_return_t, targs);
+        }();
+        auto const get_fptr_t = [&](bool eop, meta::info obj_t) {
+            auto targs = std::vector{
+                meta::reflect_constant(eop), obj_t, return_type, meta::reflect_constant(quals.is_noexcept)};
+            targs.append_range(trait_params);
+            return substitute(^^make_function_member_type, targs);
         };
         auto const is_extractable = [=](meta::info fptr_t) {
             return extract<bool>(substitute(^^extractable_template, {fptr_t, reflect_constant(impl_method)}));
@@ -401,11 +415,11 @@ consteval auto check_parameter_match(
             auto const mem_fptr = get_fptr_t(false, obj);
             if (is_extractable(mem_fptr))
                 return true;
-        }
 
-        auto const eop_fptr = get_fptr_t(true, obj_ref);
-        if (is_extractable(eop_fptr))
-            return true;
+            auto const eop_fptr = get_fptr_t(true, obj_ref);
+            if (is_extractable(eop_fptr))
+                return true;
+        }
 
         if (not exact_ref) {
             auto const mem_fptr = get_fptr_t(false, add_lvalue_reference(obj));
@@ -416,7 +430,7 @@ consteval auto check_parameter_match(
                 auto const mem_oep_fptr = get_fptr_t(true, add_lvalue_reference(obj));
                 if (is_extractable(mem_oep_fptr))
                     return true;
-            } else {
+            } else if (not quals.is_volatile) {
                 auto const eop_fptr = get_fptr_t(true, obj);
                 if (is_extractable(eop_fptr))
                     return true;
@@ -446,19 +460,15 @@ consteval auto check_parameter_match(
         }
         return false;
     } else if (not is_function(impl_method) and not is_function_template(impl_method)) {
-        auto const call_ops        = subextract_info_span(^^call_operators_of, {type_of(impl_method)});
-        auto const method_inv_type = copy_cv_to(remove_reference(invokation_info), type_of(impl_method));
-
+        auto const method_obj_t    = type_of(impl_method);
+        auto const call_ops        = subextract_info_span(^^call_operators_of, {method_obj_t});
+        auto const method_inv_type = copy_cv_to(remove_reference(invokation_info), method_obj_t);
         return stdr::any_of(call_ops, [=](auto op) {
             return check_parameter_match(method_inv_type, op, method_idt, exact_cv, exact_ref);
         });
     }
     return false;
 }
-
-template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodIdt, bool ExactCv, bool ExactRef = false>
-inline constexpr auto parameters_match =
-    check_parameter_match(^^Impl, ImplMethod, ^^MethodIdt, ExactCv, ExactRef);
 
 template<typename ParamType>
 consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {

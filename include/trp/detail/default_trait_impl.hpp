@@ -138,6 +138,7 @@ consteval auto find_trait_method_impl(meta::info                      impl,
         return std::nullopt;
 
     auto const invokable_concept = reqs.exact_return ? ^^invokable_exact_return : ^^invokable_convert_return;
+
     auto const callable_mems =
         id_mems    //
         | stdv::filter([=](auto m) {
@@ -146,9 +147,7 @@ consteval auto find_trait_method_impl(meta::info                      impl,
         | stdr::to<std::vector>();
 
     for (auto const m: callable_mems) {
-        auto const matches = extract<bool>(
-            substitute(^^parameters_match,
-                       {impl, reflect_constant(m), method_idt, meta::reflect_constant(reqs.exact_cv), meta::reflect_constant(false)}));
+        auto const matches = check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
         if (matches)
             return m;
     }
@@ -170,7 +169,8 @@ inline constexpr auto full_impls_for = [] {
         auto const method_idt = idts[i];
         auto const reqs       = all_reqs[i];
 
-        auto o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt, reqs);
+        std::optional<meta::info> o_m;
+        o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt, reqs);
         if (not o_m) {
             o_m = [=] -> std::optional<meta::info> {
                 auto       checked_bases = std::vector<meta::info>{};

@@ -67,10 +67,12 @@ struct cvo_invoker;
         }                                                                                                    \
     };
 
-TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile, , );
-TRP_CV_OVERLOAD(Quals.is_const and not Quals.is_volatile, const, );
-TRP_CV_OVERLOAD(not Quals.is_const and Quals.is_volatile, , volatile);
-TRP_CV_OVERLOAD(Quals.is_const and Quals.is_volatile, const, volatile);
+// clang-format off
+TRP_CV_OVERLOAD(not Quals.is_const and not Quals.is_volatile,      ,         );
+TRP_CV_OVERLOAD(    Quals.is_const and not Quals.is_volatile, const,         );
+TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile,      , volatile);
+TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile, const, volatile);
+// clang-format on
 #undef TRP_CV_OVERLOAD
 
 
@@ -234,10 +236,11 @@ struct dyn_cv_ref_definer {
                         return;
                     targs.push_back(spec);
                 };
-                maybe_add(holder_targs, true);
-                maybe_add(holder_targs_c, quals.is_const);
-                maybe_add(holder_targs_v, quals.is_volatile);
-                maybe_add(holder_targs_cv, quals.is_const and quals.is_volatile);
+
+                maybe_add(holder_targs, not quals.is_rvalue);
+                maybe_add(holder_targs_c, quals.is_const and not quals.is_rvalue);
+                maybe_add(holder_targs_v, quals.is_volatile and not quals.is_rvalue);
+                maybe_add(holder_targs_cv, quals.is_cv() and not quals.is_rvalue);
             };
 
             auto const id_refl      = meta::reflect_constant(id);
