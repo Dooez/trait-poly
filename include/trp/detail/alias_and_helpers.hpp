@@ -380,8 +380,7 @@ consteval bool are_similar_idts(meta::info a, meta::info b) {
     auto const reta = extract_method_return_type(a);
     auto const retb = extract_method_return_type(b);
     if (reta != retb)
-        return false;
-
+        throw "methods differ by return type only";
     return true;
 }
 
@@ -496,20 +495,20 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
                     | stdr::to<std::vector>();
 
     auto const append_unique = [&](auto&& idts, auto&& reqs) {
-        for (auto [m, req]: stdv::zip(idts, reqs)) {
+        for (auto [m, const_req]: stdv::zip(idts, reqs)) {
             auto const is_similar = [=](meta::info idt) { return are_similar_idts(idt, m); };
 
             auto const it = stdr::find_if(res_idts, is_similar);
             if (it == res_idts.end()) {
                 res_idts.push_back(m);
-                res_reqs.push_back(req);
+                res_reqs.push_back(const_req);
                 continue;
             }
-            auto const i = stdr::distance(res_idts.begin(), it);
+            auto const i   = stdr::distance(res_idts.begin(), it);
+            auto       req = const_req;
 
             auto qa = extract_method_qualifiers(*it);
             auto qb = extract_method_qualifiers(m);
-
 
             if (qa.is_lvalue != qb.is_lvalue or qa.is_rvalue != qb.is_rvalue) {
                 // we need both lvalue and rvalue qualified methods
