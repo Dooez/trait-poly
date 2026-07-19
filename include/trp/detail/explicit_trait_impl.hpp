@@ -35,9 +35,6 @@ template<meta::info Fn>
 concept any_static_member_info = is_static_member(Fn);
 template<meta::info Fn>
 concept any_fn_template_info = is_function_template(Fn);
-template<meta::info Fn, typename Trait>
-concept explicit_template_method_impl_of =
-    any_static_member_info<Fn> and any_fn_template_info<Fn> and is_explicit_template_method_impl<Trait>(Fn);
 }    // namespace concepts
 
 template<typename ExplicitImpl, typename Trait>

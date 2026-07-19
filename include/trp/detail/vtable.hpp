@@ -90,9 +90,10 @@ consteval auto fill_vtable() {
     auto       quals           = vtable_cv_quals{};
     auto const get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
         using trait_method_idt_t = [:trait_method_idt:];
-        constexpr auto m =
-            stdr::find(full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt)
-                ->fn;
+        constexpr auto bind      = *stdr::find(
+            full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt);
+        constexpr auto m = bind.fn;
+
         if constexpr (m == meta::info{}) {
             if (trait_method_idt_t::is_const)
                 quals.has_const = false;
@@ -102,7 +103,7 @@ consteval auto fill_vtable() {
             return typename trait_method_idt_t::wrapper_fptr_type{nullptr};
         } else {
             auto [... is] = make_cw_idxs<trait_method_idt_t::param_infos.size()>();
-            if constexpr (concepts::explicit_template_method_impl_of<m, SESubtrait>) {
+            if constexpr (bind.is_explicit) {
                 using cv_subtrait                  = [:trait_method_idt_t::add_obj_cv(^^SESubtrait):];
                 using cvts_ref                     = cvts_trait_ref<cv_subtrait, Impl>;
                 constexpr auto method              = substitute(m, {^^cvts_ref});

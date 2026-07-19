@@ -2,7 +2,6 @@
 
 #include "support/test_support.hpp"
 #include "trp/dyn_trait_ref.hpp"
-#include "trp/trait_variant.hpp"
 
 namespace reqtest {
 

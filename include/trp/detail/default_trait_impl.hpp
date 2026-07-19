@@ -12,6 +12,7 @@ namespace detail {
 struct impl_method_bind {
     meta::info fn;
     meta::info idt;
+    bool       is_explicit;
 };
 
 template<non_cv_trait Trait>
@@ -117,7 +118,10 @@ consteval auto find_explicit_impl(meta::info impl, meta::info ncv_trait, meta::i
     }
     return meta::info{};
 }
-
+consteval auto find_explicit_trait_method_impl(meta::info impl, meta::info ncv_trait, meta::info method_idt)
+    -> meta::info {
+    return extract<meta::info>(substitute(^^explicit_impl_for, {remove_cv(impl), ncv_trait, method_idt}));
+}
 /*
  * @return  nullopt if no matching names were found. 
  *          meta::info{} if member overload set could not be resolved.
@@ -127,11 +131,6 @@ consteval auto find_trait_method_impl(meta::info                      impl,
                                       meta::info                      ncv_trait,
                                       meta::info                      method_idt,
                                       method_signature_requirements_t reqs) -> std::optional<meta::info> {
-    auto const m =
-        extract<meta::info>(substitute(^^explicit_impl_for, {remove_cv(impl), ncv_trait, method_idt}));
-    if (m != meta::info{})
-        return m;
-
     auto const id_mems =
         subextract_info_span(^^matching_id_direct_public_members_for_method, {remove_cv(impl), method_idt});
     if (id_mems.empty())
@@ -166,15 +165,21 @@ inline constexpr auto full_impls_for = [] {
         auto const method_idt = idts[i];
         auto const reqs       = all_reqs[i];
 
-        auto o_m = find_trait_method_impl(^^Impl, ^^Trait, method_idt, reqs);
+        if (auto m = find_explicit_trait_method_impl(^^Impl, ^^Trait, method_idt); m != meta::info{}) {
+            impls.emplace_back(m, method_idt, true);
+            continue;
+        }
+        bool is_explicit = false;
+        auto o_m         = find_trait_method_impl(^^Impl, ^^Trait, method_idt, reqs);
         if (not o_m) {
-            o_m = [=] -> std::optional<meta::info> {
+            o_m = [&] -> std::optional<meta::info> {
                 auto       checked_bases = std::vector<meta::info>{};
                 auto       next_bases    = std::vector<meta::info>{};
                 auto const apply_cv = stdv::transform([](auto base) { return copy_cv_to(^^Impl, base); });
 
-                auto m              = meta::info{};
-                auto base_candidate = meta::info{};
+                auto m                  = meta::info{};
+                auto base_candidate     = meta::info{};
+                auto explicit_candidate = false;
 
                 auto bases = subextract_info_span(^^direct_base_types, {remove_cv(^^Impl)})    //
                              | apply_cv                                                        //
@@ -185,8 +190,16 @@ inline constexpr auto full_impls_for = [] {
                             //ambiguous because the fitting method found in multiple base-class subobjects
                             return meta::info{};
                         }
-                        auto const o_m = find_trait_method_impl(base, ^^Trait, method_idt, reqs);
-                        if (o_m) {
+                        if (auto em = find_explicit_trait_method_impl(^^Impl, ^^Trait, method_idt);
+                            em != meta::info{}) {
+                            if (m != meta::info{})    // multiple matches, call is ambiguous
+                                return meta::info{};
+
+                            m                  = em;
+                            base_candidate     = base;
+                            explicit_candidate = true;
+                            continue;
+                        } else if (auto const o_m = find_trait_method_impl(base, ^^Trait, method_idt, reqs)) {
                             if (m != meta::info{}) {
                                 // method present in multiple bases, call would be ambiguous
                                 return meta::info{};
@@ -197,20 +210,23 @@ inline constexpr auto full_impls_for = [] {
                             }
                             m              = *o_m;
                             base_candidate = base;
-                        } else {
-                            checked_bases.push_back(base);
-                            auto const nb = subextract_info_span(^^direct_base_types, {remove_cv(base)});
-                            next_bases.append_range(
-                                nb            //
-                                | apply_cv    //
-                                | stdv::filter([&](auto r) { return not stdr::contains(checked_bases, r); }));
+                            continue;
                         }
+
+                        checked_bases.push_back(base);
+                        auto const nb = subextract_info_span(^^direct_base_types, {remove_cv(base)});
+                        next_bases.append_range(
+                            nb            //
+                            | apply_cv    //
+                            | stdv::filter([&](auto r) { return not stdr::contains(checked_bases, r); }));
                     }
                     bases = next_bases;
                     next_bases.clear();
                 }
-                if (m != meta::info{})
+                if (m != meta::info{}) {
+                    is_explicit = explicit_candidate;
                     return m;
+                }
                 return std::nullopt;
             }();
         }
@@ -218,10 +234,11 @@ inline constexpr auto full_impls_for = [] {
         if (m == meta::info{})
             for (auto const bind: all_default_impls<Trait>)
                 if (matching_explicit_impl(bind.idt, method_idt)) {
-                    m = bind.fn;
+                    m           = bind.fn;
+                    is_explicit = true;
                     break;
                 }
-        impls.emplace_back(m, method_idt);
+        impls.emplace_back(m, method_idt, is_explicit);
     }
     return std::define_static_array(impls);
 }();

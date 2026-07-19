@@ -71,7 +71,7 @@ public:
 };
 
 
-template<non_ref Impl, meta::info Method, trait_method_idt MethodIdt>
+template<non_ref Impl, meta::info Method, bool ExplicitMethod, trait_method_idt MethodIdt>
 struct cvts_overload_spec {
     using method_idt = MethodIdt;
 };
@@ -87,72 +87,64 @@ struct cvts_cvo_invoker;
 #define TRP_ASSERT_INTERCONVERTIBLE
 #endif
 
-#define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                                     \
-    template<non_cvref           TRef,                                                                      \
-             non_cvref           MethodHolder,                                                              \
-             non_cvref           MethodInvoker,                                                             \
-             non_ref             Impl,                                                                      \
-             meta::info          Method,                                                                    \
-             char const*         Id,                                                                        \
-             method_qualifiers_t Quals,                                                                     \
-             typename Ret,                                                                                  \
-             typename... Args>                                                                              \
-        requires(Req)                                                                                       \
-    struct cvts_cvo_invoker<TRef,                                                                           \
-                            MethodHolder,                                                                   \
-                            MethodInvoker,                                                                  \
-                            cvts_overload_spec<Impl, Method, method_identity_t<Id, Quals, Ret, Args...>>> { \
-        auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                          \
-            using self_t = cvts_cvo_invoker C V Ref;                                                        \
-            if constexpr (explicit_method<> != meta::info{}) {                                              \
-                return [:explicit_method<>:](static_cast<self_t&&>(*this).get_trait_ref(),                  \
-                                             std::forward<Args>(args)...);                                  \
-            } else {                                                                                        \
-                using effective_ref_t = [:Quals.is_rvalue ? add_rvalue_reference(^^Impl)                    \
-                                                          : add_lvalue_reference(^^Impl):];                 \
-                return static_cast<effective_ref_t>(                                                        \
-                           *extract_obj_ptr(static_cast<self_t&&>(*this).get_trait_ref()))                  \
-                    .[:Method:](std::forward<Args>(args)...);                                               \
-            }                                                                                               \
-        }                                                                                                   \
-                                                                                                            \
-    private:                                                                                                \
-        /* template because TRef is incomplete at the point of cvts_cvo_invoker instantiation*/             \
-        template<typename T = void>                                                                         \
-        static constexpr auto explicit_method = [] {                                                        \
-            if constexpr (is_template(Method)) {                                                            \
-                return substitute(Method, {^^TRef});                                                        \
-            } else {                                                                                        \
-                return meta::info{};                                                                        \
-            }                                                                                               \
-        }();                                                                                                \
-                                                                                                            \
-        auto get_trait_ref(this auto&& self) -> decltype(auto) {                                            \
-            constexpr auto add_cvp = [](meta::info type) {                                                  \
-                using this_t = std::remove_reference_t<decltype(self)>;                                     \
-                return add_pointer(copy_cv_to(^^this_t, type));                                             \
-            };                                                                                              \
-                                                                                                            \
-            static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);                              \
-            auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                           \
-                                                                                                            \
-            constexpr auto invoker_ptr = [] {                                                               \
-                auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);                        \
-                if (mems.size() != 1)                                                                       \
-                    throw "Method holder is expected to have only a single method.";                        \
-                if (type_of(mems[0]) != ^^MethodInvoker)                                                    \
-                    throw "Method invoker type does not match method holders first member type.";           \
-                return extract<MethodInvoker MethodHolder::*>(mems[0]);                                     \
-            }();                                                                                            \
-            TRP_ASSERT_INTERCONVERTIBLE                                                                     \
-            static_assert(std::is_standard_layout_v<MethodHolder>);                                         \
-            auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);                      \
-                                                                                                            \
-            static_assert(std::derived_from<TRef, MethodHolder>);                                           \
-                                                                                                            \
-            using out_ref_t = [:copy_cvref_to(^^decltype(self), ^^TRef):]&&;                                \
-            return static_cast<out_ref_t>(*static_cast<[:add_cvp(^^TRef):]>(mh_ptr));                       \
-        }                                                                                                   \
+#define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                                  \
+    template<non_cvref           TRef,                                                                   \
+             non_cvref           MethodHolder,                                                           \
+             non_cvref           MethodInvoker,                                                          \
+             non_ref             Impl,                                                                   \
+             meta::info          Method,                                                                 \
+             bool                ExplicitMethod,                                                         \
+             char const*         Id,                                                                     \
+             method_qualifiers_t Quals,                                                                  \
+             typename Ret,                                                                               \
+             typename... Args>                                                                           \
+        requires(Req)                                                                                    \
+    struct cvts_cvo_invoker<                                                                             \
+        TRef,                                                                                            \
+        MethodHolder,                                                                                    \
+        MethodInvoker,                                                                                   \
+        cvts_overload_spec<Impl, Method, ExplicitMethod, method_identity_t<Id, Quals, Ret, Args...>>> {  \
+        auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                       \
+            using self_t = [:Quals.is_rvalue ? (^^cvts_cvo_invoker C V&&) : (^^cvts_cvo_invoker C V&):]; \
+            if constexpr (ExplicitMethod) {                                                              \
+                return [:substitute(Method, {^^TRef}):](static_cast<self_t&&>(*this).get_trait_ref(),    \
+                                                        std::forward<Args>(args)...);                    \
+            } else {                                                                                     \
+                using effective_ref_t = [:Quals.is_rvalue ? add_rvalue_reference(^^Impl)                 \
+                                                          : add_lvalue_reference(^^Impl):];              \
+                return static_cast<effective_ref_t>(                                                     \
+                           *extract_obj_ptr(static_cast<self_t&&>(*this).get_trait_ref()))               \
+                    .[:Method:](std::forward<Args>(args)...);                                            \
+            }                                                                                            \
+        }                                                                                                \
+                                                                                                         \
+    private:                                                                                             \
+        auto get_trait_ref(this auto&& self) -> decltype(auto) {                                         \
+            constexpr auto add_cvp = [](meta::info type) {                                               \
+                using this_t = std::remove_reference_t<decltype(self)>;                                  \
+                return add_pointer(copy_cv_to(^^this_t, type));                                          \
+            };                                                                                           \
+                                                                                                         \
+            static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);                           \
+            auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                        \
+                                                                                                         \
+            constexpr auto invoker_ptr = [] {                                                            \
+                auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);                     \
+                if (mems.size() != 1)                                                                    \
+                    throw "Method holder is expected to have only a single method.";                     \
+                if (type_of(mems[0]) != ^^MethodInvoker)                                                 \
+                    throw "Method invoker type does not match method holders first member type.";        \
+                return extract<MethodInvoker MethodHolder::*>(mems[0]);                                  \
+            }();                                                                                         \
+            TRP_ASSERT_INTERCONVERTIBLE                                                                  \
+            static_assert(std::is_standard_layout_v<MethodHolder>);                                      \
+            auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);                   \
+                                                                                                         \
+            static_assert(std::derived_from<TRef, MethodHolder>);                                        \
+                                                                                                         \
+            using out_ref_t = [:copy_cvref_to(^^decltype(self), ^^TRef):];                               \
+            return static_cast<out_ref_t&&>(*static_cast<[:add_cvp(^^TRef):]>(mh_ptr));                  \
+        }                                                                                                \
     };
 
 // clang-format off
@@ -228,8 +220,9 @@ struct cvts_ref_definer {
             for (auto [i, mem, impl_m]: stdv::zip(stdv::iota(grp.begin_idx), raw_methods, raw_impls)) {
                 auto const quals = extract_method_qualifiers(mem);
                 auto const spec  = substitute(^^cvts_overload_spec,
-                                              {^^Impl,    //
+                                              {^^Impl,
                                                meta::reflect_constant(impl_m.fn),
+                                               meta::reflect_constant(impl_m.is_explicit),
                                                mem});
                 methods.push_back(spec);
                 if (quals.is_const)
@@ -326,7 +319,17 @@ inline constexpr auto ref_method = [] -> meta::info {
 template<char const* MethodId, typename Ref, typename... Args>
 auto call_method_via_id(Ref&& ref, Args&&... args) -> decltype(auto) {
     using ref_t = std::remove_cvref_t<decltype(ref)>;
-    return std::forward<Ref>(ref).[:ref_method<MethodId, ref_t>:](std::forward<Args>(args)...);
+    using fn_t  = [:[] {
+        auto const raw_fn = type_of(ref_method<MethodId, ref_t>);
+        if (is_rvalue_reference_type(^^Ref&&)) {
+            // throw "FU";
+            return add_rvalue_reference(raw_fn);
+        } else {
+            return add_lvalue_reference(raw_fn);
+        }
+    }():];
+
+    return static_cast<fn_t>(ref.[:ref_method<MethodId, ref_t>:])(std::forward<Args>(args)...);
 }
 }    // namespace cvts_trait
 
