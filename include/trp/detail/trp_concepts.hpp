@@ -249,8 +249,10 @@ using method_return_t = [:[] {
     }
 }():];
 
-consteval auto
-invocable(meta::info impl, meta::info impl_method, meta::info method_idt, meta::info return_concept) -> bool {
+consteval auto invocable_as_method(meta::info impl,
+                                   meta::info impl_method,
+                                   meta::info method_idt,
+                                   meta::info return_concept) -> bool {
     auto const params = extract_method_param_types(method_idt);
     auto const ret    = extract_method_return_type(method_idt);
     auto const quals  = extract_method_qualifiers(method_idt);

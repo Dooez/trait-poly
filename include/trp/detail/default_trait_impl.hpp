@@ -137,11 +137,11 @@ consteval auto find_trait_method_impl(meta::info                      impl,
     if (id_mems.empty())
         return std::nullopt;
 
-    auto const invocable_concept = reqs.exact_return ? ^^std::same_as : ^^std::convertible_to;
+    auto const invk_concept = reqs.exact_return ? ^^std::same_as : ^^std::convertible_to;
     auto const callable_mems =
-        id_mems                                                                                      //
-        | stdv::filter([=](auto m) { return invocable(impl, m, method_idt, invocable_concept); })    //
-        | stdr::to<std::vector>();
+        id_mems |
+        stdv::filter([=](auto m) { return invocable_as_method(impl, m, method_idt, invk_concept); }) |
+        stdr::to<std::vector>();
 
     for (auto const m: callable_mems) {
         auto const matches = check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
