@@ -214,94 +214,31 @@ inline constexpr auto matching_id_direct_public_members = std::define_static_arr
     members_of(^^Impl, unprivileged)    //
     | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; }));
 
-template<typename Impl, meta::info ImplMethod, any_method_idt MethodIdt>
-inline constexpr bool invokable_exact_return = [] {
-    auto [... arg_ids]      = MethodIdt::param_identities;
-    using return_type       = MethodIdt::return_type;
-    using impl_invocation_t = [:MethodIdt::add_obj_call_cvref(^^Impl):];
-
+template<typename Impl, meta::info ImplMethod, bool Noexcept, typename... Args>
+inline constexpr bool invocable_from_idt = [] {
     if constexpr (meta::is_template(ImplMethod)) {
-        if constexpr (MethodIdt::is_noexcept) {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } noexcept -> std::same_as<return_type>;
+        if constexpr (Noexcept) {
+            return requires {
+                { std::declval<Impl>().template[:ImplMethod:](std::declval<Args>()...) } noexcept;
             };
         } else {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } -> std::same_as<return_type>;
+            return requires {
+                { std::declval<Impl>().template[:ImplMethod:](std::declval<Args>()...) };
             };
         }
     } else {
-        if constexpr (MethodIdt::is_noexcept) {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } noexcept -> std::same_as<return_type>;
+        if constexpr (Noexcept) {
+            return requires {
+                { std::declval<Impl>().[:ImplMethod:](std::declval<Args>()...) } noexcept;
             };
         } else {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } -> std::same_as<return_type>;
-            };
-        }
-    }
-}();
-template<typename Impl, meta::info ImplMethod, any_method_idt MethodIdt>
-inline constexpr bool invokable_convert_return = [] {
-    auto [... arg_ids]      = MethodIdt::param_identities;
-    using return_type       = MethodIdt::return_type;
-    using impl_invocation_t = [:MethodIdt::add_obj_call_cvref(^^Impl):];
-
-    if constexpr (meta::is_template(ImplMethod)) {
-        if constexpr (MethodIdt::is_noexcept) {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } noexcept -> std::convertible_to<return_type>;
-            };
-        } else {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } -> std::convertible_to<return_type>;
-            };
-        }
-    } else {
-        if constexpr (MethodIdt::is_noexcept) {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } noexcept -> std::convertible_to<return_type>;
-            };
-        } else {
-            return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
-                {
-                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
-                        std::forward<typename decltype(arg_ids)::type>(args)...)
-                } -> std::convertible_to<return_type>;
+            return requires {
+                { std::declval<Impl>().[:ImplMethod:](std::declval<Args>()...) };
             };
         }
     }
 }();
 
-
-template<non_cv_trait Trait>
-inline constexpr auto method_signature_requirements = [] -> method_signature_requirements_t {
-    if (auto o_req = extract_signature_req(^^Trait); o_req)
-        return *o_req;
-    return {};
-}();
 
 template<typename Impl, meta::info ImplMethod, typename... Args>
 using method_return_t = [:[] {
@@ -311,6 +248,36 @@ using method_return_t = [:[] {
         return ^^decltype(std::declval<Impl>().[:ImplMethod:](std::declval<Args>()...));
     }
 }():];
+
+consteval auto
+invocable(meta::info impl, meta::info impl_method, meta::info method_idt, meta::info return_concept) -> bool {
+    auto const params = extract_method_param_types(method_idt);
+    auto const ret    = extract_method_return_type(method_idt);
+    auto const quals  = extract_method_qualifiers(method_idt);
+
+    auto invk_impl = impl;
+    if (quals.is_const)
+        invk_impl = add_const(invk_impl);
+    if (quals.is_volatile)
+        invk_impl = add_volatile(invk_impl);
+    if (quals.is_rvalue)
+        invk_impl = add_rvalue_reference(invk_impl);
+    else
+        invk_impl = add_lvalue_reference(invk_impl);
+
+    auto const method_r = reflect_constant(impl_method);
+
+    auto invk_args = std::vector{invk_impl, method_r, meta::reflect_constant(quals.is_noexcept)};
+    invk_args.append_range(params);
+    if (not extract<bool>(substitute(^^invocable_from_idt, invk_args)))
+        return false;
+
+    auto invk_ret_args = std::vector{invk_impl, method_r};
+    invk_ret_args.append_range(params);
+    auto const invk_ret = substitute(^^method_return_t, invk_ret_args);
+    return extract<bool>(substitute(return_concept, {invk_ret, ret}));
+}
+
 
 consteval auto call_operators_of_fn(meta::info type) -> std::vector<meta::info> {
     auto v = members_of(type, unprivileged) | stdv::filter([](auto m) {
@@ -447,19 +414,22 @@ consteval auto check_parameter_match(
         if (exact_cv)
             return false;
 
-        auto const is_invokable = [=, im = reflect_constant(impl_method)](meta::info impl) {
-            return extract<bool>(
-                substitute(^^invokable_convert_return, {add_method_cvref(impl), im, method_idt}));
+        auto invk_args = std::vector{
+            meta::info{}, reflect_constant(method_idt), meta::reflect_constant(quals.is_noexcept)};
+        invk_args.append_range(trait_params);
+        auto const is_invocable = [&](meta::info impl) {
+            invk_args[0] = impl;
+            return extract<bool>(substitute(^^invocable_from_idt, invk_args));
         };
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
-        if (not meta::is_const(remove_reference(invokation_info)) and is_invokable(add_const(impl))) {
+        if (not meta::is_const(remove_reference(invokation_info)) and is_invocable(add_const(impl))) {
             auto const exact_method =
                 check_parameter_match(add_const(impl), impl_method, method_idt, exact_cv, exact_ref);
             if (exact_method)
                 return true;
         }
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
-        if (not meta::is_volatile(remove_reference(invokation_info)) and is_invokable(add_volatile(impl))) {
+        if (not meta::is_volatile(remove_reference(invokation_info)) and is_invocable(add_volatile(impl))) {
             auto const exact_method =
                 check_parameter_match(add_volatile(impl), impl_method, method_idt, exact_cv, exact_ref);
             if (exact_method)
