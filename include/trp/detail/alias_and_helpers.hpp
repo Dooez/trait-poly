@@ -497,11 +497,18 @@ struct methods_and_requirements {
     std::span<method_signature_requirements_t const> requirements;
 
     static consteval auto to_o_requirements(meta::info trait_member) -> method_signature_requirements_t {
+        auto const verify = [](auto const& req) {
+            if (req.exact_cv and not req.exact_args)
+                throw "Exact cv signature requirement must include exact arguments requriement";
+            if (req.exact_ref and not req.exact_args)
+                throw "Exact reference signature requirement must include exact arguments requriement";
+            return req;
+        };
         if (auto o_req = extract_signature_req(trait_member))
-            return *o_req;
+            return verify(*o_req);
         auto const trait = parent_of(trait_member);
         if (auto o_req = extract_signature_req(trait))
-            return *o_req;
+            return verify(*o_req);
         return {};
     };
 

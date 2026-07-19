@@ -54,8 +54,8 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     auto const quals = method_qualifiers_t{
         .is_const    = is_const(remove_reference(ref)),
         .is_volatile = is_volatile(remove_reference(ref)),
-        .is_lvalue   = true,
-        .is_rvalue   = false,
+        .is_lvalue   = is_lvalue_reference_type(ref),
+        .is_rvalue   = is_rvalue_reference_type(ref),
         .is_value    = false,
         .is_noexcept = is_noexcept(fn),
     };
@@ -361,7 +361,6 @@ consteval auto check_parameter_match(
                 return false;
         }
         return true;
-
     } else if (is_function_template(impl_method)) {
         auto const return_type = [&] {
             auto targs = std::vector{invokation_info, reflect_constant(impl_method)};
