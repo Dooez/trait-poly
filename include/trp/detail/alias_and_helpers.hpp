@@ -115,7 +115,7 @@ struct method_qualifiers_t {
         return is_const and is_volatile;
     }
     [[nodiscard]] consteval auto is_ref() const {
-        return is_lvalue and is_rvalue;
+        return is_lvalue or is_rvalue;
     }
 };
 template<method_qualifiers_t quals>
@@ -148,12 +148,19 @@ struct method_identity_t {
             inf = add_volatile(inf);
         if (is_const)
             inf = add_const(inf);
-        if (is_rvalue)
-            inf = add_lvalue_reference(inf);
         if (is_lvalue)
+            inf = add_lvalue_reference(inf);
+        if (is_rvalue)
             inf = add_rvalue_reference(inf);
         return inf;
     };
+
+    static consteval auto add_obj_call_cvref(meta::info inf) {
+        inf = add_obj_cv(inf);
+        if (is_rvalue)
+            return add_rvalue_reference(inf);
+        return add_lvalue_reference(inf);
+    }
 
     static consteval auto add_obj_cv(meta::info inf) {
         auto const is_lref_obj = is_lvalue_reference_type(inf);
@@ -335,14 +342,14 @@ consteval auto add_method_obj_cvref(meta::info method, meta::info inf) {
         inf = add_volatile(inf);
     if (quals.is_const)
         inf = add_const(inf);
-    if (quals.is_rvalue)
-        inf = add_lvalue_reference(inf);
     if (quals.is_lvalue)
+        inf = add_lvalue_reference(inf);
+    if (quals.is_rvalue)
         inf = add_rvalue_reference(inf);
     return inf;
 };
 
-consteval auto update_method_qualifiers(meta::info method, method_qualifiers_t quals) -> meta::info {
+consteval auto replace_method_qualifiers(meta::info method, method_qualifiers_t quals) -> meta::info {
     auto upd_targs = std::vector{meta::reflect_constant(extract_method_identifier(method)),
                                  meta::reflect_constant(quals),
                                  extract_method_return_type(method)};
@@ -367,6 +374,9 @@ consteval bool is_cv_idt(meta::info idt) {
 }
 
 consteval bool are_similar_idts(meta::info a, meta::info b) {
+    if (std::string_view(extract_method_identifier(a)) != extract_method_identifier(b))
+        return false;
+
     auto const qa = extract_method_qualifiers(a);
     auto const qb = extract_method_qualifiers(b);
     if (qa.is_const != qb.is_const or qa.is_volatile != qb.is_volatile)
@@ -382,6 +392,38 @@ consteval bool are_similar_idts(meta::info a, meta::info b) {
     if (reta != retb)
         throw "methods differ by return type only";
     return true;
+}
+
+/**
+ * @brief checks if method identity range contains a potentially more specialized version of method_idt
+ */
+consteval bool contains_submethod_of(std::span<meta::info const> idt_range, meta::info method_idt) {
+    auto const quals = extract_method_qualifiers(method_idt);
+    auto const ret   = extract_method_return_type(method_idt);
+
+    auto has_lvalue = false;
+    auto has_rvalue = false;
+    for (auto const candidate: idt_range) {
+        if (extract_method_return_type(candidate) != ret)
+            continue;
+        if (not are_similar_idts(candidate, method_idt))
+            continue;
+        auto const candidate_quals = extract_method_qualifiers(candidate);
+        if (quals.is_noexcept and not candidate_quals.is_noexcept)
+            continue;
+        if (not candidate_quals.is_ref())
+            return true;
+        has_lvalue |= candidate_quals.is_lvalue;
+        has_rvalue |= candidate_quals.is_rvalue;
+
+        if (has_lvalue and has_rvalue)
+            return true;
+    }
+    if (quals.is_lvalue)
+        return has_lvalue;
+    if (quals.is_rvalue)
+        return has_rvalue;
+    return has_lvalue and has_rvalue;
 }
 
 consteval auto copy_cv_to(meta::info proto, meta::info type) {
@@ -495,119 +537,103 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
                     | stdr::to<std::vector>();
 
     auto const append_unique = [&](auto&& idts, auto&& reqs) {
-        for (auto [m, const_req]: stdv::zip(idts, reqs)) {
-            auto const is_similar = [=](meta::info idt) { return are_similar_idts(idt, m); };
+        auto const update_at = [&](uZ i, auto const& quals, auto const& reqs) {
+            auto curr_quals = extract_method_qualifiers(res_idts[i]);
+            curr_quals.is_noexcept |= quals.is_noexcept;
+            curr_quals.is_lvalue |= quals.is_lvalue;
+            curr_quals.is_rvalue |= quals.is_rvalue;
 
-            auto const it = stdr::find_if(res_idts, is_similar);
-            if (it == res_idts.end()) {
-                res_idts.push_back(m);
-                res_reqs.push_back(const_req);
-                continue;
-            }
-            auto const i   = stdr::distance(res_idts.begin(), it);
-            auto       req = const_req;
+            res_idts[i] = replace_method_qualifiers(res_idts[i], curr_quals);
+            res_reqs[i] |= reqs;
+        };
+        auto const append_as_ref = [&](meta::info method, auto const& reqs, bool is_lvalue) {
+            auto quals      = extract_method_qualifiers(method);
+            quals.is_lvalue = is_lvalue;
+            quals.is_rvalue = not is_lvalue;
+            res_idts.push_back(replace_method_qualifiers(method, quals));
+            res_reqs.push_back(reqs);
+        };
 
-            auto qa = extract_method_qualifiers(*it);
-            auto qb = extract_method_qualifiers(m);
+        for (auto [method, requirements]: stdv::zip(idts, reqs)) {
+            auto const size = res_idts.size();
 
-            if (qa.is_lvalue != qb.is_lvalue or qa.is_rvalue != qb.is_rvalue) {
-                // we need both lvalue and rvalue qualified methods
-
-                if (auto it2 = std::find_if(it + 1, res_idts.end(), is_similar); it2 == res_idts.end()) {
-                    // there's no second method, we need to add one
-                    if (qa.is_lvalue) {
-                        if (qb.is_rvalue) {
-                            res_idts.push_back(m);
-                            res_reqs.push_back(req);
-                            continue;
-                        }
-                        // new entry is unq
-                        res_reqs[i] |= req;    // merge requirements
-                        if (not qa.is_noexcept and qb.is_noexcept) {
-                            qa.is_noexcept |= true;
-                            *it = update_method_qualifiers(*it, qa);
-                        }
-                        qb.is_rvalue = true;
-                        res_idts.push_back(update_method_qualifiers(m, qb));
-                        res_reqs.push_back(req);
-                        continue;
-                    } else if (qa.is_rvalue) {
-                        auto idta = *it;
-                        auto reqa = res_reqs[i];
-                        if (not qb.is_lvalue) {
-                            reqa |= req;
-                            if (not qa.is_noexcept and qb.is_noexcept) {
-                                qa.is_noexcept |= true;
-                                idta = update_method_qualifiers(idta, qa);
-                            }
-                            qb.is_lvalue = true;
-                        }
-                        res_idts.push_back(idta);
-                        res_reqs.push_back(reqa);
-                        *it         = m;
-                        res_reqs[i] = req;
-                        continue;
-                    } else {
-                        auto idta = *it;
-                        auto reqa = res_reqs[i];
-                        req |= reqa;
-                        qb.is_noexcept |= qa.is_noexcept;
-                        if (qb.is_lvalue) {
-                            *it         = update_method_qualifiers(m, qb);
-                            res_reqs[i] = req;
-
-                            qa.is_rvalue = true;
-                            res_idts.push_back(update_method_qualifiers(idta, qa));
-                            res_reqs.push_back(reqa);
-                            continue;
-                        }
-                        // qb is rvalue
-                        res_idts.push_back(update_method_qualifiers(m, qb));
-                        res_reqs.push_back(req);
-                        qa.is_lvalue = true;
-                        *it          = update_method_qualifiers(idta, qa);
-                        continue;
-                    }
-                } else {
-                    // both ref variants are already added
-                    // update quals
-                    auto const i2 = stdr::distance(res_idts.begin(), it2);
-                    auto       qc = extract_method_qualifiers(*it2);
-
-                    if (not qb.is_ref()) {
-                        if (not qa.is_noexcept and qb.is_noexcept) {
-                            qa.is_noexcept |= true;
-                            *it = update_method_qualifiers(*it, qa);
-                        }
-                        if (not qc.is_noexcept and qb.is_noexcept) {
-                            qc.is_noexcept |= true;
-                            *it2 = update_method_qualifiers(*it2, qc);
-                        }
-                        res_reqs[i] |= req;
-                        res_reqs[i2] |= req;
-                    } else if (qb.is_lvalue) {
-                        // lvalue is always first
-                        if (not qa.is_noexcept and qb.is_noexcept) {
-                            qa.is_noexcept |= true;
-                            *it = update_method_qualifiers(*it, qa);
-                        }
-                        res_reqs[i] |= req;
-                    } else {
-                        if (not qc.is_noexcept and qb.is_noexcept) {
-                            qc.is_noexcept |= true;
-                            *it2 = update_method_qualifiers(*it2, qc);
-                        }
-                        res_reqs[i2] |= req;
-                    }
+            auto unqual_idx = size;
+            auto lvalue_idx = size;
+            auto rvalue_idx = size;
+            for (auto i: stdv::iota(0UZ, size)) {
+                if (not are_similar_idts(res_idts[i], method))
                     continue;
+                auto const quals = extract_method_qualifiers(res_idts[i]);
+                if (quals.is_lvalue) {
+                    lvalue_idx = i;
+                } else if (quals.is_rvalue) {
+                    rvalue_idx = i;
+                    break;
+                } else {
+                    unqual_idx = i;
+                    break;
                 }
             }
 
-            if (not qa.is_noexcept and qb.is_noexcept) {
-                qa.is_noexcept |= true;
-                *it = update_method_qualifiers(*it, qa);
+            if (unqual_idx == size     /**/
+                and lvalue_idx == size /**/
+                and rvalue_idx == size) {
+                res_idts.push_back(method);
+                res_reqs.push_back(requirements);
+                continue;
             }
-            res_reqs[i] |= req;
+
+            auto const method_quals = extract_method_qualifiers(method);
+            if (unqual_idx != size) {
+                if (not method_quals.is_ref()) {
+                    update_at(unqual_idx, method_quals, requirements);
+                    continue;
+                }
+                auto const current_method = res_idts[unqual_idx];
+
+                auto lvalue_req   = res_reqs[unqual_idx];
+                auto lvalue_quals = extract_method_qualifiers(current_method);
+                auto rvalue_req   = lvalue_req;
+                auto rvalue_quals = lvalue_quals;
+
+                if (method_quals.is_lvalue)
+                    lvalue_req |= requirements;
+                else
+                    rvalue_req |= requirements;
+
+                lvalue_quals.is_lvalue = true;
+                if (method_quals.is_lvalue)
+                    lvalue_quals.is_noexcept |= method_quals.is_noexcept;
+                update_at(unqual_idx, lvalue_quals, lvalue_req);
+
+                rvalue_quals.is_rvalue = true;
+                if (method_quals.is_rvalue)
+                    rvalue_quals.is_noexcept |= method_quals.is_noexcept;
+                res_idts.push_back(replace_method_qualifiers(current_method, rvalue_quals));
+                res_reqs.push_back(rvalue_req);
+                continue;
+            }
+
+            if (method_quals.is_lvalue) {
+                if (lvalue_idx == size)
+                    append_as_ref(method, requirements, true);
+                else
+                    update_at(lvalue_idx, method_quals, requirements);
+            } else if (method_quals.is_rvalue) {
+                if (rvalue_idx == size)
+                    append_as_ref(method, requirements, false);
+                else
+                    update_at(rvalue_idx, method_quals, requirements);
+            } else {
+                if (lvalue_idx == size)
+                    append_as_ref(method, requirements, true);
+                else
+                    update_at(lvalue_idx, method_quals, requirements);
+                if (rvalue_idx == size)
+                    append_as_ref(method, requirements, false);
+                else
+                    update_at(rvalue_idx, method_quals, requirements);
+            }
         }
     };
     template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
@@ -618,11 +644,21 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
     auto const method_id_less = [](auto&& zip_v_l, auto&& zip_v_r) {
         auto [idt_l, _] = zip_v_l;
         auto [idt_r, _] = zip_v_r;
-        return std::string_view(extract_method_identifier(idt_l)) <
-               std::string_view(extract_method_identifier(idt_r));
+        auto const id_l = std::string_view(extract_method_identifier(idt_l));
+        auto const id_r = std::string_view(extract_method_identifier(idt_r));
+        if (id_l != id_r)
+            return id_l < id_r;
+        auto const quals_l  = extract_method_qualifiers(idt_l);
+        auto const quals_r  = extract_method_qualifiers(idt_r);
+        auto const ref_rank = [](method_qualifiers_t quals) {
+            if (quals.is_lvalue)
+                return 0;
+            if (quals.is_rvalue)
+                return 2;
+            return 1;
+        };
+        return ref_rank(quals_l) < ref_rank(quals_r);
     };
-
-
     stdr::sort(stdv::zip(res_idts, res_reqs), method_id_less);
     return methods_and_requirements{
         .identities   = std::define_static_array(res_idts),

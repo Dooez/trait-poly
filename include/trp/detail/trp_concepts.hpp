@@ -190,15 +190,16 @@ template<typename Trait>
 concept non_cv_trait = non_cvref<Trait> and any_trait<Trait>;
 
 template<typename Supertrait, typename Trait>
-concept supertrait_of = any_trait<Supertrait>    //
-                        and any_trait<Trait>     //
-                        and ([] {
-                                for (auto m: detail::all_trait_methods<Supertrait>) {
-                                    if (not stdr::contains(detail::all_trait_methods<Trait>, m))
-                                        return false;
-                                }
-                                return true;
-                            }());
+concept supertrait_of =
+    any_trait<Supertrait>    //
+    and any_trait<Trait>     //
+    and ([] {
+            for (auto m: detail::all_trait_methods<Supertrait>) {
+                if (not detail::contains_submethod_of(detail::all_trait_methods<Trait>, m))
+                    return false;
+            }
+            return true;
+        }());
 template<typename Supertrait, typename Trait>
 concept direct_supertrait_of =
     supertrait_of<Supertrait, Trait> and
@@ -217,19 +218,21 @@ template<typename Impl, meta::info ImplMethod, any_method_idt MethodIdt>
 inline constexpr bool invokable_exact_return = [] {
     auto [... arg_ids]      = MethodIdt::param_identities;
     using return_type       = MethodIdt::return_type;
-    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
+    using impl_invocation_t = [:MethodIdt::add_obj_call_cvref(^^Impl):];
 
     if constexpr (meta::is_template(ImplMethod)) {
         if constexpr (MethodIdt::is_noexcept) {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } noexcept -> std::same_as<return_type>;
             };
         } else {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } -> std::same_as<return_type>;
             };
         }
@@ -237,13 +240,15 @@ inline constexpr bool invokable_exact_return = [] {
         if constexpr (MethodIdt::is_noexcept) {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } noexcept -> std::same_as<return_type>;
             };
         } else {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } -> std::same_as<return_type>;
             };
         }
@@ -253,19 +258,21 @@ template<typename Impl, meta::info ImplMethod, any_method_idt MethodIdt>
 inline constexpr bool invokable_convert_return = [] {
     auto [... arg_ids]      = MethodIdt::param_identities;
     using return_type       = MethodIdt::return_type;
-    using impl_invocation_t = [:MethodIdt::add_obj_cv(^^Impl):];
+    using impl_invocation_t = [:MethodIdt::add_obj_call_cvref(^^Impl):];
 
     if constexpr (meta::is_template(ImplMethod)) {
         if constexpr (MethodIdt::is_noexcept) {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } noexcept -> std::convertible_to<return_type>;
             };
         } else {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.template[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).template[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } -> std::convertible_to<return_type>;
             };
         }
@@ -273,13 +280,15 @@ inline constexpr bool invokable_convert_return = [] {
         if constexpr (MethodIdt::is_noexcept) {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } noexcept -> std::convertible_to<return_type>;
             };
         } else {
             return requires(impl_invocation_t impl, typename decltype(arg_ids)::type... args) {
                 {
-                    impl.[:ImplMethod:](std::forward<typename decltype(arg_ids)::type>(args)...)
+                    std::forward<impl_invocation_t>(impl).[:ImplMethod:](
+                        std::forward<typename decltype(arg_ids)::type>(args)...)
                 } -> std::convertible_to<return_type>;
             };
         }
@@ -369,19 +378,18 @@ consteval auto check_parameter_match(
                     return false;
             }
         }
+        auto const impl_is_lvalue = is_eop ? is_lvalue_reference_type(type_of(impl_params_raw[0]))
+                                           : is_lvalue_reference_qualified(impl_method);
+        auto const impl_is_rvalue = is_eop ? is_rvalue_reference_type(type_of(impl_params_raw[0]))
+                                           : is_rvalue_reference_qualified(impl_method);
         if (exact_ref) {
-            if (is_eop) {
-                auto const eop_t = type_of(impl_params_raw[0]);
-                if (quals.is_lvalue != is_lvalue_reference_type(eop_t))
-                    return false;
-                if (quals.is_rvalue != is_rvalue_reference_type(eop_t))
-                    return false;
-            } else {
-                if (quals.is_lvalue != is_lvalue_reference_qualified(impl_method))
-                    return false;
-                if (quals.is_rvalue != is_rvalue_reference_qualified(impl_method))
-                    return false;
-            }
+            if (quals.is_lvalue != impl_is_lvalue or quals.is_rvalue != impl_is_rvalue)
+                return false;
+        } else {
+            if (quals.is_rvalue and impl_is_lvalue)
+                return false;
+            if (not quals.is_rvalue and impl_is_rvalue)
+                return false;
         }
         return true;
 
@@ -419,9 +427,11 @@ consteval auto check_parameter_match(
         }
 
         if (not exact_ref) {
-            auto const mem_fptr = get_fptr_t(false, add_lvalue_reference(obj));
-            if (is_extractable(mem_fptr))
-                return true;
+            if (not quals.is_rvalue) {
+                auto const mem_fptr = get_fptr_t(false, add_lvalue_reference(obj));
+                if (is_extractable(mem_fptr))
+                    return true;
+            }
 
             if (not quals.is_ref()) {
                 auto const mem_oep_fptr = get_fptr_t(true, add_lvalue_reference(obj));

@@ -318,10 +318,10 @@ inline constexpr auto ref_method = [] -> meta::info {
         ->member;
 }();
 
-template<char const* MethodId, typename... Args>
-auto call_method_via_id(auto&& ref, Args&&... args) -> decltype(auto) {
+template<char const* MethodId, typename Ref, typename... Args>
+auto call_method_via_id(Ref&& ref, Args&&... args) -> decltype(auto) {
     using ref_t = std::remove_cvref_t<decltype(ref)>;
-    return ref.[:ref_method<MethodId, ref_t>:](std::forward<Args>(args)...);
+    return std::forward<Ref>(ref).[:ref_method<MethodId, ref_t>:](std::forward<Args>(args)...);
 }
 }    // namespace cvts_trait
 
