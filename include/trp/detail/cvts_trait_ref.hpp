@@ -103,13 +103,16 @@ struct cvts_cvo_invoker;
                             MethodInvoker,                                                                  \
                             cvts_overload_spec<Impl, Method, method_identity_t<Id, Quals, Ret, Args...>>> { \
         auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                          \
+            using self_t = cvts_cvo_invoker C V Ref;                                                        \
             if constexpr (explicit_method<> != meta::info{}) {                                              \
-                return [:explicit_method<>:](get_trait_ref(), std::forward<Args>(args)...);                 \
+                return [:explicit_method<>:](static_cast<self_t&&>(*this).get_trait_ref(),                  \
+                                             std::forward<Args>(args)...);                                  \
             } else {                                                                                        \
                 using effective_ref_t = [:Quals.is_rvalue ? add_rvalue_reference(^^Impl)                    \
                                                           : add_lvalue_reference(^^Impl):];                 \
-                return static_cast<effective_ref_t>(*extract_obj_ptr(get_trait_ref())).[:Method:](          \
-                    std::forward<Args>(args)...);                                                           \
+                return static_cast<effective_ref_t>(                                                        \
+                           *extract_obj_ptr(static_cast<self_t&&>(*this).get_trait_ref()))                  \
+                    .[:Method:](std::forward<Args>(args)...);                                               \
             }                                                                                               \
         }                                                                                                   \
                                                                                                             \
@@ -150,7 +153,7 @@ struct cvts_cvo_invoker;
             using out_ref_t = [:copy_cvref_to(^^decltype(self), ^^TRef):]&&;                                \
             return static_cast<out_ref_t>(*static_cast<[:add_cvp(^^TRef):]>(mh_ptr));                       \
         }                                                                                                   \
-    };    // namespace trp::detail
+    };
 
 // clang-format off
 
