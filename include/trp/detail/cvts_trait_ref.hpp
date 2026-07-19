@@ -112,9 +112,15 @@ struct cvts_cvo_invoker;
             } else {                                                                                     \
                 using effective_ref_t = [:Quals.is_rvalue ? add_rvalue_reference(^^Impl)                 \
                                                           : add_lvalue_reference(^^Impl):];              \
-                return static_cast<effective_ref_t>(                                                     \
-                           *extract_obj_ptr(static_cast<self_t&&>(*this).get_trait_ref()))               \
-                    .[:Method:](std::forward<Args>(args)...);                                            \
+                if constexpr (is_function_template(Method)) {                                            \
+                    return static_cast<effective_ref_t>(                                                 \
+                               *extract_obj_ptr(static_cast<self_t&&>(*this).get_trait_ref()))           \
+                        .template[:Method:](std::forward<Args>(args)...);                                \
+                } else {                                                                                 \
+                    return static_cast<effective_ref_t>(                                                 \
+                               *extract_obj_ptr(static_cast<self_t&&>(*this).get_trait_ref()))           \
+                        .[:Method:](std::forward<Args>(args)...);                                        \
+                }                                                                                        \
             }                                                                                            \
         }                                                                                                \
                                                                                                          \
