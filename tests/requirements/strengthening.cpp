@@ -26,8 +26,8 @@ struct convert_ret_impl {
     }
 };
 
-static_assert(reqtest::only_requirement<strenthened_trait>().exact_return);
-static_assert(!reqtest::only_requirement<strenthened_trait>().exact_args);
+static_assert(reqtest::extract_first_req<strenthened_trait>().exact_return);
+static_assert(!reqtest::extract_first_req<strenthened_trait>().exact_args);
 
 // clang-format off
 static_assert(    trp::implements_trait<convert_ret_impl, relaxed_trait>);
