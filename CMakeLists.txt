@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 project(trp VERSION 0.2.0 LANGUAGES CXX)
 
-include(CTest)
-
 add_library(trp_trp INTERFACE)
 target_include_directories(trp_trp INTERFACE "include")
 target_compile_features(trp_trp INTERFACE cxx_std_26)
@@ -15,8 +13,9 @@ set_target_properties(trp_trp PROPERTIES
 add_library(trp::trp ALIAS trp_trp)
 
 option(TRP_BUILD_EXAMPLES "Build examples" OFF)
+option(TRP_BUILD_TESTING "Build examples" OFF)
 
-if (BUILD_TESTING)
+if (TRP_BUILD_TESTING)
 	add_subdirectory(tests)
 endif()
 
