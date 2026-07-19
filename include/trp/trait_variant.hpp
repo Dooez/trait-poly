@@ -19,7 +19,8 @@ union uninit {
     auto ptr(this auto&& self) {
         using this_t    = std::remove_reference_t<decltype(self)>;
         using value_ptr = [:add_pointer(copy_cv_to(^^this_t, ^^T)):];
-        return std::launder(reinterpret_cast<value_ptr>(self.storage.data()));
+        using unvolatile = [:remove_volatile(^^this_t):];
+        return std::launder(reinterpret_cast<value_ptr>(const_cast<unvolatile&>(self).storage.data()));
     }
 };
 

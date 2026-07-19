@@ -433,6 +433,20 @@ consteval auto copy_cv_to(meta::info proto, meta::info type) {
         type = add_volatile(type);
     return type;
 }
+consteval auto copy_cvref_to(meta::info proto, meta::info type) {
+    if (is_lvalue_reference_type(type) or is_rvalue_reference_type(type))
+        throw "Non-reference type expected";
+    if (is_const(remove_reference(proto)))
+        type = add_const(type);
+    if (is_volatile(remove_reference(proto)))
+        type = add_volatile(type);
+    if (is_lvalue_reference_type(proto))
+        type = add_lvalue_reference(type);
+    if (is_rvalue_reference_type(proto))
+        type = add_rvalue_reference(type);
+
+    return type;
+}
 
 struct method_signature_requirements_t {
     bool exact_return =
@@ -450,12 +464,22 @@ struct method_signature_requirements_t {
     bool exact_cv =
 #ifdef TRP_DEFAULT_MATCH_METHOD_CV
         true;
+#ifndef TRP_DEFAULT_MATCH_METHOD_ARGS
+    static_assert(false,
+                  "Exact cv- qualification requirements can only be enabled together with exact arguments "
+                  "reqruiements.");
+#endif
 #else
         false;
 #endif
     bool exact_ref =
 #ifdef TRP_DEFAULT_MATCH_METHOD_REF
         true;
+#ifndef TRP_DEFAULT_MATCH_METHOD_ARGS
+    static_assert(false,
+                  "Exact reference qualification requirements can only be enabled together with exact "
+                  "arguments reqruiements.");
+#endif
 #else
         false;
 #endif

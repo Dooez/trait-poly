@@ -362,8 +362,9 @@ consteval auto check_parameter_match(
         }
         return true;
     } else if (is_function_template(impl_method)) {
+        auto const method_r    = reflect_constant(impl_method);
         auto const return_type = [&] {
-            auto targs = std::vector{invokation_info, reflect_constant(impl_method)};
+            auto targs = std::vector{invokation_info, method_r};
             targs.append_range(trait_params);
             return substitute(^^method_return_t, targs);
         }();
@@ -374,7 +375,7 @@ consteval auto check_parameter_match(
             return substitute(^^make_function_member_type, targs);
         };
         auto const is_extractable = [=](meta::info fptr_t) {
-            return extract<bool>(substitute(^^extractable_template, {fptr_t, reflect_constant(impl_method)}));
+            return extract<bool>(substitute(^^extractable_template, {fptr_t, method_r}));
         };
 
         auto const obj     = add_method_obj_cv(method_idt, impl);

@@ -38,7 +38,7 @@ auto extract_vtable_ptr(auto&& ref) -> auto&&
 auto extract_obj_ptr(auto&& ref) -> auto&&
     requires(obj_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
 {
-    return ref.[:obj_member_info<std::remove_cvref_t<decltype(ref)>>:];
+    return std::forward<decltype(ref)>(ref).[:obj_member_info<std::remove_cvref_t<decltype(ref)>>:];
 }
 
 namespace cvts_trait {
@@ -146,9 +146,11 @@ struct cvts_cvo_invoker;
             auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);                      \
                                                                                                             \
             static_assert(std::derived_from<TRef, MethodHolder>);                                           \
-            return *static_cast<[:add_cvp(^^TRef):]>(mh_ptr);                                               \
+                                                                                                            \
+            using out_ref_t = [:copy_cvref_to(^^decltype(self), ^^TRef):]&&;                                \
+            return static_cast<out_ref_t>(*static_cast<[:add_cvp(^^TRef):]>(mh_ptr));                       \
         }                                                                                                   \
-    };
+    };    // namespace trp::detail
 
 // clang-format off
 
