@@ -8,7 +8,7 @@ template<any_trait Trait>
 struct dyn_trait_ref;
 
 /**
- * @brief Converts reference from one trait to it's explicit supertrait. 
+ * @brief Converts reference from one trait to its explicit supertrait.
  * The resulting vtable uses entries from vtable of `Impl` for `Supertrait`.
  *
  * @tparam Supertrait target trait.
@@ -87,13 +87,13 @@ struct cvm_invoker : cvo_invoker<OvSpecs::index, typename OvSpecs::id>... {
 };
 
 template<typename CVMInvoker, typename VTable, typename... Args>
-concept noexcept_cvm_invoker =
-    has_template_arguments(^^CVMInvoker)                //
-    and (template_of(^^CVMInvoker) == ^^cvm_invoker)    //
-    and ([] {
-            VTable vt{};
-            return noexcept(CVMInvoker{}(&vt, nullptr, std::forward<Args>(std::declval<Args>())...));
-        }());
+concept valid_cvm_invoker = has_template_arguments(^^CVMInvoker)                //
+                            and (template_of(^^CVMInvoker) == ^^cvm_invoker)    //
+                            and std::invocable<CVMInvoker, VTable const*, void*, Args...>;
+
+template<typename CVMInvoker, typename VTable, typename... Args>
+inline constexpr auto noexcept_cvm_invoker =
+    std::is_nothrow_invocable_v<CVMInvoker, VTable const*, void*, Args...>;
 
 
 template<typename TRef, typename Trait, typename MethodHolder, typename CVMInvoker>
@@ -106,7 +106,9 @@ private:
 public:
     template<typename... Args>
     auto operator()(Args&&... args) const
-        volatile noexcept(noexcept_cvm_invoker<invoker_t, vtable_t, Args...>) -> decltype(auto) {
+        volatile noexcept(noexcept_cvm_invoker<invoker_t, vtable_t, Args...>) -> decltype(auto)
+        requires valid_cvm_invoker<invoker_t, vtable_t, Args...>
+    {
         return invoker_t{}(extract_vtable_ptr(get_trait_ref()),
                            extract_obj_ptr(get_trait_ref()),
                            std::forward<Args>(args)...);

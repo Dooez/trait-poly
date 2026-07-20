@@ -10,32 +10,43 @@ inline constexpr auto relaxed_signature = detail::method_signature_requirements_
     .exact_return = false,
     .exact_args   = false,
     .exact_cv     = false,
-
+    .exact_ref    = false,
 };
 inline constexpr auto matching_return_signature = detail::method_signature_requirements_t{
     .exact_return = true,
     .exact_args   = false,
     .exact_cv     = false,
+    .exact_ref    = false,
 };
 inline constexpr auto matching_args_signature = detail::method_signature_requirements_t{
     .exact_return = false,
     .exact_args   = true,
     .exact_cv     = false,
+    .exact_ref    = false,
 };
 inline constexpr auto matching_cv_signature = detail::method_signature_requirements_t{
     .exact_return = false,
     .exact_args   = true,
     .exact_cv     = true,
+    .exact_ref    = false,
 };
 inline constexpr auto exact_signature = detail::method_signature_requirements_t{
     .exact_return = true,
     .exact_args   = true,
     .exact_cv     = false,
+    .exact_ref    = false,
 };
 inline constexpr auto exact_cv_signature = detail::method_signature_requirements_t{
     .exact_return = true,
     .exact_args   = true,
     .exact_cv     = true,
+    .exact_ref    = false,
+};
+inline constexpr auto exact_cvref_signature = detail::method_signature_requirements_t{
+    .exact_return = true,
+    .exact_args   = true,
+    .exact_cv     = true,
+    .exact_ref    = true,
 };
 
 namespace detail {
@@ -65,6 +76,12 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     return substitute(^^method_identity_t, idt_targs);
 }
 consteval auto matching_explicit_impl(meta::info impl, meta::info method_idt) -> bool {
+    auto       impl_quals = extract_method_qualifiers(impl);
+    auto const req_quals  = extract_method_qualifiers(method_idt);
+    if (req_quals.is_noexcept and not impl_quals.is_noexcept)
+        return false;
+    impl_quals.is_noexcept = req_quals.is_noexcept;
+    impl                   = replace_method_qualifiers(impl, impl_quals);
     return impl == method_idt or impl == as_lref_method_identity(method_idt);
 }
 
@@ -99,7 +116,7 @@ template<typename Trait>
 concept no_explicit_special_members = non_cvref<Trait>    //
                                       and stdr::none_of(members_of(^^Trait, unprivileged), [](auto m) {
                                               return is_special_member_function(m)    //
-                                                     and not is_defaulted(m);
+                                                     and is_user_declared(m);
                                           });    //
 //
 template<typename Trait>
@@ -119,6 +136,19 @@ concept nonstatic_methods_are_not_templates =
     non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, [](auto r) {
         return is_function_template(r) and not is_static_member(r);
     });
+
+template<typename Trait>
+concept no_vararg_methods =
+    non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, meta::is_vararg_function);
+
+template<typename Trait>
+concept no_default_arguments = non_cvref<Trait>and[] {
+    for (auto method: nonspecial_members<Trait> | stdv::filter(meta::is_function))
+        if (stdr::any_of(parameters_of(method), meta::has_default_argument))
+            return false;
+    return true;
+}
+();
 template<typename Trait>
 concept static_methods_are_templates =
     non_cvref<Trait> and
@@ -144,13 +174,15 @@ template<typename T, typename Trait>
 concept static_methods_are_default_impl_for =
     non_cvref<T>            //
     and non_cvref<Trait>    //
-    and stdr::all_of(
-            nonspecial_members<T> |
-                stdv::filter([](auto r) { return is_static_member(r) and (is_function_template(r)); }),
-            [](auto r) {
-                return stdr::contains(all_trait_methods<Trait> | stdv::transform(as_lref_method_identity),
-                                      explicit_impl_to_method_identity(r, ^^Trait));
-            });
+    and
+    stdr::all_of(nonspecial_members<T> |
+                     stdv::filter([](auto r) { return is_static_member(r) and (is_function_template(r)); }),
+                 [](auto r) {
+                     auto const impl_idt = explicit_impl_to_method_identity(r, ^^Trait);
+                     return stdr::any_of(all_trait_methods<Trait>, [=](auto method) {
+                         return matching_explicit_impl(impl_idt, method);
+                     });
+                 });
 
 
 template<typename Trait>
@@ -164,6 +196,8 @@ concept any_immediate_trait = non_cvref<Trait>                                  
                               and static_methods_are_templates<Trait>                  //
                               and no_operators<Trait>                                  //
                               and nonstatic_methods_are_not_templates<Trait>           //
+                              and no_vararg_methods<Trait>                             //
+                              and no_default_arguments<Trait>                          //
                               and valid_methods<Trait>                                 //
                               and static_methods_are_default_impl_for<Trait, Trait>    //
     ;
@@ -209,10 +243,17 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 
 namespace detail {
-template<non_cvref Impl, auto Id>
-inline constexpr auto matching_id_direct_public_members = std::define_static_array(
-    members_of(^^Impl, unprivileged)    //
-    | stdv::filter([](auto info) { return has_identifier(info) and identifier_of(info) == Id; }));
+template<char const* Id>
+struct is_matching_id_t {
+    static constexpr auto id_sv = std::string_view(Id);
+    static consteval bool operator()(meta::info r) {
+        return has_identifier(r) and identifier_of(r) == id_sv;
+    }
+};
+template<non_cvref Impl, char const* Id>
+inline constexpr auto matching_id_direct_public_members =
+    std::define_static_array(members_of(^^Impl, unprivileged)    //
+                             | stdv::filter(is_matching_id_t<Id>{}));
 
 template<typename Impl, meta::info ImplMethod, bool Noexcept, typename... Args>
 inline constexpr bool invocable_from_idt = [] {
@@ -249,10 +290,10 @@ using method_return_t = [:[] {
     }
 }():];
 
-consteval auto invocable_as_method(meta::info impl,
+consteval auto invocable_as_method(meta::info impl, /**/
                                    meta::info impl_method,
                                    meta::info method_idt,
-                                   meta::info return_concept) -> bool {
+                                   bool       exact_ret) -> bool {
     auto const params = extract_method_param_types(method_idt);
     auto const ret    = extract_method_return_type(method_idt);
     auto const quals  = extract_method_qualifiers(method_idt);
@@ -276,8 +317,15 @@ consteval auto invocable_as_method(meta::info impl,
 
     auto invk_ret_args = std::vector{invk_impl, method_r};
     invk_ret_args.append_range(params);
-    auto const invk_ret = substitute(^^method_return_t, invk_ret_args);
-    return extract<bool>(substitute(return_concept, {invk_ret, ret}));
+    auto const invk_ret    = substitute(^^method_return_t, invk_ret_args);
+    auto const same_return = extract<bool>(substitute(^^std::same_as, {invk_ret, ret}));
+    if (same_return)
+        return true;
+    if (exact_ret)
+        return false;
+    if (quals.is_noexcept)
+        return extract<bool>(substitute(^^std::is_nothrow_convertible_v, {invk_ret, ret}));
+    return extract<bool>(substitute(^^std::is_convertible_v, {invk_ret, ret}));
 }
 
 
@@ -318,9 +366,7 @@ consteval auto check_parameter_match(
     // This way the return type rules are decoupled from argument rules.
     // noexcept promotion in pointer conversion is automatic
 
-    // add static function resolution?
-    //
-    if (is_function(impl_method) and not is_static_member(impl_method)) {
+    if (is_function(impl_method)) {
         auto const impl_params_raw = parameters_of(impl_method);
         auto const is_eop = not impl_params_raw.empty() and is_explicit_object_parameter(impl_params_raw[0]);
         auto const impl_params = [&] {
@@ -333,6 +379,13 @@ consteval auto check_parameter_match(
         }();
         if (not stdr::equal(trait_params, impl_params))
             return false;
+        if (is_static_member(impl_method)) {
+            if (exact_cv and (quals.is_const or quals.is_volatile))
+                return false;
+            if (exact_ref and quals.is_ref())
+                return false;
+            return true;
+        }
         if (exact_cv) {
             if (is_eop) {
                 auto const eop_t = type_of(impl_params_raw[0]);
@@ -406,7 +459,7 @@ consteval auto check_parameter_match(
                 auto const mem_oep_fptr = get_fptr_t(true, add_lvalue_reference(obj));
                 if (is_extractable(mem_oep_fptr))
                     return true;
-            } else if (not quals.is_volatile) {
+            } else if (not quals.is_volatile and not is_volatile(impl)) {
                 auto const eop_fptr = get_fptr_t(true, obj);
                 if (is_extractable(eop_fptr))
                     return true;
@@ -416,8 +469,7 @@ consteval auto check_parameter_match(
         if (exact_cv)
             return false;
 
-        auto invk_args = std::vector{
-            meta::info{}, reflect_constant(method_idt), meta::reflect_constant(quals.is_noexcept)};
+        auto invk_args = std::vector{meta::info{}, method_r, meta::reflect_constant(quals.is_noexcept)};
         invk_args.append_range(trait_params);
         auto const is_invocable = [&](meta::info impl) {
             invk_args[0] = impl;

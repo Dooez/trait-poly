@@ -8,6 +8,15 @@
 #include <ranges>
 #include <type_traits>
 
+
+#if defined(__clang__)
+namespace std::meta {
+consteval bool is_vararg_function(meta::info r) {
+    return is_function(r) and has_ellipsis_parameter(r);
+}
+}    // namespace std::meta
+#endif
+
 namespace trp {
 using i8  = int8_t;
 using i16 = int16_t;
@@ -361,7 +370,7 @@ template<typename T>
 concept any_method_idt = has_template_arguments(^^T) and template_of(^^T) == ^^method_identity_t;
 
 template<typename T>
-concept trait_method_idt = any_method_idt<T> and not(T::is_value);
+concept trait_method_idt = any_method_idt<T> and not(T::is_value) and std::string_view(T::identifier) != "_";
 
 consteval bool is_const_idt(meta::info idt) {
     return extract_method_qualifiers(idt).is_const;
@@ -467,7 +476,7 @@ struct method_signature_requirements_t {
 #ifndef TRP_DEFAULT_MATCH_METHOD_ARGS
     static_assert(false,
                   "Exact cv- qualification requirements can only be enabled together with exact arguments "
-                  "reqruiements.");
+                  "requirements.");
 #endif
 #else
         false;
@@ -478,7 +487,7 @@ struct method_signature_requirements_t {
 #ifndef TRP_DEFAULT_MATCH_METHOD_ARGS
     static_assert(false,
                   "Exact reference qualification requirements can only be enabled together with exact "
-                  "arguments reqruiements.");
+                  "argument requirements.");
 #endif
 #else
         false;
@@ -498,7 +507,7 @@ consteval auto extract_signature_req(meta::info r) -> std::optional<method_signa
         | stdv::filter([](auto r) { return remove_cv(type_of(r)) == ^^method_signature_requirements_t; }) /**/
         | stdr::to<std::vector>();
     if (annotations.size() > 1)
-        throw "More than one method requirements annoation.";
+        throw "More than one method requirements annotation.";
     if (annotations.empty())
         return std::nullopt;
     return extract<method_signature_requirements_t>(constant_of(annotations.front()));
@@ -523,9 +532,9 @@ struct methods_and_requirements {
     static consteval auto to_o_requirements(meta::info trait_member) -> method_signature_requirements_t {
         auto const verify = [](auto const& req) {
             if (req.exact_cv and not req.exact_args)
-                throw "Exact cv signature requirement must include exact arguments requriement";
+                throw "Exact cv signature requirement must include exact arguments requirement";
             if (req.exact_ref and not req.exact_args)
-                throw "Exact reference signature requirement must include exact arguments requriement";
+                throw "Exact reference signature requirement must include exact arguments requirement";
             return req;
         };
         if (auto o_req = extract_signature_req(trait_member))

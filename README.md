@@ -42,7 +42,8 @@ must satisfy these restrictions:
 - no non-default special member functions;
 - no operators;
 - no non-static template methods;
-- no rvalue-qualified methods or explicit-object-by-value methods;
+- no default arguments or C-style variadic methods;
+- no explicit-object-by-value methods;
 - static data members are accepted only when recognized as `constexpr`. The
   current check is GCC-specific. Clang effectively rejects static data members;
 - static functions are allowed only when they are templates used as default
@@ -65,26 +66,27 @@ Implementation lookup uses this order:
    > [!NOTE]
    > This search is depth-first.
 
-3. Direct public members with matching identifier:
-    1. First direct public members of `Impl` that do not satisfy all of are discarded:
-        - the member is callable through a cv-qualified reference to `Impl` with the
-          arguments specified by the trait method;
-        - the invocation is `noexcept` if the trait method is `noexcept`;
-        - the return type matches type specified by the trait method:  
-          - matches exactly if trait or method are annotated accordingly;
-          - convertible to if trait or method are annotated accordingly, default;
-    3. trait method signature with potentially adjusted return type is checked.
-       return type is adjusted if the method being checked returns a type diffreent 
-       from initial trait signature;
-    4. if cv-promotion is allowed cv qualified signatures are checked
-       e.g. if return adjasted trait method signature is `int foo(int);` 
-       and a member does not match it, then `int foo(int) const` etc. are checked;
-    5. if parameter conversion is allowed an overload set is built and resolved 
-       using normal C++ overload resolution.
+3. Direct public members with matching identifiers:
+   - candidates must be callable through the trait method's object cv/ref
+     category and argument types;
+   - the complete call, including conversion to the trait return type, must be
+     non-throwing when the trait method is `noexcept`;
+   - return types are exact or convertible according to the active signature
+     requirements;
+   - argument, cv, and ref qualifications are checked exactly when requested;
+   - otherwise, a proxy overload set uses normal C++ overload resolution.
+
+   Static implementation methods are supported. For exact cv/ref matching they
+   behave as unqualified methods. Additional trailing implementation parameters
+   may be defaulted: exact argument matching compares the trait parameters with
+   the same leading implementation parameters and does not treat those trailing
+   defaults as a mismatch. C-style variadic implementation methods are not
+   supported.
 
 4. If there are no direct public members with matching identifier,
    steps 1-3 are repeated for public bases of `Impl`, breadth-first.
-   If there are multiple fitting candidates, the result is discarded.
+   If there are multiple fitting base subobjects, the result is discarded.
+   A common virtual base is treated as one unambiguous subobject.
 5. Explicit trait defaults `trp::default_impl_spec<std::remove_cv_t<Trait>>`.
 6. Inline trait defaults i.e. static members with matching signature:
    - method         `       auto foo(int) const -> int`
@@ -94,35 +96,42 @@ Implementation lookup uses this order:
 The signature requirements are managed via annotations.  
 Annotating a trait only affects direct trait methods requirements.  
 
-Signature requirement annotations completely overwrite higher level annotations,  
-meaning method-level requriements overwrite global and trait signature requirements.
+Signature requirement annotations completely overwrite higher-level annotations,
+meaning method-level requirements overwrite global and trait signature requirements.
 
 If a method is present in multiple supertraits, the requirements are combined to form a most strict form.  
 This means that a requirement cannot be lessened by redeclaration.
 
-By default a relaxed signature is requied i.e. return type, argument and cv conversion is allowed.  
+By default a relaxed signature is required: return type, argument, cv, and ref
+promotion is allowed.
 Global level signature requirements can be controlled via macros:
 ```cpp
 #define TRP_DEFAULT_MATCH_METHOD_RETURN 
 #define TRP_DEFAULT_MATCH_METHOD_ARGS   
 #define TRP_DEFAULT_MATCH_METHOD_CV     
+#define TRP_DEFAULT_MATCH_METHOD_REF
 ```
 
-The library provides following annotations:
-`trp::relaxed_signature` - default, least restrictive, requires method to be callable with convertible return type 
-`trp::matching_return_signature` - requires only exact return type
-`trp::matching_args_signature` - requires only exact arguments, allows cv-promotion
-`trp::matching_cv_signature` - requires exact arguments and cv-qualifications
-`trp::exact_signature` - requires exact return and arguments, allows cv-promotion
-`trp::exact_cv_signature` - requires exact return, arguments and cv-qualifications
+The library provides these annotations:
+
+- `trp::relaxed_signature`: callable arguments and a convertible return type;
+- `trp::matching_return_signature`: exact return type;
+- `trp::matching_args_signature`: exact arguments;
+- `trp::matching_cv_signature`: exact arguments and cv qualification;
+- `trp::exact_signature`: exact return type and arguments;
+- `trp::exact_cv_signature`: exact return type, arguments, and cv qualification;
+- `trp::exact_cvref_signature`: exact return type, arguments, cv, and ref qualification.
+
+Exact cv or ref matching always requires exact argument matching.
 
 Overload resolution limitations:
-- Function templates cannot be inspected in C++ 26. 
+- Function templates cannot be fully inspected in C++26.
   There's no way to acquire instantiation from a call.
   The only reliable way to check function template is to check conversion to pointer to a member.
-  Currently member function templates will only be selected if they match the signature exactly in the 3.2 or 3.3
-  or if they are the only candidate and the parameter conversion is allowed.
-  If there is more than one candidate in 3.5 and one of them is a template the overload resolution cannot be done.
+  Member function templates are selected when their specialization can be
+  extracted with the required signature, or when they are the sole callable
+  candidate and relaxed argument matching is active. An overload set containing
+  a template cannot otherwise be resolved.
 - Reflections of *using-declaration* is not present in C++26. 
   This means that if there are multiple bases providing `foo` member,
   and the derived class uses *using-declaration* to disambiguate,
@@ -131,8 +140,9 @@ Overload resolution limitations:
 ## Trait Handles
 
 ### Variant
-The non-type erased handle is `trp::trait_variant<Trait, Alternatives...>`.
-It is owning wrapper with value semantics.
+The non-type-erased handle is `trp::trait_variant<Trait, Alternatives...>`.
+It is an owning wrapper with value semantics. Ref-qualified trait methods are
+preserved, so rvalue-only methods are called through an rvalue variant.
 
 Calling noexcept trait methods from a valueless variant calls `std::terminate()`.
 
@@ -148,8 +158,14 @@ To prevent clashing with method object the following free functions are provided
 - `trp::get_if<T>(Variant* var) -> decltype(auto)` returns a pointer to alternative of type T, nullptr if not active
 
 ### Type-erased handles
-The core the type-erased handle is `trp::dyn_trait_ref<Trait>`. It is a non-owning
+The core type-erased handle is `trp::dyn_trait_ref<Trait>`. It is a non-owning
 view over a trait object.
+
+Because the view never owns or consumes the implementation object, rvalue-only
+trait methods are omitted from its interface. When a trait contains both lvalue-
+and rvalue-qualified overloads, the lvalue overload remains available. The
+identifier `_` is reserved for generated handle storage and is not supported as
+a trait method name.
 
 Method access uses dot notation: `ref.foo();`. Because dot notation is reserved
 for trait method access, operations on `dyn_trait_ref` itself are provided as
@@ -270,7 +286,8 @@ qualifiers equal to the `Trait` qualifiers is constructed and invoked.
 This uses native C++ overload resolution for both argument types and cv
 resolution.
 
-Variant uses similar technique, except it is cv-transient, and doesn't use type erasure and vtable.
+Variant uses a similar technique, except it is cv-transient and does not use
+type erasure or a vtable.
 
 ## Limitations
 

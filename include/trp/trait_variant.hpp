@@ -334,9 +334,10 @@ public:
     }
 
     template<typename Impl>
-        requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl>
+        requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl> and
+                 std::is_constructible_v<std::remove_cvref_t<Impl>, Impl&&>
     constexpr explicit trait_variant_impl(Impl&& value) noexcept(
-        std::is_nothrow_move_constructible_v<std::remove_cvref_t<Impl>>) {
+        std::is_nothrow_constructible_v<std::remove_cvref_t<Impl>, Impl&&>) {
         using impl_t         = std::remove_cvref_t<Impl>;
         constexpr auto index = ImplHolder::template type_index<impl_t>;
         extract_union_member(*this).construct(cw<index>, std::forward<Impl>(value));
@@ -429,7 +430,8 @@ public:
     }
 
     template<typename Impl>
-        requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl>
+        requires unique_alternative_of<std::remove_cvref_t<Impl>, trait_variant_impl> and
+                 std::is_constructible_v<std::remove_cvref_t<Impl>, Impl&&>
     constexpr trait_variant_impl& operator=(Impl&& other) {
         using impl_t             = std::remove_cvref_t<Impl>;
         constexpr auto index     = cw<ImplHolder::template type_index<impl_t>>;

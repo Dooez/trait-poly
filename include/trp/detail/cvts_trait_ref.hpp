@@ -51,22 +51,23 @@ class cvts_trait_ref_impl : public MethodHolders... {
     friend struct cvts_cvo_invoker;
 
 public:
-    explicit cvts_trait_ref_impl(Impl& optr) {
+    explicit cvts_trait_ref_impl(Impl& optr) noexcept {
         extract_obj_ptr(*this) = &optr;
     };
     cvts_trait_ref_impl(cvts_trait_ref_impl const&) = delete;
     cvts_trait_ref_impl(cvts_trait_ref_impl&&)      = delete;
 
-    template<std::common_reference_with<Impl> T, typename S>
-        requires std::constructible_from<T&, typename[:copy_cv_to(^^S, ^^Impl):]>
-    explicit operator T&(this S&& self) {
-        return *extract_obj_ptr(std::forward<S>(self));
+    template<typename T, typename S>
+        requires std::constructible_from<T&, typename[:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):]>
+    explicit operator T&(this S&& self) noexcept {
+        using source_t = [:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):];
+        return static_cast<source_t>(*extract_obj_ptr(std::forward<S>(self)));
     }
-
-    template<std::common_reference_with<Impl> T, typename S>
-        requires std::constructible_from<T, typename[:copy_cv_to(^^S, ^^Impl):]>
-    explicit operator T(this S&& self) {
-        return *extract_obj_ptr(std::forward<S>(self));
+    template<typename T, typename S>
+        requires std::constructible_from<T&&, typename[:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):]>
+    explicit operator T&&(this S&& self) noexcept {
+        using source_t = [:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):];
+        return static_cast<source_t>(*extract_obj_ptr(std::forward<S>(self)));
     }
 };
 
@@ -328,7 +329,6 @@ auto call_method_via_id(Ref&& ref, Args&&... args) -> decltype(auto) {
     using fn_t  = [:[] {
         auto const raw_fn = type_of(ref_method<MethodId, ref_t>);
         if (is_rvalue_reference_type(^^Ref&&)) {
-            // throw "FU";
             return add_rvalue_reference(raw_fn);
         } else {
             return add_lvalue_reference(raw_fn);

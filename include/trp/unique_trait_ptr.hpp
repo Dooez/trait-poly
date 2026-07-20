@@ -145,7 +145,7 @@ template<any_trait Trait, implements_trait<Trait> Impl, typename Alloc, typename
     auto const [ptr, n] =
         alloc_traits::allocate_at_least(new_allocator, sizeof(ctrl_block) + alignof(ctrl_block) - 1);
     auto  tmp_n    = n;
-    auto* tmp_ptr  = static_cast<void*>(ptr);
+    auto* tmp_ptr  = static_cast<void*>(std::to_address(ptr));
     auto  ctrl_ptr = std::align(alignof(ctrl_block), sizeof(ctrl_block), tmp_ptr, tmp_n);
     if (ctrl_ptr == nullptr) {
         alloc_traits::deallocate(new_allocator, ptr, n);

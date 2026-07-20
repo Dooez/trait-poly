@@ -40,16 +40,37 @@ inline constexpr auto all_default_impls = [] {
 }();
 
 
-template<uZ Idx, bool C, bool V, typename... Args>
+template<uZ Idx, bool C, bool V, bool L, bool R, bool Static, typename... Args>
 struct overload_proxy {
     auto operator()(Args...) const volatile -> constant_wrapper<Idx>
-        requires(C and V);
+        requires(not Static and C and V and not L and not R);
     auto operator()(Args...) const -> constant_wrapper<Idx>
-        requires(C and not V);
+        requires(not Static and C and not V and not L and not R);
     auto operator()(Args...) volatile -> constant_wrapper<Idx>
-        requires(not C and V);
+        requires(not Static and not C and V and not L and not R);
     auto operator()(Args...) -> constant_wrapper<Idx>
-        requires(not C and not V);
+        requires(not Static and not C and not V and not L and not R);
+
+    auto operator()(Args...) const volatile& -> constant_wrapper<Idx>
+        requires(not Static and C and V and L);
+    auto operator()(Args...) const& -> constant_wrapper<Idx>
+        requires(not Static and C and not V and L);
+    auto operator()(Args...) volatile& -> constant_wrapper<Idx>
+        requires(not Static and not C and V and L);
+    auto operator()(Args...) & -> constant_wrapper<Idx>
+        requires(not Static and not C and not V and L);
+
+    auto operator()(Args...) const volatile&& -> constant_wrapper<Idx>
+        requires(not Static and C and V and R);
+    auto operator()(Args...) const&& -> constant_wrapper<Idx>
+        requires(not Static and C and not V and R);
+    auto operator()(Args...) volatile&& -> constant_wrapper<Idx>
+        requires(not Static and not C and V and R);
+    auto operator()(Args...) && -> constant_wrapper<Idx>
+        requires(not Static and not C and not V and R);
+
+    static auto operator()(Args...) -> constant_wrapper<Idx>
+        requires(Static);
 };
 template<typename... Proxies>
 struct overload_tester : Proxies... {
@@ -62,7 +83,7 @@ template<meta::reflection_range R = std::initializer_list<meta::info>>
 consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_methods) -> meta::info {
     if (stdr::empty(callable_methods))
         return meta::info{};
-    if (std::size(callable_methods) == 1)
+    if (stdr::size(callable_methods) == 1)
         return callable_methods[0];
 
     auto const params = extract_method_param_types(method_idt);
@@ -75,10 +96,23 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
             // if the template is the only callable member, it's already handled
             return meta::info{};
         }
-        auto const c_arg       = meta::reflect_constant(is_const(m));
-        auto const v_arg       = meta::reflect_constant(is_volatile(m));
-        auto       proxy_targs = std::vector{meta::reflect_constant(i), c_arg, v_arg};
-        proxy_targs.append_range(parameters_of(m) | stdv::transform(meta::type_of));
+        auto const raw_params  = parameters_of(m);
+        auto const is_eop      = not raw_params.empty() and is_explicit_object_parameter(raw_params[0]);
+        auto const object_type = is_eop ? type_of(raw_params[0]) : meta::info{};
+        auto const c_arg = meta::reflect_constant(is_eop ? meta::is_const(remove_reference(object_type))    //
+                                                         : is_const(m));
+        auto const v_arg = meta::reflect_constant(is_eop ? meta::is_volatile(remove_reference(object_type))
+                                                         : is_volatile(m));
+        auto const l_arg = meta::reflect_constant(is_eop ? is_lvalue_reference_type(object_type)
+                                                         : is_lvalue_reference_qualified(m));
+        auto const r_arg = meta::reflect_constant(is_eop ? is_rvalue_reference_type(object_type)
+                                                         : is_rvalue_reference_qualified(m));
+        auto const static_arg = meta::reflect_constant(is_static_member(m));
+        auto proxy_targs = std::vector{meta::reflect_constant(i), c_arg, v_arg, l_arg, r_arg, static_arg};
+        proxy_targs.append_range(raw_params                      //
+                                 | stdv::drop(is_eop ? 1 : 0)    //
+                                 | stdv::take(params.size())     //
+                                 | stdv::transform(meta::type_of));
         proxies.push_back(substitute(^^overload_proxy, proxy_targs));
     }
     auto tester = substitute(^^overload_tester, proxies);
@@ -86,6 +120,10 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
         tester = std::meta::add_const(tester);
     if (quals.is_volatile)
         tester = std::meta::add_volatile(tester);
+    if (quals.is_rvalue)
+        tester = std::meta::add_rvalue_reference(tester);
+    else
+        tester = std::meta::add_lvalue_reference(tester);
     auto ov_idx_targs = std::vector{tester};
     ov_idx_targs.append_range(params);
     if (not extract<bool>(substitute(^^std::invocable, ov_idx_targs)))
@@ -136,17 +174,21 @@ consteval auto find_trait_method_impl(meta::info                      impl,
     if (id_mems.empty())
         return std::nullopt;
 
-    auto const invk_concept = reqs.exact_return ? ^^std::same_as : ^^std::convertible_to;
     auto const callable_mems =
         id_mems |
-        stdv::filter([=](auto m) { return invocable_as_method(impl, m, method_idt, invk_concept); }) |
+        stdv::filter([&](auto m) { return invocable_as_method(impl, m, method_idt, reqs.exact_return); }) |
         stdr::to<std::vector>();
 
-    for (auto const m: callable_mems) {
-        auto const matches = check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
-        if (matches)
-            return m;
-    }
+    // always try to find exactly matching arguments because templates cannot be resolved otherwise
+    auto const matching_mems =    //
+        callable_mems             //
+        | stdv::filter([&](auto m) {
+              return check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
+          })    //
+        | stdr::to<std::vector>();
+    // after cvref promotion multiple matching arguments can be present, need to resolve
+    if (auto m = resolve_method_overload_set(method_idt, matching_mems); m != meta::info{})
+        return m;
 
     if (not reqs.exact_args)
         if (auto m = resolve_method_overload_set(method_idt, callable_mems); m != meta::info{})
@@ -187,10 +229,15 @@ inline constexpr auto full_impls_for = [] {
                 while (not stdr::empty(bases)) {
                     for (auto const base: bases) {
                         if (base_candidate == base) {
-                            //ambiguous because the fitting method found in multiple base-class subobjects
+                            // handle virtual inheritance
+                            auto const unambiguous_base =
+                                substitute(^^std::derived_from, {remove_cv(^^Impl), remove_cv(base)});
+                            if (extract<bool>(unambiguous_base))
+                                continue;
+                            // ambiguous
                             return meta::info{};
                         }
-                        if (auto em = find_explicit_trait_method_impl(^^Impl, ^^Trait, method_idt);
+                        if (auto em = find_explicit_trait_method_impl(base, ^^Trait, method_idt);
                             em != meta::info{}) {
                             if (m != meta::info{})    // multiple matches, call is ambiguous
                                 return meta::info{};

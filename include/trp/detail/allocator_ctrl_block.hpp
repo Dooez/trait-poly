@@ -16,19 +16,22 @@ struct ctrl_header {
 template<typename Impl, typename Allocator, typename Arc = empty_0>
     requires std::is_nothrow_move_constructible_v<Allocator>
 struct ctrl_block : public ctrl_header<Arc> {
+    using allocator_traits = std::allocator_traits<Allocator>;
+    using pointer          = allocator_traits::pointer;
+
     ctrl_block() = delete;
 
     template<typename... Args>
-    ctrl_block(std::byte* memstart, uZ n, Allocator&& allocator, Args&&... args)
+    ctrl_block(pointer memstart, uZ n, Allocator&& allocator, Args&&... args)
     : ctrl_header<Arc>{.destructor_ptr_ = &destroy}
     , impl_(std::forward<Args>(args)...)
     , memstart_(memstart)
     , n_(n)
     , allocator_(std::move(allocator)){};
 
-    Impl       impl_;
-    std::byte* memstart_{};
-    uZ         n_{};
+    Impl    impl_;
+    pointer memstart_{};
+    uZ      n_{};
 
     [[no_unique_address]] Allocator allocator_;
 
@@ -38,7 +41,7 @@ struct ctrl_block : public ctrl_header<Arc> {
         auto  memstart  = ctrl.memstart_;
         auto  n         = ctrl.n_;
         ctrl.~ctrl_block();
-        std::allocator_traits<Allocator>::deallocate(allocator, memstart, n);
+        allocator_traits::deallocate(allocator, memstart, n);
     }
 };
 }    // namespace trp::detail

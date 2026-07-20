@@ -57,7 +57,10 @@ struct explicit_invoke_wrapper_struct {
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
         Ref ref(*static_cast<Impl*>(ptr));
-        return [:Fn:](ref, std::forward<Params>(params)...);
+        if constexpr (MethodId::is_rvalue)
+            return [:Fn:](std::move(ref), std::forward<Params>(params)...);
+        else
+            return [:Fn:](ref, std::forward<Params>(params)...);
     }
 };
 
@@ -65,13 +68,14 @@ template<non_ref Impl, meta::info ImplMethod, trait_method_idt MethodId, typenam
 struct invoke_wrapper_struct {
     using return_type = MethodId::return_type;
     using obj_ptr     = [:add_pointer(MethodId::add_obj_cv(^^Impl)):];
+    using obj_ref     = [:MethodId::add_obj_call_cvref(^^Impl):];
 
     static auto invoke(void* ptr, Params... params) noexcept(MethodId::is_noexcept) -> return_type {
-        decltype(auto) impl = *static_cast<obj_ptr>(ptr);
+        decltype(auto) impl = static_cast<obj_ref>(*static_cast<obj_ptr>(ptr));
         if constexpr (is_template(ImplMethod)) {
-            return impl.template[:ImplMethod:](std::forward<Params>(params)...);
+            return std::forward<obj_ref>(impl).template[:ImplMethod:](std::forward<Params>(params)...);
         } else {
-            return impl.[:ImplMethod:](std::forward<Params>(params)...);
+            return std::forward<obj_ref>(impl).[:ImplMethod:](std::forward<Params>(params)...);
         }
     }
 };
