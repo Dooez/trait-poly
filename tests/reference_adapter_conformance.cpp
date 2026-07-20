@@ -10,13 +10,17 @@ struct empty_impl {};
 struct lvalue_default_trait {
     auto access() & -> int;
 
-    static auto access(auto&) -> int;
+    static auto access(auto&) -> int {
+        return 0;
+    }
 };
 
 struct rvalue_default_trait {
     auto access() && -> int;
 
-    static auto access(auto&&) -> int;
+    static auto access(auto&&) -> int {
+        return 0;
+    }
 };
 
 struct explicit_lvalue_trait {
@@ -34,12 +38,16 @@ struct explicit_rvalue_impl {};
 
 template<>
 struct trp::impl_spec_for<explicit_lvalue_impl, explicit_lvalue_trait> {
-    static auto access(auto&) -> int;
+    static auto access(auto&) -> int {
+        return 0;
+    }
 };
 
 template<>
 struct trp::impl_spec_for<explicit_rvalue_impl, explicit_rvalue_trait> {
-    static auto access(auto&&) -> int;
+    static auto access(auto&&) -> int {
+        return 0;
+    }
 };
 
 static_assert(trp::implements_trait<empty_impl, lvalue_default_trait>);
@@ -48,5 +56,14 @@ static_assert(trp::implements_trait<explicit_lvalue_impl, explicit_lvalue_trait>
 static_assert(trp::implements_trait<explicit_rvalue_impl, explicit_rvalue_trait>);
 
 int main() {
+    auto empty          = empty_impl{};
+    auto explicit_left  = explicit_lvalue_impl{};
+    auto explicit_right = explicit_rvalue_impl{};
+
+    (void)trp::dyn_trait_ref<lvalue_default_trait>(empty);
+    (void)trp::dyn_trait_ref<rvalue_default_trait>(empty);
+    (void)trp::dyn_trait_ref<explicit_lvalue_trait>(explicit_left);
+    (void)trp::dyn_trait_ref<explicit_rvalue_trait>(explicit_right);
+
     return 0;
 }

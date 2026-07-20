@@ -20,18 +20,32 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileFailureTest.cmake")
 foreach(source IN ITEMS
 	supertraits
 	dyn_trait_ref
+	dyn_trait_ref_interface
 	cv_qualification
+	explicit_noexcept
+	fancy_allocator
+	inherited_explicit_impl
+	inherited_virtual_impl
+	noexcept_conversion
+	overload_cv
+	overload_eop
 	reference_adapter_conformance
+	reference_adapter_conversion
 	reference_adapters
 	reference_inheritance
 	reference_qualification
 	unique_trait_ptr_ownership
 	shared_trait_ptr_ownership
+	static_impl
 	trait_variant
+	trait_variant_constraints
 	trait_variant_lifecycle
+	trait_validation
 	overload_resolution
 	requirements/overload_limitations
+	requirements/exact_arguments
 	requirements/overrides
+	requirements/reference_overrides
 	requirements/reference_qualification
 	requirements/strengthening)
 	string(REPLACE "requirements/" "req_" name "${source}")

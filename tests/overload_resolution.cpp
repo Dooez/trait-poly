@@ -13,6 +13,7 @@ inline constexpr auto eop_initial_value   = 7;
 inline constexpr auto eop_ref_value       = 9;
 inline constexpr auto eop_variant_initial = 11;
 inline constexpr auto eop_variant_value   = 13;
+inline constexpr auto defaulted_result    = 60;
 inline constexpr auto success_exit_code   = 0;
 inline constexpr auto case_name           = std::string_view("overload_resolution");
 
@@ -60,11 +61,30 @@ struct eop_impl {
     }
 };
 
+struct defaulted_trait {
+    auto pick(short value) -> int;
+};
+
+struct defaulted_impl {
+    auto pick(long, int = 0) -> int {
+        return pick_long_result;
+    }
+
+    auto pick(int, int = 0) -> int {
+        return defaulted_result;
+    }
+
+    auto pick(double, int = 0) -> int {
+        return pick_double_result;
+    }
+};
+
 using arithmetic_variant = trp::trait_variant<arithmetic_trait, arithmetic_impl>;
 using eop_variant        = trp::trait_variant<eop_trait, eop_impl>;
 
 static_assert(trp::implements_trait<arithmetic_impl, arithmetic_trait>);
 static_assert(trp::implements_trait<eop_impl, eop_trait>);
+static_assert(trp::implements_trait<defaulted_impl, defaulted_trait>);
 
 void check_dyn_ref_overloads() {
     auto impl = arithmetic_impl{};
@@ -95,10 +115,20 @@ void check_explicit_object_methods() {
     test::expect_eq(case_name, "eop variant write", var.value(), eop_variant_value);
 }
 
+void check_defaulted_parameter_overloads() {
+    auto impl = defaulted_impl{};
+    auto ref  = trp::dyn_trait_ref<defaulted_trait>(impl);
+    test::expect_eq(case_name, "defaulted parameter overload", ref.pick(0), defaulted_result);
+
+    auto var = trp::trait_variant<defaulted_trait, defaulted_impl>(std::in_place_type<defaulted_impl>);
+    test::expect_eq(case_name, "variant defaulted parameter overload", var.pick(0), defaulted_result);
+}
+
 int main() {
     check_dyn_ref_overloads();
     check_variant_overloads();
     check_explicit_object_methods();
+    check_defaulted_parameter_overloads();
 
     return success_exit_code;
 }

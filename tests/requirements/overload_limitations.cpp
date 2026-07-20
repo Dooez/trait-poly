@@ -42,6 +42,13 @@ struct template_impl {
     }
 };
 
+struct only_template_impl {
+    template<typename T>
+    auto pick(T const&) -> short {
+        return template_result;
+    }
+};
+
 struct using_left_base {
     auto pick(int) -> int {
         return using_left_result;
@@ -69,7 +76,9 @@ static_assert(trp::implements_trait<normal_overloads_impl, trait>);
 static_assert(not trp::implements_trait<template_impl, relaxed_trait>);
 // accepts because strict return discards the convertible template before overload resolution.
 static_assert(    trp::implements_trait<template_impl, trait>);
-// need to add test where template can be resolved exactly
+// accepts because no overload resolution is needed for a sole callable template.
+// need to add incorrect return type being filtered out
+static_assert(    trp::implements_trait<only_template_impl, relaxed_trait>);
 
 // native C++ sees the using declaration.
 static_assert(requires(using_decl_impl impl, int v) { impl.pick(v); });
@@ -81,5 +90,10 @@ static_assert(not trp::implements_trait<using_decl_impl, trait>);
 }    // namespace
 
 int main() {
+    auto impl = only_template_impl{};
+    auto ref  = trp::dyn_trait_ref<relaxed_trait>(impl);
+
+    test::expect_eq(case_name, "sole template dispatch", ref.pick(variant_arg), int{template_result});
+
     return reqtest::success_exit_code;
 }

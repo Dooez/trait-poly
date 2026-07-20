@@ -92,15 +92,11 @@ void check_cvref_dispatch() {
 }    // namespace
 
 int main() {
-    // check_unqualified_dispatch();
-    // check_split_dispatch<split_impl>("ordinary split lvalue", "ordinary split rvalue");
-    // check_split_dispatch<eop_split_impl>("explicit-object split lvalue", "explicit-object split rvalue");
-#if 1
-    // TODO: clang-p2996 rejects splicing this deducing-this member template with
-    // "cannot implicitly reference a class member through a splice".
+    check_unqualified_dispatch();
+    check_split_dispatch<split_impl>("ordinary split lvalue", "ordinary split rvalue");
+    check_split_dispatch<eop_split_impl>("explicit-object split lvalue", "explicit-object split rvalue");
     check_split_dispatch<forwarding_impl>("forwarding explicit-object lvalue",
                                           "forwarding explicit-object rvalue");
-#endif
     check_split_dispatch<callable_impl>("callable data member lvalue", "callable data member rvalue");
     check_cvref_dispatch();
 

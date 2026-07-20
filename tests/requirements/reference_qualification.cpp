@@ -34,8 +34,8 @@ static_assert(not trp::implements_trait<lvalue_impl,       split_trait>);
 static_assert(not trp::implements_trait<rvalue_impl,       split_trait>);
 static_assert(    trp::implements_trait<split_impl,        split_trait>);
 static_assert(    trp::implements_trait<eop_split_impl,    split_trait>);
-#if 0
-// this requires template pointer extraction, it errors on gcc 16.1
+#if defined(__clang__)
+// GCC 16.1 cannot inspect the specialization needed for exact signature matching.
 static_assert(    trp::implements_trait<forwarding_impl, split_trait>);
 #endif
 static_assert(    trp::implements_trait<callable_impl,    split_trait>);
