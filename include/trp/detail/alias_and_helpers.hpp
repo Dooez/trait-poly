@@ -105,6 +105,13 @@ inline constexpr auto extract_size = stdr::size([:RefInfo:]);
 template<meta::info RefInfo>
 inline constexpr auto extract_ptr = stdr::data([:RefInfo:]);
 
+template<typename T, meta::reflection_range R = std::initializer_list<meta::info>>
+consteval auto subextract_span(meta::info r, R const& targs) -> std::span<T const> {
+    auto const src_span = meta::reflect_constant(meta::substitute(r, targs));
+    return std::span<T const>{extract<T const*>(substitute(^^extract_ptr, {src_span})),
+                              extract<uZ>(substitute(^^extract_size, {src_span}))};
+}
+
 template<meta::reflection_range R = std::initializer_list<meta::info>>
 consteval auto subextract_info_span(meta::info r, R const& targs) -> std::span<meta::info const> {
     auto const src_span = meta::reflect_constant(meta::substitute(r, targs));
@@ -793,5 +800,10 @@ consteval auto find_annotated_base(meta::info           type,
     }
     return meta::info{};
 }
+consteval void expect(meta::info check, std::initializer_list<meta::info> args) {
+    if (not extract<bool>(substitute(check, args)))
+        throw "unexpexted error";
+}
+
 }    // namespace detail
 }    // namespace trp

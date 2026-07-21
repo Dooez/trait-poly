@@ -15,6 +15,13 @@ struct impl_method_bind {
     bool       is_explicit;
 };
 
+struct bind_transformer {
+    meta::info     trait;
+    consteval auto operator()(meta::info m) const -> impl_method_bind {
+        return impl_method_bind{m, explicit_impl_to_method_identity(m, trait)};
+    }
+};
+
 template<non_cv_trait Trait>
 inline constexpr auto all_default_impls = [] {
     auto impls = std::vector<impl_method_bind>{};
@@ -29,9 +36,7 @@ inline constexpr auto all_default_impls = [] {
     };
     append_unique(nonspecial_members<Trait>                                            //
                   | stdv::filter(concepts::is_explicit_template_method_impl<Trait>)    //
-                  | stdv::transform([](auto m) {
-                        return impl_method_bind{m, explicit_impl_to_method_identity(m, ^^Trait)};
-                    }));
+                  | stdv::transform(bind_transformer{^^Trait}));
     template for (constexpr auto base: direct_base_types<Trait>) {
         using base_t = [:base:];
         append_unique(all_default_impls<base_t>);
@@ -311,16 +316,20 @@ inline constexpr auto full_impls_for = [] {
     return std::define_static_array(impls);
 }();
 
+struct valid_impl_bind_for {
+    meta::info     trait;
+    consteval bool operator()(impl_method_bind bind) {
+        auto const is_relevant_method = (is_const_idt(bind.idt) or not is_const(trait))    //
+                                        and (is_volatile_idt(bind.idt) or not is_volatile(trait));
+        return not is_relevant_method or bind.fn != meta::info{};
+    }
+};
 
 template<typename Impl, typename Trait>
 concept has_impls_for_all_methods =
     non_ref<Impl>           //
     and any_trait<Trait>    //
-    and stdr::all_of(full_impls_for<Impl, std::remove_cv_t<Trait>>, [](impl_method_bind bind) {
-            auto const is_relevant_method = (is_const_idt(bind.idt) or not is_const(^^Trait))    //
-                                            and (is_volatile_idt(bind.idt) or not is_volatile(^^Trait));
-            return not is_relevant_method or bind.fn != meta::info{};
-        });
+    and stdr::all_of(full_impls_for<Impl, std::remove_cv_t<Trait>>, valid_impl_bind_for{^^Trait});
 }    // namespace detail
 
 template<typename Impl, typename Trait>

@@ -57,22 +57,27 @@ using cvtmock_holder = typename cvtmock_holder_definer<id, Invoker>::cvtmock_met
 template<typename... MethodHolders>
 struct mock_ref_impl : public MethodHolders... {};
 
-template<non_cvref Trait>
-consteval auto get_cvtmock_ref() {
-    auto const holders = trait_method_groups<Trait>    //
-                         | stdv::transform([](auto grp) {
-                               return substitute(^^cvtmock_holder,
-                                                 {meta::reflect_constant(grp.name),
-                                                  substitute(^^cvtmock_cvm_invoker,
-                                                             all_trait_methods<Trait>         //
-                                                                 | stdv::take(grp.end_idx)    //
-                                                                 | stdv::drop(grp.begin_idx))});
-                           });
+consteval auto get_holder(method_reference method_group, std::span<meta::info const> methods) -> meta::info {
+    return substitute(^^cvtmock_holder,
+                      {meta::reflect_constant(method_group.name),
+                       substitute(^^cvtmock_cvm_invoker,
+                                  methods                          //
+                                      | stdv::take(method_group.end_idx)    //
+                                      | stdv::drop(method_group.begin_idx))});
+}
+
+consteval auto get_cvtmock_ref(meta::info trait) -> meta::info {
+    expect(^^non_cvref, {trait});
+    auto const methods = subextract_info_span(^^all_trait_methods, {trait});
+    auto       holders = std::vector<meta::info>();
+    for (auto const grp: subextract_span<method_reference>(^^trait_method_groups, {trait})) {
+        holders.push_back(get_holder(grp, methods));
+    }
     return substitute(^^mock_ref_impl, holders);
 };
 }    // namespace cvtmock_trait
 
 // cv-transient trait reference mock
 template<non_cvref Trait>
-using mock_trait_ref = [:cvtmock_trait::get_cvtmock_ref<Trait>():];
+using mock_trait_ref = [:cvtmock_trait::get_cvtmock_ref(^^Trait):];
 }    // namespace trp::detail
