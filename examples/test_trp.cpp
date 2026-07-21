@@ -82,9 +82,6 @@ struct trait_proto {
 // clang-format on
 
 struct my_trait {
-#if defined(__GNUC__) && !defined(__clang__)
-    static constexpr char v{};
-#endif
     void foo();
 };
 struct not_trait_data {

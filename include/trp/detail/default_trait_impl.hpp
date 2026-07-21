@@ -22,27 +22,35 @@ struct bind_transformer {
     }
 };
 
+consteval auto all_default_impls_fn(meta::info trait) -> std::span<impl_method_bind const>;
+
 template<non_cv_trait Trait>
-inline constexpr auto all_default_impls = [] {
-    auto impls = std::vector<impl_method_bind>{};
-    for (auto const m: nonspecial_members<default_impl_spec<Trait>> |
-                           stdv::filter(concepts::is_explicit_template_method_impl<Trait>))
-        impls.emplace_back(m, explicit_impl_to_method_identity(m, ^^Trait));
+inline constexpr auto all_default_impls = all_default_impls_fn(^^Trait);
+
+consteval auto all_default_impls_fn(meta::info trait) -> std::span<impl_method_bind const> {
+    auto       impls = std::vector<impl_method_bind>{};
+    auto const nsm_spec =
+        subextract_info_span(^^nonspecial_members, {substitute(^^default_impl_spec, {trait})});
+    for (auto const m: nsm_spec)
+        if (concepts::is_explicit_template_method_impl(m, trait))
+            impls.emplace_back(m, explicit_impl_to_method_identity(m, trait), true);
+
+    auto const nsm_inline = subextract_info_span(^^nonspecial_members, {trait});
+    for (auto const m: nsm_inline)
+        if (concepts::is_explicit_template_method_impl(m, trait))
+            impls.emplace_back(m, explicit_impl_to_method_identity(m, trait), true);
 
     auto const append_unique = [&](auto&& method_impls) {
         for (auto const m: method_impls)
             if (not stdr::contains(impls, m.idt, &impl_method_bind::idt))
                 impls.push_back(m);
     };
-    append_unique(nonspecial_members<Trait>                                            //
-                  | stdv::filter(concepts::is_explicit_template_method_impl<Trait>)    //
-                  | stdv::transform(bind_transformer{^^Trait}));
-    template for (constexpr auto base: direct_base_types<Trait>) {
-        using base_t = [:base:];
-        append_unique(all_default_impls<base_t>);
+    for (auto base: subextract_base_types(trait)) {
+        auto const base_impls = subextract_span<impl_method_bind>(^^all_default_impls, {base});
+        append_unique(base_impls);
     }
     return define_static_array(impls);
-}();
+}
 
 
 template<uZ Idx, bool C, bool V, bool L, bool R, bool Static, typename... Args>

@@ -24,12 +24,11 @@ consteval bool maps_to_a_trait_method_of(meta::info fn) {
     return stdr::contains(all_trait_methods<Trait>, explicit_impl_to_method_identity(fn, ^^Trait));
 };
 
-template<any_trait Trait>
-consteval bool is_explicit_template_method_impl(meta::info fn) {
+consteval bool is_explicit_template_method_impl(meta::info fn, meta::info trait) {
     return is_static_member(fn)            //
            and is_function_template(fn)    //
-           and first_parameter_is_non_eop_cvref_of<mock_trait_ref<Trait>>(
-                   substitute(fn, {^^mock_trait_ref<Trait>}));
+           and first_parameter_is_non_eop_cvref_of(substitute(fn, {substitute(^^mock_trait_ref, {trait})}),
+                                                   substitute(^^mock_trait_ref, {trait}));
 }
 template<meta::info Fn>
 concept any_static_member_info = is_static_member(Fn);

@@ -524,13 +524,12 @@ consteval auto check_parameter_match(meta::info impl, meta::info impl_method, me
     return {};
 }
 
-template<typename ParamType>
-consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn) {
+consteval bool first_parameter_is_non_eop_cvref_of(meta::info fn, meta::info param_type) {
     auto const params = parameters_of(fn);
     return stdr::size(params) > 0                             //
            and is_reference_type(type_of(params[0]))          //
            and not is_explicit_object_parameter(params[0])    //
-           and remove_cvref(type_of(params[0])) == ^^ParamType;
+           and remove_cvref(type_of(params[0])) == dealias(param_type);
 }
 }    // namespace detail
 }    // namespace trp
