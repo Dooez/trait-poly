@@ -180,12 +180,33 @@ consteval auto find_trait_method_impl(meta::info                      impl,
         stdr::to<std::vector>();
 
     // always try to find exactly matching arguments because templates cannot be resolved otherwise
-    auto const matching_mems =    //
-        callable_mems             //
-        | stdv::filter([&](auto m) {
-              return check_parameter_match(impl, m, method_idt, reqs.exact_cv, reqs.exact_ref);
-          })    //
-        | stdr::to<std::vector>();
+    auto matching_mems     = std::vector<meta::info>();
+    auto matching_template = meta::info{};
+
+    for (auto m: callable_mems) {
+        if (not is_function(m) and not is_function_template(m)) {
+            auto const method_obj_t    = type_of(m);
+            auto const call_ops        = subextract_info_span(^^call_operators_of, {method_obj_t});
+            auto const method_inv_type = copy_cv_to(impl, method_obj_t);
+            for (auto op: call_ops) {
+                auto const match = check_parameter_match(method_inv_type, op, method_idt);
+                if (match.satisfies(reqs))
+                    return m;
+            }
+        }
+        auto const match = check_parameter_match(impl, m, method_idt);
+        if (match.full_match()) {
+            if (is_function_template(m))
+                matching_template = m;
+            else
+                return m;
+        }
+        if (match.satisfies(reqs))
+            matching_mems.push_back(m);
+    }
+    if (matching_template != meta::info{})
+        return matching_template;
+
     // after cvref promotion multiple matching arguments can be present, need to resolve
     if (auto m = resolve_method_overload_set(method_idt, matching_mems); m != meta::info{})
         return m;

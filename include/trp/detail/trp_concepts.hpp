@@ -349,8 +349,23 @@ concept extractable_template = requires(MPtr ptr) {
     { ptr = &template[:ImplMethod:] };
 };
 
-consteval auto check_parameter_match(
-    meta::info impl, meta::info impl_method, meta::info method_idt, bool exact_cv, bool exact_ref) -> bool {
+struct match {
+    bool args{};
+    bool cv{};
+    bool ref{};
+
+    [[nodiscard]] constexpr auto full_match() const -> bool {
+        return args and cv and ref;
+    }
+    [[nodiscard]] constexpr auto satisfies(method_signature_requirements_t reqs) const -> bool {
+        return (args or not reqs.exact_args) and (cv or not reqs.exact_cv) and (ref or not reqs.exact_ref);
+    };
+};
+
+consteval auto check_parameter_match(meta::info impl, meta::info impl_method, meta::info method_idt)
+    -> match {
+    if (not(is_function(impl_method) or is_function_template(impl_method)))
+        throw "Expected function or function template";
     auto const trait_params = extract_method_param_types(method_idt);
     auto const quals        = extract_method_qualifiers(method_idt);
 
@@ -378,42 +393,32 @@ consteval auto check_parameter_match(
                    stdr::to<std::vector>();
         }();
         if (not stdr::equal(trait_params, impl_params))
-            return false;
-        if (is_static_member(impl_method)) {
-            if (exact_cv and (quals.is_const or quals.is_volatile))
-                return false;
-            if (exact_ref and quals.is_ref())
-                return false;
-            return true;
-        }
-        if (exact_cv) {
-            if (is_eop) {
-                auto const eop_t = type_of(impl_params_raw[0]);
-                if (quals.is_const != meta::is_const(meta::remove_reference(eop_t)))
-                    return false;
-                if (quals.is_volatile != meta::is_volatile(meta::remove_reference(eop_t)))
-                    return false;
-            } else {
-                if (quals.is_const != is_const(impl_method))
-                    return false;
-                if (quals.is_volatile != is_volatile(impl_method))
-                    return false;
-            }
+            return {};
+        if (is_static_member(impl_method))
+            return match{
+                .args = true,
+                .cv   = quals.is_const and quals.is_volatile,
+                .ref  = not quals.is_ref(),
+            };
+        auto res = match{.args = true};
+
+        if (is_eop) {
+            auto const eop_t = type_of(impl_params_raw[0]);
+            res.cv |= (quals.is_const == is_const(remove_reference(eop_t)))    //
+                      and (quals.is_volatile == is_volatile(remove_reference(eop_t)));
+        } else {
+            res.cv =
+                (quals.is_const == is_const(impl_method)) and (quals.is_volatile == is_volatile(impl_method));
         }
         auto const impl_is_lvalue = is_eop ? is_lvalue_reference_type(type_of(impl_params_raw[0]))
                                            : is_lvalue_reference_qualified(impl_method);
         auto const impl_is_rvalue = is_eop ? is_rvalue_reference_type(type_of(impl_params_raw[0]))
                                            : is_rvalue_reference_qualified(impl_method);
-        if (exact_ref) {
-            if (quals.is_lvalue != impl_is_lvalue or quals.is_rvalue != impl_is_rvalue)
-                return false;
-        } else {
-            if (quals.is_rvalue and impl_is_lvalue)
-                return false;
-            if (not quals.is_rvalue and impl_is_rvalue)
-                return false;
-        }
-        return true;
+
+        if (quals.is_rvalue and impl_is_lvalue or not quals.is_rvalue and impl_is_rvalue)
+            return {};
+        res.ref = quals.is_lvalue == impl_is_lvalue and quals.is_rvalue == impl_is_rvalue;
+        return res;
     } else if (is_function_template(impl_method)) {
         auto const method_r    = reflect_constant(impl_method);
         auto const return_type = [&] {
@@ -436,38 +441,33 @@ consteval auto check_parameter_match(
 
         auto const mem_fptr = get_fptr_t(false, obj_ref);
         if (is_extractable(mem_fptr))
-            return true;
+            return {.args = true, .cv = true, .ref = true};
 
         if (quals.is_ref()) {
             auto const mem_fptr = get_fptr_t(false, obj);
             if (is_extractable(mem_fptr))
-                return true;
+                return {.args = true, .cv = true, .ref = true};
 
             auto const eop_fptr = get_fptr_t(true, obj_ref);
             if (is_extractable(eop_fptr))
-                return true;
+                return {.args = true, .cv = true, .ref = true};
         }
 
-        if (not exact_ref) {
-            if (not quals.is_rvalue) {
-                auto const mem_fptr = get_fptr_t(false, add_lvalue_reference(obj));
-                if (is_extractable(mem_fptr))
-                    return true;
-            }
-
-            if (not quals.is_ref()) {
-                auto const mem_oep_fptr = get_fptr_t(true, add_lvalue_reference(obj));
-                if (is_extractable(mem_oep_fptr))
-                    return true;
-            } else if (not quals.is_volatile and not is_volatile(impl)) {
-                auto const eop_fptr = get_fptr_t(true, obj);
-                if (is_extractable(eop_fptr))
-                    return true;
-            }
+        if (not quals.is_rvalue) {
+            auto const mem_fptr = get_fptr_t(false, add_lvalue_reference(obj));
+            if (is_extractable(mem_fptr))
+                return {.args = true, .cv = true, .ref = false};
         }
 
-        if (exact_cv)
-            return false;
+        if (not quals.is_ref()) {
+            auto const mem_oep_fptr = get_fptr_t(true, add_lvalue_reference(obj));
+            if (is_extractable(mem_oep_fptr))
+                return {.args = true, .cv = true, .ref = false};
+        } else if (not quals.is_volatile and not is_volatile(impl)) {
+            auto const eop_fptr = get_fptr_t(true, obj);
+            if (is_extractable(eop_fptr))
+                return {.args = true, .cv = true, .ref = false};
+        }
 
         auto invk_args = std::vector{meta::info{}, method_r, meta::reflect_constant(quals.is_noexcept)};
         invk_args.append_range(trait_params);
@@ -477,28 +477,19 @@ consteval auto check_parameter_match(
         };
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
         if (not meta::is_const(remove_reference(invokation_info)) and is_invocable(add_const(impl))) {
-            auto const exact_method =
-                check_parameter_match(add_const(impl), impl_method, method_idt, exact_cv, exact_ref);
-            if (exact_method)
-                return true;
+            auto with_const = check_parameter_match(add_const(impl), impl_method, method_idt);
+            with_const.cv   = false;
+            return with_const;
         }
         // Using more relaxed of concepts to verify that cv qualifiers do not break invokability.
         if (not meta::is_volatile(remove_reference(invokation_info)) and is_invocable(add_volatile(impl))) {
-            auto const exact_method =
-                check_parameter_match(add_volatile(impl), impl_method, method_idt, exact_cv, exact_ref);
-            if (exact_method)
-                return true;
+            auto with_volatile = check_parameter_match(add_volatile(impl), impl_method, method_idt);
+            with_volatile.cv   = false;
+            return with_volatile;
         }
-        return false;
-    } else if (not is_function(impl_method) and not is_function_template(impl_method)) {
-        auto const method_obj_t    = type_of(impl_method);
-        auto const call_ops        = subextract_info_span(^^call_operators_of, {method_obj_t});
-        auto const method_inv_type = copy_cv_to(remove_reference(invokation_info), method_obj_t);
-        return stdr::any_of(call_ops, [=](auto op) {
-            return check_parameter_match(method_inv_type, op, method_idt, exact_cv, exact_ref);
-        });
+        return {};
     }
-    return false;
+    return {};
 }
 
 template<typename ParamType>
