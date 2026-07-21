@@ -170,19 +170,31 @@ concept static_data_members_are_constexpr = [] {
     return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
 }();
 
+consteval auto static_methods_are_default_impl_for_fn(std::span<meta::info const> members,
+                                                      std::span<meta::info const> all_methods,
+                                                      meta::info                  trait) -> bool {
+    for (auto member: members) {
+        if (not(is_static_member(member) and is_function_template(member)))
+            continue;
+        auto const impl_idt = explicit_impl_to_method_identity(member, trait);
+        auto       matching = false;
+        for (auto m: all_methods) {
+            if (matching_explicit_impl(impl_idt, m)) {
+                matching = true;
+                break;
+            }
+        }
+        if (not matching)
+            return false;
+    }
+    return true;
+}
+
 template<typename T, typename Trait>
 concept static_methods_are_default_impl_for =
     non_cvref<T>            //
     and non_cvref<Trait>    //
-    and
-    stdr::all_of(nonspecial_members<T> |
-                     stdv::filter([](auto r) { return is_static_member(r) and (is_function_template(r)); }),
-                 [](auto r) {
-                     auto const impl_idt = explicit_impl_to_method_identity(r, ^^Trait);
-                     return stdr::any_of(all_trait_methods<Trait>, [=](auto method) {
-                         return matching_explicit_impl(impl_idt, method);
-                     });
-                 });
+    and static_methods_are_default_impl_for_fn(nonspecial_members<Trait>, all_trait_methods<Trait>, ^^Trait);
 
 
 template<typename Trait>
