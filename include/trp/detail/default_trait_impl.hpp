@@ -84,8 +84,8 @@ struct overload_tester : Proxies... {
 template<typename Overloaded, typename... Args>
 inline constexpr auto overload_idx = std::invoke_result_t<Overloaded, Args...>::value;
 
-template<meta::reflection_range R = std::initializer_list<meta::info>>
-consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_methods) -> meta::info {
+consteval auto resolve_method_overload_set(meta::info                  method_idt,
+                                           std::span<meta::info const> callable_methods) -> meta::info {
     if (stdr::empty(callable_methods))
         return meta::info{};
     if (stdr::size(callable_methods) == 1)
@@ -95,7 +95,7 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
     auto const quals  = extract_method_qualifiers(method_idt);
 
     auto proxies = std::vector<meta::info>{};
-    for (auto [i, m]: stdv::zip(stdv::iota(0), callable_methods)) {
+    for (uZ i = 0; auto m: callable_methods) {
         if (is_function_template(m)) {
             // currently cannot resolve templates
             // if the template is the only callable member, it's already handled
@@ -119,6 +119,7 @@ consteval auto resolve_method_overload_set(meta::info method_idt, R&& callable_m
                                  | stdv::take(params.size())     //
                                  | stdv::transform(meta::type_of));
         proxies.push_back(substitute(^^overload_proxy, proxy_targs));
+        ++i;
     }
     auto tester = substitute(^^overload_tester, proxies);
     if (quals.is_const)

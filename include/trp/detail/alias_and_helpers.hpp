@@ -557,16 +557,15 @@ struct methods_and_requirements {
     }
 };
 
-template<typename T>
-inline constexpr auto direct_trait_methods_and_requirements = [] {
-    constexpr auto is_relevant_method = [](meta::info method) {
-        return is_function(method)                            //
-               and not is_special_member_function(method)     //
-               and (is_const(method) or not is_const(^^T))    //
-               and (is_volatile(method) or not is_volatile(^^T));
+consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
+    auto is_relevant_method = [=](meta::info method) {
+        return is_function(method)                              //
+               and not is_special_member_function(method)       //
+               and (is_const(method) or not is_const(trait))    //
+               and (is_volatile(method) or not is_volatile(trait));
     };
 
-    auto const relevant_methods = members_of(^^T, unprivileged)         //
+    auto const relevant_methods = members_of(trait, unprivileged)       //
                                   | stdv::filter(is_relevant_method)    //
                                   | stdr::to<std::vector>();
     return methods_and_requirements{
@@ -574,14 +573,33 @@ inline constexpr auto direct_trait_methods_and_requirements = [] {
         .requirements = define_static_array(relevant_methods    //
                                             | stdv::transform(methods_and_requirements::to_o_requirements)),
     };
-}();
+};
 
 template<typename T>
-inline constexpr auto all_trait_methods_and_requirements = [] {
-    auto res_idts = direct_trait_methods_and_requirements<T>.identities    //
+inline constexpr auto direct_trait_methods_and_requirements = direct_trait_methods_and_requirements_fn(^^T);
+template<typename T>
+inline constexpr auto direct_trait_methods = direct_trait_methods_and_requirements<T>.identities;
+template<typename T>
+inline constexpr auto direct_trait_requirements = direct_trait_methods_and_requirements<T>.requirements;
+
+consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements;
+template<typename T>
+inline constexpr auto all_trait_methods_and_requirements = all_trait_methods_and_requirements_fn(^^T);
+/**
+ * @brief All reflections of method_identity_t for all methods in a trait T sorted in lexicographical order of identifiers
+ * @tparam T 
+ */
+template<typename T>
+inline constexpr auto all_trait_methods = all_trait_methods_and_requirements<T>.identities;
+template<typename T>
+inline constexpr auto all_trait_requirements = all_trait_methods_and_requirements<T>.requirements;
+
+consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements {
+    auto res_idts = subextract_info_span(^^direct_trait_methods, {trait})    //
                     | stdr::to<std::vector>();
-    auto res_reqs = direct_trait_methods_and_requirements<T>.requirements    //
-                    | stdr::to<std::vector>();
+    auto res_reqs =
+        subextract_span<method_signature_requirements_t>(^^direct_trait_requirements, {trait})    //
+        | stdr::to<std::vector>();
 
     auto const append_unique = [&](auto&& idts, auto&& reqs) {
         auto const update_at = [&](uZ i, auto const& quals, auto const& reqs) {
@@ -683,10 +701,12 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
             }
         }
     };
-    template for (constexpr auto base: direct_base_types<std::remove_cv_t<T>>) {
-        using base_t = [:copy_cv_to(^^T, base):];
-        append_unique(all_trait_methods_and_requirements<base_t>.identities,
-                      all_trait_methods_and_requirements<base_t>.requirements);
+    for (auto base: subextract_base_types(remove_cv(trait))) {
+        auto const cv_base = copy_cv_to(trait, base);
+        auto const idts    = subextract_info_span(^^all_trait_methods, {cv_base});
+        auto const reqs =
+            subextract_span<method_signature_requirements_t>(^^all_trait_requirements, {cv_base});
+        append_unique(idts, reqs);
     }
     auto const method_id_less = [](auto&& zip_v_l, auto&& zip_v_r) {
         auto [idt_l, _] = zip_v_l;
@@ -711,17 +731,8 @@ inline constexpr auto all_trait_methods_and_requirements = [] {
         .identities   = std::define_static_array(res_idts),
         .requirements = std::define_static_array(res_reqs),
     };
-}();
+};
 
-template<typename T>
-inline constexpr auto direct_trait_methods = direct_trait_methods_and_requirements<T>.identities;
-
-/**
- * @brief All reflections of method_identity_t for all methods in a trait T sorted in lexicographical order of identifiers
- * @tparam T 
- */
-template<typename T>
-inline constexpr auto all_trait_methods = all_trait_methods_and_requirements<T>.identities;
 
 struct method_reference {
     char const* name;         // method identifier

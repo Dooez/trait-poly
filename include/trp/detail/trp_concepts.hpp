@@ -243,17 +243,16 @@ concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::deriv
 
 
 namespace detail {
-template<char const* Id>
-struct is_matching_id_t {
-    static constexpr auto id_sv = std::string_view(Id);
-    static consteval bool operator()(meta::info r) {
+struct is_matching_id {
+    std::string_view id_sv;
+    consteval bool   operator()(meta::info r) const {
         return has_identifier(r) and identifier_of(r) == id_sv;
     }
 };
 template<non_cvref Impl, char const* Id>
 inline constexpr auto matching_id_direct_public_members =
     std::define_static_array(members_of(^^Impl, unprivileged)    //
-                             | stdv::filter(is_matching_id_t<Id>{}));
+                             | stdv::filter(is_matching_id{Id}));
 
 template<typename Impl, meta::info ImplMethod, bool Noexcept, typename... Args>
 inline constexpr bool invocable_from_idt = [] {
