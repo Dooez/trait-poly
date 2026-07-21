@@ -86,31 +86,17 @@ consteval auto matching_explicit_impl(meta::info impl, meta::info method_idt) ->
 }
 
 namespace concepts {
-
-template<typename T, meta::info M>
-consteval bool check_constexpr_static_data_member() {
-#if defined(__GNUC__) && !defined(__clang__)
-#define TRP_CHECK_CESDM
-#endif
-
-#ifdef TRP_CHECK_CESDM
-    return requires { cw<([:M:])>; };
-#else
-    return false;
-#endif
-#undef TRP_CHECK_CESDM
-}
-
 template<typename Trait>
 concept no_private_members =
-    non_cvref<Trait> and stdr::size(members_of(^^Trait, meta::access_context::unchecked())) ==
-                             stdr::size(members_of(^^Trait, unprivileged));
+    non_cvref<Trait> and not has_inaccessible_nonstatic_data_members(^^Trait, unprivileged);
 template<typename Trait>
 concept no_private_bases = non_cvref<Trait> and not has_inaccessible_bases(^^Trait, unprivileged);
 
 template<typename Trait>
 concept no_nonstatic_data_members =
-    non_cvref<Trait> and stdr::empty(nonstatic_data_members_of(^^Trait, unprivileged));
+    non_cvref<Trait>                                                                          //
+    and stdr::empty(nonstatic_data_members_of(^^Trait, meta::access_context::unchecked()))    //
+    and stdr::empty(static_data_members_of(^^Trait, meta::access_context::unchecked()));
 
 template<typename Trait>
 concept no_explicit_special_members = non_cvref<Trait>    //
@@ -118,18 +104,28 @@ concept no_explicit_special_members = non_cvref<Trait>    //
                                               return is_special_member_function(m)    //
                                                      and is_user_declared(m);
                                           });    //
-//
+
+consteval auto no_operators_fn(std::span<meta::info const> members) -> bool {
+    for (auto m: members)
+        if (is_operator_function(m) or is_operator_function_template(m))
+            return false;
+    return true;
+}
+
 template<typename Trait>
-concept no_operators = non_cvref<Trait>    //
-                       and stdr::none_of(nonspecial_members<Trait>, [](auto m) {
-                               return is_operator_function(m)    //
-                                      or is_operator_function_template(m);
-                           });    //
+concept no_operators = non_cvref<Trait> and no_operators_fn(nonspecial_members<Trait>);
+
+consteval auto no_virtual_fn(std::span<meta::info const> rs) {
+    for (auto r: rs)
+        if (is_virtual(r))
+            return false;
+    return true;
+}
+
 template<typename Trait>
-concept no_virtual =
-    non_cvref<Trait>                                                  //
-    and stdr::none_of(nonspecial_members<Trait>, meta::is_virtual)    //
-    and stdr::none_of(bases_of(^^Trait, meta::access_context::unchecked()), meta::is_virtual);
+concept no_virtual = non_cvref<Trait>                                //
+                     and no_virtual_fn(nonspecial_members<Trait>)    //
+                     and no_virtual_fn(bases_of(^^Trait, unprivileged));
 
 template<typename Trait>
 concept nonstatic_methods_are_not_templates =
@@ -141,34 +137,41 @@ template<typename Trait>
 concept no_vararg_methods =
     non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, meta::is_vararg_function);
 
+consteval auto methods_have_no_default_args(std::span<meta::info const> methods) {
+    for (auto m: methods) {
+        if (not is_function(m))
+            continue;
+        for (auto p: parameters_of(m))
+            if (has_default_argument(p))
+                return false;
+    }
+    return true;
+}
+
 template<typename Trait>
-concept no_default_arguments = non_cvref<Trait>and[] {
-    for (auto method: nonspecial_members<Trait> | stdv::filter(meta::is_function))
-        if (stdr::any_of(parameters_of(method), meta::has_default_argument))
+concept no_default_arguments = non_cvref<Trait> and methods_have_no_default_args(nonspecial_members<Trait>);
+
+consteval auto static_methods_are_templates_fn(std::span<meta::info const> members) {
+    for (auto m: members)
+        if (is_static_member(m) and is_function(m))
             return false;
     return true;
 }
-();
+
 template<typename Trait>
 concept static_methods_are_templates =
-    non_cvref<Trait> and
-    stdr::none_of(nonspecial_members<Trait>, [](auto r) { return is_static_member(r) and is_function(r); });
+    non_cvref<Trait> and static_methods_are_templates_fn(nonspecial_members<Trait>);
 
-template<typename T>
-concept valid_methods = [] {
-    for (auto m: direct_trait_methods<T>) {
+consteval auto valid_methods_fn(meta::info trait, std::span<meta::info const> methods) {
+    for (auto m: methods) {
         if (not extract<bool>(substitute(^^trait_method_idt, {m})))
             return false;
     }
     return true;
-}();
+}
 
 template<typename T>
-concept static_data_members_are_constexpr = [] {
-    constexpr auto mems = std::define_static_array(static_data_members_of(^^T, unprivileged));
-    auto [... Is]       = make_cw_idxs<mems.size()>();
-    return (check_constexpr_static_data_member<T, mems[Is]>() and ... and true);
-}();
+concept valid_methods = valid_methods_fn(^^T, direct_trait_methods<T>);
 
 consteval auto static_methods_are_default_impl_for_fn(std::span<meta::info const> members,
                                                       std::span<meta::info const> all_methods,
@@ -204,7 +207,6 @@ concept any_immediate_trait = non_cvref<Trait>                                  
                               and no_virtual<Trait>                                    //
                               and no_nonstatic_data_members<Trait>                     //
                               and no_explicit_special_members<Trait>                   //
-                              and static_data_members_are_constexpr<Trait>             // only in gcc atm
                               and static_methods_are_templates<Trait>                  //
                               and no_operators<Trait>                                  //
                               and nonstatic_methods_are_not_templates<Trait>           //
@@ -213,6 +215,19 @@ concept any_immediate_trait = non_cvref<Trait>                                  
                               and valid_methods<Trait>                                 //
                               and static_methods_are_default_impl_for<Trait, Trait>    //
     ;
+
+consteval auto recurse_substitute(meta::info r, std::span<meta::info const> args) {
+    if (args.empty())
+        return true;
+    auto s_args = std::vector{meta::reflect_constant(r)};
+    s_args.append_range(args);
+    return extract<bool>(substitute(r, s_args));
+}
+
+// template<meta::info Self, typename... Traits>
+// concept any_traits = (true and ... and
+//                       (any_immediate_trait<std::remove_cv_t<Traits>> and
+//                        recurse_substitute(Self, direct_base_types<std::remove_cv_t<Traits>>)));
 
 template<meta::info Self, typename... Traits>
 concept any_traits =
@@ -225,6 +240,16 @@ concept any_traits =
                            }()):])    //
     );
 
+
+consteval auto supertrait_of_fn(std::span<meta::info const> supertrat_methods,
+                                std::span<meta::info const> trait_methods) -> bool {
+    for (auto m: supertrat_methods) {
+        if (not contains_submethod_of(trait_methods, m))
+            return false;
+    }
+    return true;
+}
+
 }    // namespace concepts
 }    // namespace detail
 
@@ -236,20 +261,16 @@ template<typename Trait>
 concept non_cv_trait = non_cvref<Trait> and any_trait<Trait>;
 
 template<typename Supertrait, typename Trait>
-concept supertrait_of =
-    any_trait<Supertrait>    //
-    and any_trait<Trait>     //
-    and ([] {
-            for (auto m: detail::all_trait_methods<Supertrait>) {
-                if (not detail::contains_submethod_of(detail::all_trait_methods<Trait>, m))
-                    return false;
-            }
-            return true;
-        }());
+concept supertrait_of = any_trait<Supertrait>    //
+                        and any_trait<Trait>     //
+                        and detail::concepts::supertrait_of_fn(detail::all_trait_methods<Supertrait>,
+                                                               detail::all_trait_methods<Trait>);
+
 template<typename Supertrait, typename Trait>
 concept direct_supertrait_of =
     supertrait_of<Supertrait, Trait> and
     stdr::contains(detail::direct_base_types<std::remove_cv_t<Trait>>, remove_cv(^^Supertrait));
+
 template<typename Supertrait, typename Trait>
 concept explicit_supertrait_of = supertrait_of<Supertrait, Trait> and std::derived_from<Trait, Supertrait>;
 
