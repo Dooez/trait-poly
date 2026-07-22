@@ -150,7 +150,9 @@ template<non_cv_trait Trait, non_cv_trait SESubtrait, non_ref Impl>
     requires explicit_supertrait_of<Trait, SESubtrait>
 consteval auto fill_vtable() {
     // use constexpr binding when it becomes available
-    auto [... Is] = make_cw_idxs<all_trait_methods<Trait>.size()>();
+    constexpr auto direct_n = all_trait_methods<Trait>.size();
+
+    auto [... Is] = make_cw_idxs<direct_n>();
     auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
     auto quals    = vtable_cv_quals{};
 
@@ -161,7 +163,7 @@ consteval auto fill_vtable() {
         quals,
         {[:substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^SESubtrait, ^^Impl}):]...},
     };
-    auto& [... ptrs] = vt;
+    auto& [... vmems] = vt;
     template for (constexpr auto i: {Is.value...}) {
         constexpr auto method_idt   = all_trait_methods<Trait>[i];
         auto const     method_quals = extract_method_qualifiers(method_idt);
@@ -173,8 +175,9 @@ consteval auto fill_vtable() {
                 quals.has_volatile = false;
             quals.has_full = false;
         }
-        ptrs...[i] = ptr;
+        vmems...[i] = ptr;
     }
+    vmems...[direct_n + 3] = quals;
     return vt;
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>
