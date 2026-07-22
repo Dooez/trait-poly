@@ -90,11 +90,9 @@ consteval auto fill_vtable();
 template<non_cv_trait Trait, non_cv_trait SmallestExplicitSubtrait, non_ref Impl>
 inline constexpr auto trait_vtable_for = fill_vtable<Trait, SmallestExplicitSubtrait, Impl>();
 
-
-consteval auto get_wrapper_ptr(meta::info       se_subtrait,    //
-                               meta::info       impl,
-                               meta::info       method_idt,
-                               vtable_cv_quals& quals) -> meta::info {
+consteval auto get_wrapper_ptr(meta::info se_subtrait,    //
+                               meta::info impl,
+                               meta::info method_idt) -> meta::info {
     constexpr auto find_compat = [](auto impls, meta::info method_idt) {
         auto const id           = std::string_view(extract_method_identifier(method_idt));
         auto const method_quals = extract_method_qualifiers(method_idt);
@@ -127,12 +125,6 @@ consteval auto get_wrapper_ptr(meta::info       se_subtrait,    //
         find_compat(subextract_span<impl_method_bind>(^^full_impls_for, {impl, se_subtrait}), method_idt);
 
     if (bind.fn == meta::info{}) {
-        auto const method_quals = extract_method_qualifiers(method_idt);
-        if (method_quals.is_const)
-            quals.has_const = false;
-        if (method_quals.is_volatile)
-            quals.has_volatile = false;
-        quals.has_full = false;
         return meta::reflect_constant(nullptr);
     } else {
         if (bind.is_explicit) {
@@ -162,17 +154,29 @@ consteval auto fill_vtable() {
     auto [... Js] = make_cw_idxs<direct_base_types<Trait>.size()>();
     auto quals    = vtable_cv_quals{};
 
-    return vtable<Trait>{
-        [:get_wrapper_ptr(^^SESubtrait,
-                          ^^Impl,
-                          all_trait_methods<Trait>[Is],
-                          quals):]...,
-                                  &default_delete<Impl>,
-                                  &unique_id_struct<Impl>::value,
-                                  quals,
-                                  {[:substitute(^^trait_vtable_for,
-                                                {direct_base_types<Trait>[Js], ^^SESubtrait, ^^Impl}):]...},
+    auto vt = vtable<Trait>{
+        ((void)Is, nullptr)...,
+        &default_delete<Impl>,
+        &unique_id_struct<Impl>::value,
+        quals,
+        {[:substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^SESubtrait, ^^Impl}):]...},
     };
+    auto [...ptrs]= vt;
+    template for (constexpr auto i: {Is.value...}) {
+        constexpr auto method_idt = all_trait_methods<Trait>[i];
+        auto const method_quals =
+            extract_method_qualifiers(method_idt);
+        auto const ptr = [:get_wrapper_ptr(^^SESubtrait, ^^Impl, method_idt):];
+        if (ptr == nullptr) {
+            if (method_quals.is_const)
+                quals.has_const = false;
+            if (method_quals.is_volatile)
+                quals.has_volatile = false;
+            quals.has_full = false;
+        }
+        ptrs...[i] = ptr;
+    }
+    return vt;
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>
     requires explicit_supertrait_of<Supertrait, Trait>
