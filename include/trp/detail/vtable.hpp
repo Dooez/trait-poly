@@ -161,12 +161,11 @@ consteval auto fill_vtable() {
         quals,
         {[:substitute(^^trait_vtable_for, {direct_base_types<Trait>[Js], ^^SESubtrait, ^^Impl}):]...},
     };
-    auto [...ptrs]= vt;
+    auto& [... ptrs] = vt;
     template for (constexpr auto i: {Is.value...}) {
-        constexpr auto method_idt = all_trait_methods<Trait>[i];
-        auto const method_quals =
-            extract_method_qualifiers(method_idt);
-        auto const ptr = [:get_wrapper_ptr(^^SESubtrait, ^^Impl, method_idt):];
+        constexpr auto method_idt   = all_trait_methods<Trait>[i];
+        auto const     method_quals = extract_method_qualifiers(method_idt);
+        auto const     ptr          = [:get_wrapper_ptr(^^SESubtrait, ^^Impl, method_idt):];
         if (ptr == nullptr) {
             if (method_quals.is_const)
                 quals.has_const = false;
