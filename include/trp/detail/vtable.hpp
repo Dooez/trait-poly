@@ -93,10 +93,42 @@ template<non_cv_trait Trait, non_cv_trait SESubtrait, non_ref Impl>
 consteval auto fill_vtable() {
     auto       quals           = vtable_cv_quals{};
     auto const get_wrapper_ptr = [&](cw_info auto trait_method_idt) {
-        using trait_method_idt_t = [:trait_method_idt:];
-        constexpr auto bind      = *stdr::find(
-            full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt);
+
+        constexpr auto find_compat = [](auto impls, meta::info method_idt) {
+            auto const id     = std::string_view(extract_method_identifier(method_idt));
+            auto const quals  = extract_method_qualifiers(method_idt);
+            auto const params = extract_method_param_types(method_idt);
+            auto const ret    = extract_method_return_type(method_idt);
+            for (auto bind: impls) {
+                auto [_, idt, _] = bind;
+                if (id != extract_method_identifier(idt))
+                    continue;
+                auto const q = extract_method_qualifiers(idt);
+                if (q.is_const != quals.is_const or q.is_volatile != quals.is_volatile)
+                    continue;
+                if (q.is_rvalue != quals.is_rvalue )
+                    continue;
+                // q is subtrait method, and subtrait can only be more qualified
+                // no need to check for lvalue becuase either quals.is_lvalue = false, which means relaxed matching
+                // or quals.is_lvalue = true, which means subtrait must have lavlue qualified method
+
+                auto const ps = extract_method_param_types(idt);
+                if (not stdr::equal(params, ps))
+                    continue;
+                if (ret != extract_method_return_type(idt))
+                    continue;
+                return bind;
+            }
+            throw "Not found bind";
+        };
+
+        constexpr auto bind = find_compat(full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt});
+        // *stdr::find(
+        //     full_impls_for<Impl, SESubtrait>, meta::info{trait_method_idt}, &impl_method_bind::idt);
+
         constexpr auto m = bind.fn;
+        using trait_method_idt_t = [:bind.idt:];
+
 
         if constexpr (m == meta::info{}) {
             if (trait_method_idt_t::is_const)
@@ -115,7 +147,7 @@ consteval auto fill_vtable() {
                                                                 {reflect_constant(method),
                                                                  ^^Impl,
                                                                  ^^cvts_ref,
-                                                                 trait_method_idt,
+                                                                 bind.idt,
                                                                  trait_method_idt_t::param_infos[is]...});
                 using wrapper_struct               = [:wrapper_struct_info:];
                 return &wrapper_struct::invoke;
