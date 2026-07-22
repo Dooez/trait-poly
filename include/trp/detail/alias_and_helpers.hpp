@@ -715,26 +715,7 @@ consteval void append_unique(std::span<meta::info const> idts,
     }
 }
 
-using zip_ref = std::tuple<meta::info&, sign_req_t&>;
-consteval auto method_idt_less(zip_ref zip_v_l, zip_ref zip_v_r) -> bool {
-    auto [idt_l, _] = zip_v_l;
-    auto [idt_r, _] = zip_v_r;
-    auto const id_l = std::string_view(extract_method_identifier(idt_l));
-    auto const id_r = std::string_view(extract_method_identifier(idt_r));
-    if (id_l != id_r)
-        return id_l < id_r;
-    auto const quals_l  = extract_method_qualifiers(idt_l);
-    auto const quals_r  = extract_method_qualifiers(idt_r);
-    auto const ref_rank = [](method_qualifiers_t quals) {
-        if (quals.is_lvalue)
-            return 0;
-        if (quals.is_rvalue)
-            return 2;
-        return 1;
-    };
-    return ref_rank(quals_l) < ref_rank(quals_r);
-}
-consteval auto method_idt_less_new(meta::info idt_l, meta::info idt_r) -> bool {
+consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
     auto const id_l = std::string_view(extract_method_identifier(idt_l));
     auto const id_r = std::string_view(extract_method_identifier(idt_r));
     if (id_l != id_r)
@@ -765,18 +746,19 @@ consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> method
         auto const reqs    = subextract_span<sign_req_t>(^^all_trait_requirements, {cv_base});
         append_unique(idts, reqs, res_idts, res_reqs);
     }
-    // uZ const end = res_idts.size();
-    // if (end > 3) {
-    //     for (auto start: stdv::iota(0U, end - 3)) {
-    //         for (auto i: stdv::iota(start, end - 2)) {
-    //             if (method_idt_less(res_idts[i], res_idts[i + 1]))
-    //                 break;
-    //             std::swap(res_idts[i], res_idts[i + 1]);
-    //             swap(res_reqs[i], res_reqs[i + 1]);
-    //         }
-    //     }
-    // }
-    stdr::sort(stdv::zip(res_idts, res_reqs), method_idt_less);
+    uZ const end = res_idts.size();
+    for (auto unsorted_end = end; unsorted_end > 1; --unsorted_end) {
+        auto swapped = false;
+        for (auto i: stdv::iota(0UZ, unsorted_end - 1)) {
+            if (method_idt_less(res_idts[i + 1], res_idts[i])) {
+                std::swap(res_idts[i], res_idts[i + 1]);
+                swap(res_reqs[i], res_reqs[i + 1]);
+                swapped = true;
+            }
+        }
+        if (not swapped)
+            break;
+    }
     return methods_and_requirements{
         .identities   = std::define_static_array(res_idts),
         .requirements = std::define_static_array(res_reqs),
