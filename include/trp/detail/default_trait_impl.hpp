@@ -40,14 +40,11 @@ consteval auto all_default_impls_fn(meta::info trait) -> std::span<impl_method_b
         if (concepts::is_explicit_template_method_impl(m, trait))
             impls.emplace_back(m, explicit_impl_to_method_identity(m, trait), true);
 
-    auto const append_unique = [&](auto&& method_impls) {
-        for (auto const m: method_impls)
-            if (not stdr::contains(impls, m.idt, &impl_method_bind::idt))
-                impls.push_back(m);
-    };
     for (auto base: subextract_base_types(trait)) {
         auto const base_impls = subextract_span<impl_method_bind>(^^all_default_impls, {base});
-        append_unique(base_impls);
+        for (auto const m: base_impls)
+            if (not stdr::contains(impls, m.idt, &impl_method_bind::idt))
+                impls.push_back(m);
     }
     return define_static_array(impls);
 }
@@ -159,8 +156,9 @@ consteval auto find_explicit_impl(meta::info impl, meta::info ncv_trait, meta::i
     -> meta::info {
     auto const nsm =
         subextract_info_span(^^nonspecial_members, {substitute(^^impl_spec_for, {impl, ncv_trait})});
-    for (auto const m: nsm | stdv::filter(meta::is_template))
-        if (matching_explicit_impl(explicit_impl_to_method_identity(m, ncv_trait), method_idt))
+    for (auto const m: nsm)
+        if (is_template(m)    //
+            and matching_explicit_impl(explicit_impl_to_method_identity(m, ncv_trait), method_idt))
             return m;
     auto const bases = subextract_base_types(ncv_trait);
     for (auto const b: bases) {

@@ -177,7 +177,7 @@ consteval auto fill_vtable() {
         }
         vmems...[i] = ptr;
     }
-    vmems...[direct_n + 3] = quals;
+    vmems...[direct_n + 2] = quals;
     return vt;
 }
 template<non_cv_trait Supertrait, non_cv_trait Trait>

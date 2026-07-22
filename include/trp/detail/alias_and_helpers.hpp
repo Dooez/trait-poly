@@ -503,7 +503,14 @@ struct method_signature_requirements_t {
         false;
 #endif
 
-    consteval auto operator|=(const method_signature_requirements_t& other) {
+    friend consteval void swap(method_signature_requirements_t& lhs, method_signature_requirements_t& rhs) {
+        std::swap(lhs.exact_return, rhs.exact_return);
+        std::swap(lhs.exact_args, rhs.exact_args);
+        std::swap(lhs.exact_cv, rhs.exact_cv);
+        std::swap(lhs.exact_ref, rhs.exact_ref);
+    }
+
+    consteval auto operator|=(method_signature_requirements_t const& other) {
         exact_return |= other.exact_return;
         exact_args |= other.exact_args;
         exact_cv |= other.exact_cv;
@@ -554,10 +561,6 @@ struct methods_and_requirements {
             return verify(*o_req);
         return {};
     };
-
-    consteval auto zip() const {
-        return stdv::zip(identities, requirements);
-    }
 };
 
 consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
@@ -597,139 +600,183 @@ inline constexpr auto all_trait_methods = all_trait_methods_and_requirements<T>.
 template<typename T>
 inline constexpr auto all_trait_requirements = all_trait_methods_and_requirements<T>.requirements;
 
-consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements {
-    auto res_idts = subextract_info_span(^^direct_trait_methods, {trait})    //
-                    | stdr::to<std::vector>();
-    auto res_reqs =
-        subextract_span<method_signature_requirements_t>(^^direct_trait_requirements, {trait})    //
-        | stdr::to<std::vector>();
+namespace atmar {
+using sign_req_t = method_signature_requirements_t;
+consteval void update_at(uZ                       i,
+                         auto const&              quals,
+                         auto const&              reqs,
+                         std::vector<meta::info>& res_idts,
+                         std::vector<sign_req_t>& res_reqs) {
+    auto curr_quals = extract_method_qualifiers(res_idts[i]);
+    curr_quals.is_noexcept |= quals.is_noexcept;
+    curr_quals.is_lvalue |= quals.is_lvalue;
+    curr_quals.is_rvalue |= quals.is_rvalue;
 
-    auto const append_unique = [&](auto&& idts, auto&& reqs) {
-        auto const update_at = [&](uZ i, auto const& quals, auto const& reqs) {
-            auto curr_quals = extract_method_qualifiers(res_idts[i]);
-            curr_quals.is_noexcept |= quals.is_noexcept;
-            curr_quals.is_lvalue |= quals.is_lvalue;
-            curr_quals.is_rvalue |= quals.is_rvalue;
+    res_idts[i] = replace_method_qualifiers(res_idts[i], curr_quals);
+    res_reqs[i] |= reqs;
+}
+consteval void append_as_ref(meta::info               method,
+                             auto const&              reqs,
+                             bool                     is_lvalue,
+                             std::vector<meta::info>& res_idts,
+                             std::vector<sign_req_t>& res_reqs) {
+    auto quals      = extract_method_qualifiers(method);
+    quals.is_lvalue = is_lvalue;
+    quals.is_rvalue = not is_lvalue;
+    res_idts.push_back(replace_method_qualifiers(method, quals));
+    res_reqs.push_back(reqs);
+}
+consteval void append_unique(std::span<meta::info const> idts,
+                             std::span<sign_req_t const> reqs,
+                             std::vector<meta::info>&    res_idts,
+                             std::vector<sign_req_t>&    res_reqs) {
+    for (auto i: stdv::iota(0U, idts.size())) {
+        auto const method       = idts[i];
+        auto const requirements = reqs[i];
+        auto const size         = res_idts.size();
 
-            res_idts[i] = replace_method_qualifiers(res_idts[i], curr_quals);
-            res_reqs[i] |= reqs;
-        };
-        auto const append_as_ref = [&](meta::info method, auto const& reqs, bool is_lvalue) {
-            auto quals      = extract_method_qualifiers(method);
-            quals.is_lvalue = is_lvalue;
-            quals.is_rvalue = not is_lvalue;
-            res_idts.push_back(replace_method_qualifiers(method, quals));
-            res_reqs.push_back(reqs);
-        };
-
-        for (auto [method, requirements]: stdv::zip(idts, reqs)) {
-            auto const size = res_idts.size();
-
-            auto unqual_idx = size;
-            auto lvalue_idx = size;
-            auto rvalue_idx = size;
-            for (auto i: stdv::iota(0UZ, size)) {
-                if (not are_similar_idts(res_idts[i], method))
-                    continue;
-                auto const quals = extract_method_qualifiers(res_idts[i]);
-                if (quals.is_lvalue) {
-                    lvalue_idx = i;
-                } else if (quals.is_rvalue) {
-                    rvalue_idx = i;
-                    break;
-                } else {
-                    unqual_idx = i;
-                    break;
-                }
-            }
-
-            if (unqual_idx == size     /**/
-                and lvalue_idx == size /**/
-                and rvalue_idx == size) {
-                res_idts.push_back(method);
-                res_reqs.push_back(requirements);
+        auto unqual_idx = size;
+        auto lvalue_idx = size;
+        auto rvalue_idx = size;
+        for (auto i: stdv::iota(0UZ, size)) {
+            if (not are_similar_idts(res_idts[i], method))
                 continue;
-            }
-
-            auto const method_quals = extract_method_qualifiers(method);
-            if (unqual_idx != size) {
-                if (not method_quals.is_ref()) {
-                    update_at(unqual_idx, method_quals, requirements);
-                    continue;
-                }
-                auto const current_method = res_idts[unqual_idx];
-
-                auto lvalue_req   = res_reqs[unqual_idx];
-                auto lvalue_quals = extract_method_qualifiers(current_method);
-                auto rvalue_req   = lvalue_req;
-                auto rvalue_quals = lvalue_quals;
-
-                if (method_quals.is_lvalue)
-                    lvalue_req |= requirements;
-                else
-                    rvalue_req |= requirements;
-
-                lvalue_quals.is_lvalue = true;
-                if (method_quals.is_lvalue)
-                    lvalue_quals.is_noexcept |= method_quals.is_noexcept;
-                update_at(unqual_idx, lvalue_quals, lvalue_req);
-
-                rvalue_quals.is_rvalue = true;
-                if (method_quals.is_rvalue)
-                    rvalue_quals.is_noexcept |= method_quals.is_noexcept;
-                res_idts.push_back(replace_method_qualifiers(current_method, rvalue_quals));
-                res_reqs.push_back(rvalue_req);
-                continue;
-            }
-
-            if (method_quals.is_lvalue) {
-                if (lvalue_idx == size)
-                    append_as_ref(method, requirements, true);
-                else
-                    update_at(lvalue_idx, method_quals, requirements);
-            } else if (method_quals.is_rvalue) {
-                if (rvalue_idx == size)
-                    append_as_ref(method, requirements, false);
-                else
-                    update_at(rvalue_idx, method_quals, requirements);
+            auto const quals = extract_method_qualifiers(res_idts[i]);
+            if (quals.is_lvalue) {
+                lvalue_idx = i;
+            } else if (quals.is_rvalue) {
+                rvalue_idx = i;
+                break;
             } else {
-                if (lvalue_idx == size)
-                    append_as_ref(method, requirements, true);
-                else
-                    update_at(lvalue_idx, method_quals, requirements);
-                if (rvalue_idx == size)
-                    append_as_ref(method, requirements, false);
-                else
-                    update_at(rvalue_idx, method_quals, requirements);
+                unqual_idx = i;
+                break;
             }
         }
+
+        if (unqual_idx == size     /**/
+            and lvalue_idx == size /**/
+            and rvalue_idx == size) {
+            res_idts.push_back(method);
+            res_reqs.push_back(requirements);
+            continue;
+        }
+
+        auto const method_quals = extract_method_qualifiers(method);
+        if (unqual_idx != size) {
+            if (not method_quals.is_ref()) {
+                update_at(unqual_idx, method_quals, requirements, res_idts, res_reqs);
+                continue;
+            }
+            auto const current_method = res_idts[unqual_idx];
+
+            auto lvalue_req   = res_reqs[unqual_idx];
+            auto lvalue_quals = extract_method_qualifiers(current_method);
+            auto rvalue_req   = lvalue_req;
+            auto rvalue_quals = lvalue_quals;
+
+            if (method_quals.is_lvalue)
+                lvalue_req |= requirements;
+            else
+                rvalue_req |= requirements;
+
+            lvalue_quals.is_lvalue = true;
+            if (method_quals.is_lvalue)
+                lvalue_quals.is_noexcept |= method_quals.is_noexcept;
+            update_at(unqual_idx, lvalue_quals, lvalue_req, res_idts, res_reqs);
+
+            rvalue_quals.is_rvalue = true;
+            if (method_quals.is_rvalue)
+                rvalue_quals.is_noexcept |= method_quals.is_noexcept;
+            res_idts.push_back(replace_method_qualifiers(current_method, rvalue_quals));
+            res_reqs.push_back(rvalue_req);
+            continue;
+        }
+
+        if (method_quals.is_lvalue) {
+            if (lvalue_idx == size)
+                append_as_ref(method, requirements, true, res_idts, res_reqs);
+            else
+                update_at(lvalue_idx, method_quals, requirements, res_idts, res_reqs);
+        } else if (method_quals.is_rvalue) {
+            if (rvalue_idx == size)
+                append_as_ref(method, requirements, false, res_idts, res_reqs);
+            else
+                update_at(rvalue_idx, method_quals, requirements, res_idts, res_reqs);
+        } else {
+            if (lvalue_idx == size)
+                append_as_ref(method, requirements, true, res_idts, res_reqs);
+            else
+                update_at(lvalue_idx, method_quals, requirements, res_idts, res_reqs);
+            if (rvalue_idx == size)
+                append_as_ref(method, requirements, false, res_idts, res_reqs);
+            else
+                update_at(rvalue_idx, method_quals, requirements, res_idts, res_reqs);
+        }
+    }
+}
+
+using zip_ref = std::tuple<meta::info&, sign_req_t&>;
+consteval auto method_idt_less(zip_ref zip_v_l, zip_ref zip_v_r) -> bool {
+    auto [idt_l, _] = zip_v_l;
+    auto [idt_r, _] = zip_v_r;
+    auto const id_l = std::string_view(extract_method_identifier(idt_l));
+    auto const id_r = std::string_view(extract_method_identifier(idt_r));
+    if (id_l != id_r)
+        return id_l < id_r;
+    auto const quals_l  = extract_method_qualifiers(idt_l);
+    auto const quals_r  = extract_method_qualifiers(idt_r);
+    auto const ref_rank = [](method_qualifiers_t quals) {
+        if (quals.is_lvalue)
+            return 0;
+        if (quals.is_rvalue)
+            return 2;
+        return 1;
     };
+    return ref_rank(quals_l) < ref_rank(quals_r);
+}
+consteval auto method_idt_less_new(meta::info idt_l, meta::info idt_r) -> bool {
+    auto const id_l = std::string_view(extract_method_identifier(idt_l));
+    auto const id_r = std::string_view(extract_method_identifier(idt_r));
+    if (id_l != id_r)
+        return id_l < id_r;
+    auto const quals_l  = extract_method_qualifiers(idt_l);
+    auto const quals_r  = extract_method_qualifiers(idt_r);
+    auto const ref_rank = [](method_qualifiers_t quals) {
+        if (quals.is_lvalue)
+            return 0;
+        if (quals.is_rvalue)
+            return 2;
+        return 1;
+    };
+    return ref_rank(quals_l) < ref_rank(quals_r);
+}
+}    // namespace atmar
+
+consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements {
+    using namespace atmar;
+    auto res_idts = subextract_info_span(^^direct_trait_methods, {trait})    //
+                    | stdr::to<std::vector>();
+    auto res_reqs = subextract_span<sign_req_t>(^^direct_trait_requirements, {trait})    //
+                    | stdr::to<std::vector>();
+
     for (auto base: subextract_base_types(remove_cv(trait))) {
         auto const cv_base = copy_cv_to(trait, base);
         auto const idts    = subextract_info_span(^^all_trait_methods, {cv_base});
-        auto const reqs =
-            subextract_span<method_signature_requirements_t>(^^all_trait_requirements, {cv_base});
-        append_unique(idts, reqs);
+        auto const reqs    = subextract_span<sign_req_t>(^^all_trait_requirements, {cv_base});
+        append_unique(idts, reqs, res_idts, res_reqs);
     }
-    auto const method_id_less = [](auto&& zip_v_l, auto&& zip_v_r) {
-        auto [idt_l, _] = zip_v_l;
-        auto [idt_r, _] = zip_v_r;
-        auto const id_l = std::string_view(extract_method_identifier(idt_l));
-        auto const id_r = std::string_view(extract_method_identifier(idt_r));
-        if (id_l != id_r)
-            return id_l < id_r;
-        auto const quals_l  = extract_method_qualifiers(idt_l);
-        auto const quals_r  = extract_method_qualifiers(idt_r);
-        auto const ref_rank = [](method_qualifiers_t quals) {
-            if (quals.is_lvalue)
-                return 0;
-            if (quals.is_rvalue)
-                return 2;
-            return 1;
-        };
-        return ref_rank(quals_l) < ref_rank(quals_r);
-    };
-    stdr::sort(stdv::zip(res_idts, res_reqs), method_id_less);
+    // uZ const end = res_idts.size();
+    // if (end > 3) {
+    //     for (auto start: stdv::iota(0U, end - 3)) {
+    //         for (auto i: stdv::iota(start, end - 2)) {
+    //             if (method_idt_less(res_idts[i], res_idts[i + 1]))
+    //                 break;
+    //             std::swap(res_idts[i], res_idts[i + 1]);
+    //             swap(res_reqs[i], res_reqs[i + 1]);
+    //         }
+    //     }
+    // }
+    stdr::sort(stdv::zip(res_idts, res_reqs), method_idt_less);
     return methods_and_requirements{
         .identities   = std::define_static_array(res_idts),
         .requirements = std::define_static_array(res_reqs),

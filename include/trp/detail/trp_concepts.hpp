@@ -357,11 +357,11 @@ consteval auto invocable_as_method(meta::info impl, /**/
 
 
 consteval auto call_operators_of_fn(meta::info type) -> std::vector<meta::info> {
-    auto v = members_of(type, unprivileged) | stdv::filter([](auto m) {
-                 return (is_operator_function(m) or is_operator_function_template(m)) and
-                        operator_of(m) == meta::operators::op_parentheses;
-             }) |
-             stdr::to<std::vector>();
+    auto v = std::vector<meta::info>{};
+    for (auto m: subextract_info_span(^^nonspecial_members, {type}))
+        if ((is_operator_function(m) or is_operator_function_template(m)) and
+            operator_of(m) == meta::operators::op_parentheses)
+            v.push_back(m);
     if (v.empty()) {
         for (auto base: subextract_base_types(type))
             v.append_range(call_operators_of_fn(base));
