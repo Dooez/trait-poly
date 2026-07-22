@@ -224,11 +224,6 @@ consteval auto recurse_substitute(meta::info r, std::span<meta::info const> args
     return extract<bool>(substitute(r, s_args));
 }
 
-// template<meta::info Self, typename... Traits>
-// concept any_traits = (true and ... and
-//                       (any_immediate_trait<std::remove_cv_t<Traits>> and
-//                        recurse_substitute(Self, direct_base_types<std::remove_cv_t<Traits>>)));
-
 template<meta::info Self, typename... Traits>
 concept any_traits =
     (... and (any_immediate_trait<std::remove_cv_t<Traits>> and
@@ -378,6 +373,7 @@ inline constexpr auto call_operators_of = std::define_static_array(call_operator
 
 template<typename MPtr, meta::info ImplMethod>
 concept extractable_template = requires(MPtr ptr) {
+    // gcc 16.1 not working yet, only trunk
     { ptr = &template[:ImplMethod:] };
 };
 
@@ -458,6 +454,16 @@ consteval auto check_parameter_match(meta::info impl, meta::info impl_method, me
             targs.append_range(trait_params);
             return substitute(^^method_return_t, targs);
         }();
+
+        if (is_static_member(impl_method)) {
+            auto targs = std::vector{return_type, meta::reflect_constant(quals.is_noexcept)};
+            targs.append_range(trait_params);
+            auto const fptr_t = substitute(^^function_ptr_t, targs);
+            return match{.args = extract<bool>(substitute(^^extractable_template, {fptr_t, method_r})),
+                         .cv   = false,
+                         .ref  = false};
+        }
+
         auto const get_fptr_t = [&](bool eop, meta::info obj_t) {
             auto targs = std::vector{
                 meta::reflect_constant(eop), obj_t, return_type, meta::reflect_constant(quals.is_noexcept)};

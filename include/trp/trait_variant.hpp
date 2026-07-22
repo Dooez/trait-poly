@@ -17,8 +17,8 @@ union uninit {
     alignas(T) std::array<std::byte, sizeof(T)> storage;
 
     auto ptr(this auto&& self) {
-        using this_t    = std::remove_reference_t<decltype(self)>;
-        using value_ptr = [:add_pointer(copy_cv_to(^^this_t, ^^T)):];
+        using this_t     = std::remove_reference_t<decltype(self)>;
+        using value_ptr  = [:add_pointer(copy_cv_to(^^this_t, ^^T)):];
         using unvolatile = [:remove_volatile(^^this_t):];
         return std::launder(reinterpret_cast<value_ptr>(const_cast<unvolatile&>(self).storage.data()));
     }
@@ -445,8 +445,11 @@ public:
         }
         static constexpr auto idxs = make_cw_idxs<ImplHolder::count>();
         template for (constexpr auto i: idxs) {
-            if (tag == i)
+            if (tag == i) {
+                if (&union_ref.get(index) == &other)
+                    return *this;
                 union_ref.destroy(i);
+            }
         }
         union_ref.construct(index, std::forward<Impl>(other));
         return *this;

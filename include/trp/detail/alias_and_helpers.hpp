@@ -199,6 +199,9 @@ struct method_identity_t {
     using wrapper_fptr_type = auto (*)(void*, Params...) noexcept(is_noexcept) -> Ret;
 };
 
+template<typename Ret, bool Noexcept, typename... Params>
+using function_ptr_t = auto (*)(Params...) noexcept(Noexcept) -> Ret;
+
 template<bool EOP, typename Impl, typename Ret, bool Noexcept, typename... Params>
 using make_function_member_type = [:[] {
     constexpr auto is_const    = meta::is_const(remove_reference(^^Impl));
@@ -250,7 +253,7 @@ using make_function_member_type = [:[] {
         TRP_FQUAL_FPTR(, , &)
     TRP_FQUAL_FPTR(, , )
 #undef TRP_FQUAL_FPTR
-#undef TRP_FQUAL_FPTR_NONEOP
+#undef TRP_FQUAL_FPTR_NON_EOP
 }():];
 
 consteval auto method_identity(meta::info method_info) -> meta::info {

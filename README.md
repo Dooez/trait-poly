@@ -77,7 +77,7 @@ Implementation lookup uses this order:
    - otherwise, a proxy overload set uses normal C++ overload resolution.
 
    Static implementation methods are supported. For exact cv/ref matching they
-   behave as unqualified methods. Additional trailing implementation parameters
+   never match. Additional trailing implementation parameters
    may be defaulted: exact argument matching compares the trait parameters with
    the same leading implementation parameters and does not treat those trailing
    defaults as a mismatch. C-style variadic implementation methods are not
