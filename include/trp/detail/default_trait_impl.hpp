@@ -207,6 +207,7 @@ consteval auto find_trait_method_impl(meta::info                      impl,
                 if (match.satisfies(reqs))
                     return m;
             }
+            continue;
         }
         auto const match = check_parameter_match(impl, m, method_idt);
         if (match.full_match()) {

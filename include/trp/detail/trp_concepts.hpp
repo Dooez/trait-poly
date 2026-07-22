@@ -429,8 +429,8 @@ consteval auto check_parameter_match(meta::info impl, meta::info impl_method, me
         if (is_static_member(impl_method))
             return match{
                 .args = true,
-                .cv   = quals.is_const and quals.is_volatile,
-                .ref  = not quals.is_ref(),
+                .cv   = false,
+                .ref  = false,
             };
         auto res = match{.args = true};
 
@@ -471,6 +471,8 @@ consteval auto check_parameter_match(meta::info impl, meta::info impl_method, me
         auto const obj     = add_method_obj_cv(method_idt, impl);
         auto const obj_ref = add_method_obj_cvref(method_idt, impl);
 
+        // check static functions
+        //
         auto const mem_fptr = get_fptr_t(false, obj_ref);
         if (is_extractable(mem_fptr))
             return {.args = true, .cv = true, .ref = true};
