@@ -22,7 +22,7 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "$env{TRP_P2996_INSTALL_PATH}/bin/clang++",
-        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements -fannotation-attributes -ferror-limit=40 -fconstexpr-backtrace-limit=0 -ftemplate-backtrace-limit=0 -fconstexpr-steps=50000000",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -freflection -fparameter-reflection -fexpansion-statements -fannotation-attributes -ferror-limit=40 -fconstexpr-backtrace-limit=0 -ftemplate-backtrace-limit=0 -fconstexpr-steps=50000000 -ftime-trace",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -stdlib=libc++ -lc++abi -lunwind",
         "CMAKE_BUILD_TYPE": "Release",
         "TRP_BUILD_EXAMPLES": "ON",
@@ -36,7 +36,7 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_CXX_FLAGS": "-Og -freflection",
+        "CMAKE_CXX_FLAGS": "-std=gnu++26 -Og -freflection -fconcepts-diagnostics-depth=16",
         "CMAKE_BUILD_TYPE": "Release",
         "TRP_BUILD_EXAMPLES": "ON",
         "TRP_BUILD_TESTING": "ON"
