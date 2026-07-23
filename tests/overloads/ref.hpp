@@ -54,8 +54,31 @@ struct eop_impl {
     }
 };
 
+struct callable_impl {
+    struct callable {
+        auto operator()() const& -> int {
+            return -1;
+        }
+
+        auto operator()() & -> int {
+            return lvalue_result;
+        }
+
+        auto operator()() const&& -> int {
+            return -2;
+        }
+
+        auto operator()() && -> int {
+            return rvalue_result;
+        }
+    };
+
+    callable pick;
+};
+
 static_assert(trp::implements_trait<impl, trait>);
 static_assert(trp::implements_trait<eop_impl, trait>);
+static_assert(trp::implements_trait<callable_impl, trait>);
 
 template<typename Impl>
 void check_dispatch(std::string_view context) {
@@ -71,6 +94,7 @@ void check_dispatch(std::string_view context) {
 inline void run() {
     check_dispatch<impl>(case_name);
     check_dispatch<eop_impl>(eop_case_name);
+    check_dispatch<callable_impl>("overloads.ref.callable");
 }
 
 }    // namespace ref

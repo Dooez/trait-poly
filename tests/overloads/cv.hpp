@@ -59,8 +59,31 @@ struct eop_impl {
 #endif
 };
 
+struct callable_impl {
+    struct callable {
+        auto operator()() const volatile -> int {
+            return cv_result;
+        }
+
+        auto operator()() volatile -> int {
+            return volatile_result;
+        }
+
+        auto operator()() const -> int {
+            return const_result;
+        }
+
+        auto operator()() -> int {
+            return non_const_result;
+        }
+    };
+
+    callable pick;
+};
+
 static_assert(trp::implements_trait<impl, trait>);
 static_assert(trp::implements_trait<eop_impl, trait>);
+static_assert(trp::implements_trait<callable_impl, trait>);
 
 template<typename Impl>
 void check_dispatch(std::string_view context,
@@ -96,6 +119,7 @@ inline void run() {
 #else
     check_dispatch<eop_impl>(eop_case_name);
 #endif
+    check_dispatch<callable_impl>("overloads.cv.callable");
 }
 
 }    // namespace cv

@@ -79,10 +79,29 @@ struct static_impl {
     }
 };
 
+struct callable_impl {
+    struct callable {
+        auto operator()(long) -> int {
+            return long_pick_result;
+        }
+
+        auto operator()(int) -> int {
+            return short_pick_result;
+        }
+
+        auto operator()(double) -> int {
+            return double_pick_result;
+        }
+    };
+
+    callable pick;
+};
+
 static_assert(trp::implements_trait<pick_impl, trait>);
 static_assert(trp::implements_trait<defaulted_impl, trait>);
 static_assert(trp::implements_trait<eop_impl, trait>);
 static_assert(trp::implements_trait<static_impl, trait>);
+static_assert(trp::implements_trait<callable_impl, trait>);
 
 template<typename Impl>
 void check_dispatch(std::string_view ref_check, std::string_view variant_check) {
@@ -101,6 +120,7 @@ inline void run() {
     check_dispatch<defaulted_impl>("dyn ref defaulted overload", "variant defaulted overload");
     check_dispatch<eop_impl>("dyn ref explicit-object overload", "variant explicit-object overload");
     check_dispatch<static_impl>("dyn ref static overload", "variant static overload");
+    check_dispatch<callable_impl>("dyn ref callable overload", "variant callable overload");
 }
 
 }    // namespace arguments
