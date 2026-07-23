@@ -1,11 +1,10 @@
-#include "support/test_support.hpp"
 #include "trp/detail/cvts_trait_ref.hpp"
+
+#include "support/test_support.hpp"
 
 #include <utility>
 
-namespace {
-
-inline constexpr auto case_name = std::string_view("reference_adapter_conversion");
+inline constexpr auto case_name = std::string_view("cvts_trait_ref");
 
 struct value_trait {
     auto value() const -> int;
@@ -47,7 +46,7 @@ using const_trait_ref = trp::detail::cvts_trait_ref<value_trait const, move_impl
 using copy_ref        = trp::detail::cvts_trait_ref<value_trait, copy_impl>;
 
 template<typename Ref, typename To>
-concept can_cast = requires(Ref&& value) { static_cast<To>(static_cast<Ref &&>(value)); };
+concept can_cast = requires(Ref&& value) { static_cast<To>(static_cast<Ref&&>(value)); };
 
 static_assert(can_cast<ref&, move_impl&>);
 static_assert(noexcept(static_cast<move_impl&>(std::declval<ref&>())));
@@ -61,9 +60,7 @@ static_assert(can_cast<const_trait_ref&, move_impl const&>);
 static_assert(!can_cast<const_trait_ref&&, move_impl&&>);
 static_assert(can_cast<const_trait_ref&&, move_impl const&&>);
 
-}    // namespace
-
-int main() {
+void check_conversions() {
     auto impl    = move_impl{};
     auto adapter = ref(impl);
 
@@ -83,4 +80,8 @@ int main() {
     auto copied       = static_cast<copy_impl>(copy_adapter);
     test::expect_eq(case_name, "lvalue value conversion", copied.value(), 9);
     test::expect_eq(case_name, "lvalue conversion copies source", copy_source.value(), 9);
+}
+
+int main() {
+    check_conversions();
 }

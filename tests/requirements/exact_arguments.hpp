@@ -41,10 +41,32 @@ struct const_template_impl {
     }
 };
 
+struct default_call {
+    struct callable {
+        auto operator()(int input, int offset = 4) -> int {
+            return input + offset;
+        }
+    };
+    callable value;
+};
+
+struct wrong_call {
+    struct callable {
+        auto operator()(short input, int offset = 4) -> int {
+            return input + offset;
+        }
+    };
+    callable value;
+};
+
 static_assert(trp::implements_trait<extra_default_impl, exact_trait>);
 static_assert(trp::implements_trait<extra_default_impl, relaxed_trait>);
 static_assert(!trp::implements_trait<wrong_required_impl, exact_trait>);
 static_assert(trp::implements_trait<extra_eop_default_impl, exact_trait>);
+static_assert(trp::implements_trait<default_call, exact_trait>);
+static_assert(trp::implements_trait<default_call, relaxed_trait>);
+static_assert(!trp::implements_trait<wrong_call, exact_trait>);
+static_assert(trp::implements_trait<wrong_call, relaxed_trait>);
 #if defined(__clang__)
 // GCC 16.1 cannot inspect the specialization needed for exact signature matching.
 static_assert(trp::implements_trait<const_template_impl, exact_trait>);
@@ -61,6 +83,10 @@ inline void run() {
     auto eop_impl = extra_eop_default_impl{};
     auto eop_ref  = trp::dyn_trait_ref<exact_trait>(eop_impl);
     test::expect_eq(case_name, "exact eop defaulted parameter", eop_ref.value(5), 5);
+
+    auto callable     = default_call{};
+    auto callable_ref = trp::dyn_trait_ref<exact_trait>(callable);
+    test::expect_eq(case_name, "callable exact arguments", callable_ref.value(3), 7);
 
 #if defined(__clang__)
     auto template_impl = const_template_impl{};

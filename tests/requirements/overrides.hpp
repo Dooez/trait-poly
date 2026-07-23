@@ -60,6 +60,27 @@ struct relaxed_impl {
     }
 };
 
+struct exact_cv_callable {
+    auto operator()(short) -> int {
+        return exact_cv_result;
+    }
+};
+
+struct relaxed_callable {
+    auto operator()(int) const -> short {
+        return relaxed_result;
+    }
+};
+
+template<typename Callable>
+struct callable_impl {
+    Callable implicit;
+    Callable value;
+};
+
+using exact_cv_call = callable_impl<exact_cv_callable>;
+using relaxed_call  = callable_impl<relaxed_callable>;
+
 struct default_trait {
     auto implicit(short value) -> int;
 
@@ -99,10 +120,12 @@ static_assert(    requirement_for<default_trait>("value").exact_cv);
 
 // accepts because default strict requirements are satisfied exactly.
 static_assert(    trp::implements_trait<exact_cv_impl,  default_trait>);
+static_assert(    trp::implements_trait<exact_cv_call,  default_trait>);
 // all fail because default requirements are exact_cv because of defines
 static_assert(not trp::implements_trait<exact_impl,     default_trait>);
 static_assert(not trp::implements_trait<match_ret_impl, default_trait>);
 static_assert(not trp::implements_trait<relaxed_impl,   default_trait>);
+static_assert(not trp::implements_trait<relaxed_call,   default_trait>);
 
 static_assert(not requirement_for<relaxed_method_trait>("value").exact_return);
 static_assert(not requirement_for<relaxed_method_trait>("value").exact_args);
@@ -113,12 +136,16 @@ static_assert(    trp::implements_trait<exact_cv_impl,  single_relaxed_method_tr
 static_assert(    trp::implements_trait<exact_impl,     single_relaxed_method_trait>);
 static_assert(    trp::implements_trait<match_ret_impl, single_relaxed_method_trait>);
 static_assert(    trp::implements_trait<relaxed_impl,   single_relaxed_method_trait>);
+static_assert(    trp::implements_trait<exact_cv_call,  single_relaxed_method_trait>);
+static_assert(    trp::implements_trait<relaxed_call,   single_relaxed_method_trait>);
 
 static_assert(    trp::implements_trait<exact_cv_impl,  relaxed_method_trait>);
+static_assert(    trp::implements_trait<exact_cv_call,  relaxed_method_trait>);
 // fail because only one of two methods has overriding annotation.
 static_assert(not trp::implements_trait<exact_impl,     relaxed_method_trait>);
 static_assert(not trp::implements_trait<match_ret_impl, relaxed_method_trait>);
 static_assert(not trp::implements_trait<relaxed_impl,   relaxed_method_trait>);
+static_assert(not trp::implements_trait<relaxed_call,   relaxed_method_trait>);
 
 static_assert(not requirement_for<relaxed_trait>("implicit").exact_return);
 static_assert(not requirement_for<relaxed_trait>("implicit").exact_args);
@@ -132,6 +159,8 @@ static_assert(    trp::implements_trait<exact_cv_impl,  relaxed_trait>);
 static_assert(    trp::implements_trait<exact_impl,     relaxed_trait>);
 static_assert(    trp::implements_trait<match_ret_impl, relaxed_trait>);
 static_assert(    trp::implements_trait<relaxed_impl,   relaxed_trait>);
+static_assert(    trp::implements_trait<exact_cv_call,  relaxed_trait>);
+static_assert(    trp::implements_trait<relaxed_call,   relaxed_trait>);
 
 static_assert(    requirement_for<match_return_trait>("implicit").exact_return);
 static_assert(not requirement_for<match_return_trait>("implicit").exact_args);
@@ -144,8 +173,10 @@ static_assert(not requirement_for<match_return_trait>("value").exact_cv);
 static_assert(    trp::implements_trait<exact_cv_impl,  match_return_trait>);
 static_assert(    trp::implements_trait<exact_impl,     match_return_trait>);
 static_assert(    trp::implements_trait<match_ret_impl, match_return_trait>);
+static_assert(    trp::implements_trait<exact_cv_call,  match_return_trait>);
 // fails because exact return is still required.
 static_assert(not trp::implements_trait<relaxed_impl,   match_return_trait>);
+static_assert(not trp::implements_trait<relaxed_call,   match_return_trait>);
 
 // default, trait, and method requirements are non-additive and all differ here:
 struct[[= trp::matching_return_signature]] non_additive_trait {
@@ -158,6 +189,16 @@ struct marg_cret_impl {
     }
 };
 
+struct marg_cret_callable {
+    auto operator()(short) const -> short {
+        return match_result;
+    }
+};
+
+struct marg_cret_call {
+    marg_cret_callable value;
+};
+
 // default exact_cv = return + args + cv, implicit uses trait = return only, value uses method = args only.
 static_assert(not requirement_for<non_additive_trait>("value").exact_return);
 static_assert(    requirement_for<non_additive_trait>("value").exact_args);
@@ -166,11 +207,14 @@ static_assert(not requirement_for<non_additive_trait>("value").exact_cv);
 // pass because the method annotation requires only exact arguments.
 static_assert(    trp::implements_trait<exact_cv_impl,  non_additive_trait>);
 static_assert(    trp::implements_trait<exact_impl,     non_additive_trait>);
+static_assert(    trp::implements_trait<exact_cv_call,  non_additive_trait>);
 // pass despite converting return.
 static_assert(    trp::implements_trait<marg_cret_impl, non_additive_trait>);
+static_assert(    trp::implements_trait<marg_cret_call, non_additive_trait>);
 // fail because exact arguments are required.
 static_assert(not trp::implements_trait<relaxed_impl,   non_additive_trait>);
 static_assert(not trp::implements_trait<match_ret_impl, non_additive_trait>);
+static_assert(not trp::implements_trait<relaxed_call,   non_additive_trait>);
 // clang-format on
 
 void check_relaxed_impl() {
@@ -208,12 +252,27 @@ void check_non_additive_overrides() {
     test::expect_eq(case_name, "method-level override", ref.value(short_arg), exact_result);
 }
 
+void check_callable_overrides() {
+    auto exact     = exact_cv_call{};
+    auto exact_ref = trp::dyn_trait_ref<default_trait>(exact);
+    test::expect_eq(case_name, "callable default requirements", exact_ref.value(short_arg), exact_cv_result);
+
+    auto relaxed     = relaxed_call{};
+    auto relaxed_ref = trp::dyn_trait_ref<relaxed_trait>(relaxed);
+    test::expect_eq(case_name, "callable trait override", relaxed_ref.value(short_arg), int{relaxed_result});
+
+    auto non_additive     = marg_cret_call{};
+    auto non_additive_ref = trp::dyn_trait_ref<non_additive_trait>(non_additive);
+    test::expect_eq(case_name, "callable method override", non_additive_ref.value(short_arg), match_result);
+}
+
 inline void run() {
     check_relaxed_impl();
     check_match_return_impl();
     check_exact_impl();
     check_exact_cv_impl();
     check_non_additive_overrides();
+    check_callable_overrides();
 }
 
 }    // namespace overrides

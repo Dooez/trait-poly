@@ -1,10 +1,12 @@
+#pragma once
+
 #include "support/test_support.hpp"
 #include "trp/dyn_trait_ref.hpp"
 #include "trp/trait_variant.hpp"
 
 #include <utility>
 
-namespace {
+namespace static_methods {
 
 inline constexpr auto case_name     = std::string_view("static_impl");
 inline constexpr auto static_result = 41;
@@ -48,9 +50,7 @@ static_assert(trp::implements_trait<static_overload_impl, static_overload_trait 
 static_assert(!trp::implements_trait<static_impl, exact_cvref_trait>);
 static_assert(!trp::implements_trait<static_impl, exact_cv_trait>);
 
-}    // namespace
-
-int main() {
+inline void run() {
     auto impl = static_impl{};
     auto ref  = trp::dyn_trait_ref<split_trait>(impl);
     auto var  = trp::trait_variant<split_trait, static_impl>(std::in_place_type<static_impl>);
@@ -63,3 +63,5 @@ int main() {
     auto overload_ref  = trp::dyn_trait_ref<static_overload_trait const>(overload_impl);
     test::expect_eq(case_name, "static overload resolution", overload_ref.pick(0), int_result);
 }
+
+}    // namespace static_methods

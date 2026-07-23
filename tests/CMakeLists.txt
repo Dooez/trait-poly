@@ -17,49 +17,24 @@ endfunction()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileFailureTest.cmake")
 
-foreach(source IN ITEMS
-	supertraits
-	callable_mismatch
-	dyn_trait_ref
-	dyn_trait_ref_interface
-	cv_qualification
-	explicit_noexcept
-	fancy_allocator
-	inherited_explicit_impl
-	inherited_ref_vtable
-	inherited_virtual_impl
-	noexcept_conversion
-	overload_cv
-	overload_eop
-	reference_adapter_conformance
-	reference_adapter_conversion
-	reference_adapters
-	reference_inheritance
-	reference_qualification
-	unique_trait_ptr_ownership
-	shared_trait_ptr_ownership
-	static_impl
-	trait_variant
-	trait_variant_constraints
-	trait_variant_lifecycle
-	trait_validation
-	variant_alias
-	overload_resolution
-	requirements/overload_limitations
-	requirements/exact_arguments
-	requirements/overrides
-	requirements/reference_overrides
-	requirements/reference_qualification
-	requirements/strengthening)
-	string(REPLACE "requirements/" "req_" name "${source}")
-	add_trp_test(${name} "${source}.cpp")
-endforeach()
-
-# GCC 16.1 ICEs while extracting this exact specialization. The equivalent
-# positive regression is enabled where the compiler currently supports it.
+add_trp_test(traits "traits/traits.cpp")
+add_trp_test(dyn_trait_ref "dyn_trait_ref/dyn_trait_ref.cpp")
+add_trp_test(implementations "implementations/implementations.cpp")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	add_trp_test(static_template "static_template.cpp")
+	target_compile_definitions(test_implementations PRIVATE TRP_TEST_STATIC_TEMPLATE)
 endif()
+add_trp_test(noexcept "noexcept.cpp")
+add_trp_test(overloads "overloads/overloads.cpp")
+add_trp_test(cvts_trait_ref "cvts_trait_ref.cpp")
+add_trp_test(trait_ptr "trait_ptr/trait_ptr.cpp")
+add_trp_test(trait_variant "trait_variant/trait_variant.cpp")
+
+# These macros change method_signature_requirements_t, so each configuration
+# must stay in a separate executable to avoid violating ODR.
+add_trp_test(requirements "requirements/requirements.cpp")
+add_trp_test(requirements_exact_arguments "requirements/exact_arguments.cpp")
+add_trp_test(requirements_overrides "requirements/overrides.cpp")
+add_trp_test(requirements_exact_references "requirements/exact_references.cpp")
 
 add_trp_compile_failure(
 	req_reference_default_requires_arguments

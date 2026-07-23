@@ -50,7 +50,7 @@ struct rvalue_impl {
 };
 
 struct split_impl {
-    auto access() & -> int {
+    auto access() & noexcept -> int {
         return lvalue_result;
     }
 
@@ -77,17 +77,17 @@ struct forwarding_impl {
     }
 };
 
-struct ref_callable {
-    auto operator()() & -> int {
-        return lvalue_result;
-    }
-
-    auto operator()() && -> int {
-        return rvalue_result;
-    }
-};
-
 struct callable_impl {
+    struct ref_callable {
+        auto operator()() & -> int {
+            return lvalue_result;
+        }
+
+        auto operator()() && -> int {
+            return rvalue_result;
+        }
+    };
+
     ref_callable access;
 };
 

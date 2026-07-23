@@ -1,4 +1,7 @@
+#pragma once
+
 #include "support/test_support.hpp"
+#include "trait_ptr/support.hpp"
 #include "trp/shared_trait_ptr.hpp"
 #include "trp/unique_trait_ptr.hpp"
 
@@ -6,7 +9,7 @@
 #include <memory>
 #include <new>
 
-namespace {
+namespace fancy_allocator {
 
 inline constexpr auto case_name = std::string_view("fancy_allocator");
 
@@ -73,10 +76,6 @@ struct fancy_allocator {
     friend auto operator==(fancy_allocator, fancy_allocator) -> bool = default;
 };
 
-struct value_trait {
-    auto value() const -> int;
-};
-
 struct value_impl {
     int stored;
 
@@ -85,15 +84,13 @@ struct value_impl {
     }
 };
 
-}    // namespace
-
-int main() {
+inline void run() {
     auto counts = allocator_counts{};
     auto alloc  = fancy_allocator<std::byte>(counts);
 
     {
-        auto shared = trp::allocate_shared_trait<value_trait, value_impl>(alloc, 1);
-        auto unique = trp::allocate_unique_trait<value_trait, value_impl>(alloc, 2);
+        auto shared = trp::allocate_shared_trait<read_trait, value_impl>(alloc, 1);
+        auto unique = trp::allocate_unique_trait<read_trait, value_impl>(alloc, 2);
 
         test::expect_eq(case_name, "shared value", shared->value(), 1);
         test::expect_eq(case_name, "unique value", unique->value(), 2);
@@ -102,3 +99,5 @@ int main() {
 
     test::expect_eq(case_name, "deallocation count", counts.deallocations, 2);
 }
+
+}    // namespace fancy_allocator

@@ -20,14 +20,17 @@ static_assert(extract_first_req<rvalue_trait>().exact_args);
 static_assert(    trp::implements_trait<unqualified_impl,  unqualified_trait>);
 static_assert(not trp::implements_trait<lvalue_impl,       unqualified_trait>);
 static_assert(not trp::implements_trait<rvalue_impl,       unqualified_trait>);
+static_assert(not trp::implements_trait<callable_impl,     unqualified_trait>);
 
 static_assert(not trp::implements_trait<unqualified_impl,  lvalue_trait>);
 static_assert(    trp::implements_trait<lvalue_impl,       lvalue_trait>);
 static_assert(not trp::implements_trait<rvalue_impl,       lvalue_trait>);
+static_assert(    trp::implements_trait<callable_impl,     lvalue_trait>);
 
 static_assert(not trp::implements_trait<unqualified_impl,  rvalue_trait>);
 static_assert(not trp::implements_trait<lvalue_impl,       rvalue_trait>);
 static_assert(    trp::implements_trait<rvalue_impl,       rvalue_trait>);
+static_assert(    trp::implements_trait<callable_impl,     rvalue_trait>);
 
 static_assert(not trp::implements_trait<unqualified_impl,  split_trait>);
 static_assert(not trp::implements_trait<lvalue_impl,       split_trait>);
