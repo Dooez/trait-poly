@@ -127,11 +127,14 @@ Exact cv or ref matching always requires exact argument matching.
 Overload resolution limitations:
 - Function templates cannot be fully inspected in C++26.
   There's no way to acquire instantiation from a call.
-  The only reliable way to check function template is to check conversion to pointer to a member.
+  The reliable check is conversion of the specialization to the corresponding
+  function pointer or pointer-to-member type.
   Member function templates are selected when their specialization can be
   extracted with the required signature, or when they are the sole callable
   candidate and relaxed argument matching is active. An overload set containing
-  a template cannot otherwise be resolved.
+  a template cannot otherwise be resolved. Static function templates use the
+  equivalent function-pointer check; exact matching works on Clang P2996 but is
+  still limited by GCC 16.1 specialization extraction.
 - Reflections of *using-declaration* is not present in C++26. 
   This means that if there are multiple bases providing `foo` member,
   and the derived class uses *using-declaration* to disambiguate,
