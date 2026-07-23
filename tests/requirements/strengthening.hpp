@@ -1,6 +1,8 @@
-#include "support/requirement_support.hpp"
+#pragma once
 
-namespace {
+#include "requirements/support.hpp"
+
+namespace strengthening {
 
 inline constexpr auto case_name          = std::string_view("requirements.strengthening");
 inline constexpr auto exact_result       = 61;
@@ -26,8 +28,8 @@ struct convert_ret_impl {
     }
 };
 
-static_assert(reqtest::extract_first_req<strenthened_trait>().exact_return);
-static_assert(!reqtest::extract_first_req<strenthened_trait>().exact_args);
+static_assert(extract_first_req<strenthened_trait>().exact_return);
+static_assert(!extract_first_req<strenthened_trait>().exact_args);
 
 // clang-format off
 static_assert(    trp::implements_trait<convert_ret_impl, relaxed_trait>);
@@ -70,7 +72,7 @@ void check_redeclared_strengthened_call() {
     auto impl = exact_ret_impl{};
     auto ref  = trp::dyn_trait_ref<strenthened_trait>(impl);
 
-    test::expect_eq(case_name, "redeclared strict return", ref.refine(reqtest::short_arg), exact_result);
+    test::expect_eq(case_name, "redeclared strict return", ref.refine(short_arg), exact_result);
 }
 
 void check_relaxed_base_call() {
@@ -78,14 +80,12 @@ void check_relaxed_base_call() {
     auto ref  = trp::dyn_trait_ref<relaxed_trait>(impl);
 
     test::expect_eq(
-        case_name, "relaxed base return conversion", ref.refine(reqtest::short_arg), int{convertible_result});
+        case_name, "relaxed base return conversion", ref.refine(short_arg), int{convertible_result});
 }
 
-}    // namespace
-
-int main() {
+inline void run() {
     check_redeclared_strengthened_call();
     check_relaxed_base_call();
-
-    return 0;
 }
+
+}    // namespace strengthening
