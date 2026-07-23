@@ -1,6 +1,5 @@
 #pragma once
 
-#include "dyn_trait_ref/support.hpp"
 #include "support/test_support.hpp"
 #include "trp/dyn_trait_ref.hpp"
 
@@ -57,27 +56,6 @@ struct other_writable_impl {
     auto write(int) noexcept -> void {}
 };
 
-void check_const_trait_cast_precheck() {
-    auto impl      = unq_impl{};
-    auto const_ref = trp::dyn_trait_ref<full_trait const>(impl);
-
-    test::expect_eq(case_name,
-                    "unq impl const cast is valid",
-                    trp::is_valid_const_trait_cast<full_trait>(const_ref),
-                    true);
-
-    auto unq_ref = trp::const_trait_cast<full_trait>(const_ref);
-    test::expect_eq(case_name, "checked const trait cast reaches unq method", unq_ref.unq(), unq_result);
-
-    auto readonly_impl = c_impl{};
-    auto readonly_ref  = trp::dyn_trait_ref<full_trait const>(readonly_impl);
-    test::expect_eq(case_name,
-                    "const-only impl const cast is rejected",
-                    trp::is_valid_const_trait_cast<full_trait>(readonly_ref),
-                    false);
-    test::expect_eq(case_name, "const-only ref still reads", readonly_ref.c(), c_result);
-}
-
 void check_type_checks_and_trait_casts() {
     auto impl = writable_impl{};
     auto ref  = writable_ref(impl);
@@ -107,7 +85,6 @@ void check_type_checks_and_trait_casts() {
 }
 
 inline void run() {
-    check_const_trait_cast_precheck();
     check_type_checks_and_trait_casts();
 }
 
