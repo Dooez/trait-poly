@@ -95,18 +95,18 @@ struct safe_impl {
     }
 };
 
-struct immovable_result {
-    immovable_result()                        = default;
-    immovable_result(immovable_result const&) = delete;
-    immovable_result(immovable_result&&)      = delete;
+struct immovable_type {
+    immovable_type()                      = default;
+    immovable_type(immovable_type const&) = delete;
+    immovable_type(immovable_type&&)      = delete;
 };
 
 struct elision_trait {
-    auto value() noexcept -> immovable_result;
+    auto value() noexcept -> immovable_type;
 };
 
 struct elision_impl {
-    auto value() noexcept -> immovable_result {
+    auto value() noexcept -> immovable_type {
         return {};
     }
 };
