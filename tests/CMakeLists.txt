@@ -19,12 +19,14 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileFailureTest.cmake")
 
 foreach(source IN ITEMS
 	supertraits
+	callable_mismatch
 	dyn_trait_ref
 	dyn_trait_ref_interface
 	cv_qualification
 	explicit_noexcept
 	fancy_allocator
 	inherited_explicit_impl
+	inherited_ref_vtable
 	inherited_virtual_impl
 	noexcept_conversion
 	overload_cv
@@ -41,6 +43,7 @@ foreach(source IN ITEMS
 	trait_variant_constraints
 	trait_variant_lifecycle
 	trait_validation
+	variant_alias
 	overload_resolution
 	requirements/overload_limitations
 	requirements/exact_arguments
@@ -51,6 +54,12 @@ foreach(source IN ITEMS
 	string(REPLACE "requirements/" "req_" name "${source}")
 	add_trp_test(${name} "${source}.cpp")
 endforeach()
+
+# GCC 16.1 ICEs while extracting this exact specialization. The equivalent
+# positive regression is enabled where the compiler currently supports it.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	add_trp_test(static_template "static_template.cpp")
+endif()
 
 add_trp_compile_failure(
 	req_reference_default_requires_arguments

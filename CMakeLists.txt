@@ -13,9 +13,10 @@ set_target_properties(trp_trp PROPERTIES
 add_library(trp::trp ALIAS trp_trp)
 
 option(TRP_BUILD_EXAMPLES "Build examples" OFF)
-option(TRP_BUILD_TESTING "Build examples" OFF)
+option(TRP_BUILD_TESTING "Build tests" OFF)
 
 if (TRP_BUILD_TESTING)
+	enable_testing()
 	add_subdirectory(tests)
 endif()
 
