@@ -18,6 +18,11 @@ inline constexpr auto cast_value      = 5;
 inline constexpr auto downcast_value  = 6;
 inline constexpr auto alloc_value     = 7;
 inline constexpr auto converted_value = 8;
+inline constexpr auto failed_value    = 9;
+inline constexpr auto released_value  = 10;
+inline constexpr auto assigned_value  = 11;
+inline constexpr auto replaced_alloc  = 12;
+inline constexpr auto alloc_cast      = 13;
 inline constexpr auto case_name       = std::string_view("unique_trait_ptr_ownership");
 
 void check_unique_destroys_once() {
@@ -93,11 +98,96 @@ void check_alloc_unique_paths() {
     test::expect_eq(case_name, "converted alloc unique destroyed", state.destroyed, 2);
 }
 
+void check_failed_downcasts_preserve_source() {
+    auto state = counts{};
+    {
+        auto source = trp::make_unique_trait<read_trait, read_node>(state, failed_value);
+        auto failed = trp::trait_cast<write_trait, node>(std::move(source));
+
+        test::expect_eq(case_name, "failed unique downcast empty", static_cast<bool>(failed), false);
+        test::expect_eq(case_name, "failed unique downcast keeps source", static_cast<bool>(source), true);
+        test::expect_eq(case_name, "failed unique downcast source value", source->value(), failed_value);
+    }
+    test::expect_eq(case_name, "failed unique downcast destroys source", state.destroyed, 1);
+
+    state = {};
+    {
+        auto source = trp::allocate_unique_trait<read_trait, read_node>(
+            std::allocator<std::byte>{}, state, failed_value);
+        auto failed = trp::trait_cast<write_trait, node>(std::move(source));
+
+        test::expect_eq(case_name, "failed allocated downcast empty", static_cast<bool>(failed), false);
+        test::expect_eq(case_name, "failed allocated downcast keeps source", static_cast<bool>(source), true);
+        test::expect_eq(case_name, "failed allocated downcast source value", source->value(), failed_value);
+    }
+    test::expect_eq(case_name, "failed allocated downcast destroys source", state.destroyed, 1);
+}
+
+void check_release() {
+    auto  state = counts{};
+    auto  ptr   = trp::make_unique_trait<write_trait, node>(state, released_value);
+    auto* raw   = static_cast<node*>(ptr.release());
+
+    test::expect_eq(case_name, "release empties owner", static_cast<bool>(ptr), false);
+    test::expect_eq(case_name, "release returns object", raw != nullptr, true);
+    test::expect_eq(case_name, "released value", raw->value(), released_value);
+    test::expect_eq(case_name, "released object remains alive", state.alive, 1);
+    test::expect_eq(case_name, "release does not destroy", state.destroyed, 0);
+
+    delete raw;
+    test::expect_eq(case_name, "caller ends released lifetime", state.alive, 0);
+    test::expect_eq(case_name, "caller destroys released object", state.destroyed, 1);
+
+    auto empty = trp::unique_trait_ptr<read_trait>{};
+    test::expect_eq(case_name, "release empty returns null", empty.release() == nullptr, true);
+}
+
+void check_alloc_unique_move_assignment() {
+    auto state = counts{};
+    {
+        auto source =
+            trp::allocate_unique_trait<write_trait, node>(std::allocator<std::byte>{}, state, assigned_value);
+        auto target =
+            trp::allocate_unique_trait<write_trait, node>(std::allocator<std::byte>{}, state, replaced_alloc);
+
+        target = std::move(source);
+        test::expect_eq(case_name, "allocated move destroys target", state.destroyed, 1);
+        test::expect_eq(case_name, "allocated move empties source", static_cast<bool>(source), false);
+        test::expect_eq(case_name, "allocated move transfers value", target->value(), assigned_value);
+
+        target = std::move(target);
+        test::expect_eq(case_name, "allocated self move preserves value", target->value(), assigned_value);
+        test::expect_eq(case_name, "allocated self move destroys nothing", state.destroyed, 1);
+    }
+    test::expect_eq(case_name, "allocated move destroys both objects", state.destroyed, 2);
+}
+
+void check_alloc_unique_casts() {
+    auto state = counts{};
+    {
+        auto ptr =
+            trp::allocate_unique_trait<write_trait, node>(std::allocator<std::byte>{}, state, alloc_cast);
+        auto base = trp::trait_cast<read_trait>(std::move(ptr));
+
+        test::expect_eq(case_name, "allocated upcast empties source", static_cast<bool>(ptr), false);
+        test::expect_eq(case_name, "allocated upcast value", base->value(), alloc_cast);
+
+        auto down = trp::trait_cast<write_trait, node>(std::move(base));
+        test::expect_eq(case_name, "allocated downcast empties source", static_cast<bool>(base), false);
+        test::expect_eq(case_name, "allocated downcast value", down->value(), alloc_cast);
+    }
+    test::expect_eq(case_name, "allocated cast destroys object", state.destroyed, 1);
+}
+
 inline void run() {
     check_unique_destroys_once();
     check_unique_moves();
     check_unique_casts();
     check_alloc_unique_paths();
+    check_failed_downcasts_preserve_source();
+    check_release();
+    check_alloc_unique_move_assignment();
+    check_alloc_unique_casts();
 }
 
 }    // namespace unique

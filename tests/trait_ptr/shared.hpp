@@ -15,6 +15,10 @@ inline constexpr auto second_assignment_value = 12;
 inline constexpr auto cast_initial_value      = 13;
 inline constexpr auto cast_updated_value      = 14;
 inline constexpr auto wrong_cast_value        = 15;
+inline constexpr auto move_source_value       = 16;
+inline constexpr auto move_target_value       = 17;
+inline constexpr auto self_move_value         = 18;
+inline constexpr auto shared_owner_value      = 19;
 inline constexpr auto case_name               = std::string_view("shared_trait_ptr_ownership");
 
 void check_shared_copies() {
@@ -85,11 +89,57 @@ void check_shared_wrong_cast() {
     test::expect_eq(case_name, "wrong cast destroyed after scope", state.destroyed, 1);
 }
 
+void check_shared_move_assignment() {
+    auto state = counts{};
+    {
+        auto source = trp::make_shared_trait<write_trait, node>(state, move_source_value);
+        auto target = trp::make_shared_trait<write_trait, node>(state, move_target_value);
+
+        target = std::move(source);
+        test::expect_eq(case_name, "move assignment empties source", static_cast<bool>(source), false);
+        test::expect_eq(case_name, "move assignment destroys target", state.destroyed, 1);
+        test::expect_eq(case_name, "move assignment transfers value", target->value(), move_source_value);
+    }
+    test::expect_eq(case_name, "move assignment destroys both objects", state.destroyed, 2);
+}
+
+void check_shared_self_move() {
+    auto state = counts{};
+    {
+        auto ptr = trp::make_shared_trait<write_trait, node>(state, self_move_value);
+
+        ptr = std::move(ptr);
+        test::expect_eq(case_name, "self move keeps owner", static_cast<bool>(ptr), true);
+        test::expect_eq(case_name, "self move keeps value", ptr->value(), self_move_value);
+        test::expect_eq(case_name, "self move destroys nothing", state.destroyed, 0);
+    }
+    test::expect_eq(case_name, "self-moved object destroyed once", state.destroyed, 1);
+}
+
+void check_shared_move_between_coowners() {
+    auto state = counts{};
+    {
+        auto target = trp::make_shared_trait<write_trait, node>(state, shared_owner_value);
+        auto source = target;
+
+        target = std::move(source);
+        test::expect_eq(case_name, "coowner move empties source", static_cast<bool>(source), false);
+        test::expect_eq(case_name, "coowner move keeps target", static_cast<bool>(target), true);
+        test::expect_eq(case_name, "coowner move keeps value", target->value(), shared_owner_value);
+        test::expect_eq(case_name, "coowner move keeps object alive", state.alive, 1);
+        test::expect_eq(case_name, "coowner move destroys nothing", state.destroyed, 0);
+    }
+    test::expect_eq(case_name, "coowned object destroyed once", state.destroyed, 1);
+}
+
 inline void run() {
     check_shared_copies();
     check_shared_assignment();
     check_shared_casts();
     check_shared_wrong_cast();
+    check_shared_move_assignment();
+    check_shared_self_move();
+    check_shared_move_between_coowners();
 }
 
 }    // namespace shared

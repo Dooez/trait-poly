@@ -6,6 +6,7 @@
 #include "trp/unique_trait_ptr.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <new>
 
@@ -84,7 +85,32 @@ struct value_impl {
     }
 };
 
-inline void run() {
+struct construction_error {};
+
+struct throwing_impl {
+    explicit throwing_impl(int) {
+        throw construction_error{};
+    }
+
+    auto value() const -> int {
+        return 0;
+    }
+};
+
+struct alignas(128) aligned_impl {
+    int stored;
+
+    explicit aligned_impl(int value)
+    : stored(value) {}
+
+    auto value() const -> int {
+        return stored;
+    }
+};
+
+static_assert(alignof(aligned_impl) > alignof(std::max_align_t));
+
+void check_successful_allocation() {
     auto counts = allocator_counts{};
     auto alloc  = fancy_allocator<std::byte>(counts);
 
@@ -98,6 +124,57 @@ inline void run() {
     }
 
     test::expect_eq(case_name, "deallocation count", counts.deallocations, 2);
+}
+
+void check_throwing_construction() {
+    auto counts = allocator_counts{};
+    auto alloc  = fancy_allocator<std::byte>(counts);
+
+    try {
+        (void)trp::allocate_unique_trait<read_trait, throwing_impl>(alloc, 1);
+        test::fail(case_name, "throwing unique construction should fail");
+    } catch (construction_error const&) {}
+    test::expect_eq(case_name, "throwing unique allocation count", counts.allocations, 1);
+    test::expect_eq(case_name, "throwing unique deallocation count", counts.deallocations, 1);
+
+    try {
+        (void)trp::allocate_shared_trait<read_trait, throwing_impl>(alloc, 2);
+        test::fail(case_name, "throwing shared construction should fail");
+    } catch (construction_error const&) {}
+    test::expect_eq(case_name, "throwing shared allocation count", counts.allocations, 2);
+    test::expect_eq(case_name, "throwing shared deallocation count", counts.deallocations, 2);
+}
+
+void check_overaligned_allocation() {
+    auto counts = allocator_counts{};
+    auto alloc  = fancy_allocator<std::byte>(counts);
+
+    {
+        auto unique = trp::allocate_unique_trait<read_trait, aligned_impl>(alloc, 3);
+        auto shared = trp::allocate_shared_trait<read_trait, aligned_impl>(alloc, 4);
+
+        auto const unique_address = reinterpret_cast<std::uintptr_t>(unique.get<aligned_impl>());
+        auto const shared_address = reinterpret_cast<std::uintptr_t>(shared.get<aligned_impl>());
+        test::expect_eq(case_name,
+                        "overaligned unique address",
+                        unique_address % alignof(aligned_impl),
+                        std::uintptr_t{0});
+        test::expect_eq(case_name,
+                        "overaligned shared address",
+                        shared_address % alignof(aligned_impl),
+                        std::uintptr_t{0});
+        test::expect_eq(case_name, "overaligned unique value", unique->value(), 3);
+        test::expect_eq(case_name, "overaligned shared value", shared->value(), 4);
+    }
+
+    test::expect_eq(case_name, "overaligned allocation count", counts.allocations, 2);
+    test::expect_eq(case_name, "overaligned deallocation count", counts.deallocations, 2);
+}
+
+inline void run() {
+    check_successful_allocation();
+    check_throwing_construction();
+    check_overaligned_allocation();
 }
 
 }    // namespace fancy_allocator
