@@ -25,6 +25,8 @@ inline constexpr auto emplace_initial_value = 11;
 inline constexpr auto emplace_type_value    = 12;
 inline constexpr auto case_name             = std::string_view("trait_variant_lifecycle");
 
+using copy_error = marker<1>;
+
 struct no_assign_impl {
     int stored = 0;
 
@@ -45,9 +47,49 @@ struct no_assign_impl {
     }
 };
 
+struct throwing_copy {
+    throwing_copy() = default;
+    throwing_copy(throwing_copy const&) {
+        throw copy_error{};
+    }
+    throwing_copy(throwing_copy&&) noexcept = default;
+
+    auto value() const -> int {
+        return 1;
+    }
+};
+
+struct copy_only {
+    int stored = 2;
+
+    copy_only()                          = default;
+    copy_only(copy_only const&) noexcept = default;
+    copy_only(copy_only&&)               = delete;
+
+    auto value() const -> int {
+        return stored;
+    }
+};
+
+struct move_only {
+    move_only()                 = default;
+    move_only(move_only const&) = delete;
+    move_only(move_only&&)      = default;
+
+    move_only& operator=(move_only const&) = delete;
+    move_only& operator=(move_only&&)      = default;
+
+    auto value() const -> int {
+        return 3;
+    }
+};
+
 using other_impl        = value_impl<1>;
 using lifecycle_variant = trp::trait_variant<value_trait, no_assign_impl, other_impl>;
 using duplicate_variant = trp::trait_variant<value_trait, other_impl, other_impl>;
+using throwing_variant  = trp::trait_variant<value_trait, throwing_copy>;
+using copy_variant      = trp::trait_variant<value_trait, copy_only>;
+using move_variant      = trp::trait_variant<value_trait, move_only>;
 
 template<typename Var>
 concept can_get_other_by_type = requires(Var& var) { get<other_impl>(var); };
@@ -59,6 +101,12 @@ static_assert(!std::is_move_assignable_v<no_assign_impl>);
 static_assert(std::variant_size_v<duplicate_variant> == alternative_count);
 static_assert(!std::constructible_from<duplicate_variant, other_impl>);
 static_assert(!can_get_other_by_type<duplicate_variant>);
+static_assert(!noexcept(throwing_variant(std::declval<throwing_copy&>())));
+static_assert(std::is_constructible_v<copy_variant, copy_only&>);
+static_assert(noexcept(copy_variant(std::declval<copy_only&>())));
+static_assert(!std::is_constructible_v<move_variant, move_only&>);
+static_assert(std::is_constructible_v<move_variant, move_only&&>);
+static_assert(!std::is_assignable_v<move_variant&, move_only&>);
 
 void check_construction() {
     auto direct = lifecycle_variant(no_assign_impl{direct_value});
@@ -68,6 +116,22 @@ void check_construction() {
     auto by_index = duplicate_variant(std::in_place_index<1>, duplicate_value);
     test::expect_eq(case_name, "duplicate index construction", static_cast<int>(index(by_index)), 1);
     test::expect_eq(case_name, "duplicate index get", get<1>(by_index).value(), duplicate_value);
+}
+
+void check_copy_only_construction() {
+    auto source = copy_only{};
+    auto value  = copy_variant(source);
+
+    test::expect_eq(case_name, "copy-only lvalue construction", value.value(), source.value());
+}
+
+void check_throwing_copy_construction() {
+    auto source = throwing_copy{};
+    try {
+        auto value = throwing_variant(source);
+        (void)value;
+        test::fail(case_name, "throwing copy should propagate");
+    } catch (copy_error const&) {}
 }
 
 void check_impl_assignment() {
@@ -110,6 +174,8 @@ void check_emplace() {
 
 inline void run() {
     check_construction();
+    check_copy_only_construction();
+    check_throwing_copy_construction();
     check_impl_assignment();
     check_variant_assignment();
     check_emplace();

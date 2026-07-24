@@ -1,4 +1,3 @@
-#include "dyn_trait_ref/adapters.hpp"
 #include "dyn_trait_ref/casts.hpp"
 #include "dyn_trait_ref/const_casts.hpp"
 #include "dyn_trait_ref/cv_qualification.hpp"
@@ -9,5 +8,4 @@ int main() {
     const_casts::run();
     cv_qualification::run();
     forwarding::run();
-    adapters::run();
 }
