@@ -1,5 +1,6 @@
 #pragma once
 
+#include "overloads/support.hpp"
 #include "support/test_support.hpp"
 #include "trp/dyn_trait_ref.hpp"
 
@@ -10,27 +11,14 @@ inline constexpr auto argument                = short{4};
 inline constexpr auto filtered_template_value = short{50};
 inline constexpr auto selected_result         = 60;
 inline constexpr auto sole_template_value     = short{70};
-inline constexpr auto long_pick_result        = 10;
-inline constexpr auto short_pick_result       = 20;
-inline constexpr auto double_pick_result      = 30;
+
+using overloadtest::callable_impl;
+using overloadtest::ordinary_impl;
+using overloadtest::short_pick_result;
 
 struct relaxed_trait {
     auto pick(short) -> int;
 };
-struct ordinary_impl {
-    auto pick(long) -> int {
-        return long_pick_result;
-    }
-
-    auto pick(int) -> int {
-        return short_pick_result;
-    }
-
-    auto pick(double) -> int {
-        return double_pick_result;
-    }
-};
-
 struct[[= trp::matching_return_signature]] matching_return_trait {
     auto pick(short) -> int;
 };
@@ -44,23 +32,6 @@ struct return_disambiguated_impl {
     auto pick(long) -> int {
         return selected_result;
     }
-};
-
-struct callable_impl {
-    struct callable {
-        auto operator()(long) -> int {
-            return long_pick_result;
-        }
-
-        auto operator()(int) -> int {
-            return short_pick_result;
-        }
-
-        auto operator()(double) -> int {
-            return double_pick_result;
-        }
-    };
-    callable pick;
 };
 
 struct sole_template_impl {

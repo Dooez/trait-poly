@@ -1,8 +1,8 @@
 #pragma once
 
-struct value_trait {
-    auto value() -> int;
-};
+#include "support/value_support.hpp"
+
+using value_trait = valuetest::mutable_trait;
 
 template<typename Base, int>
 struct derived : Base {};

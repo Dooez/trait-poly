@@ -5,7 +5,6 @@
 #include "trp/trait_variant.hpp"
 
 #include <concepts>
-#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -15,7 +14,6 @@ namespace basic {
 inline constexpr auto alternative_count       = 2;
 inline constexpr auto first_index             = 0;
 inline constexpr auto second_index            = 1;
-inline constexpr auto throwing_value          = 0;
 inline constexpr auto direct_value            = 5;
 inline constexpr auto by_index_value          = 13;
 inline constexpr auto first_value             = 7;
@@ -27,21 +25,12 @@ inline constexpr auto valueless_initial_value = 3;
 inline constexpr auto throwing_ctor_arg       = 0;
 inline constexpr auto case_name               = std::string_view("trait_variant");
 
-using first_impl  = value_impl<0>;
-using second_impl = value_impl<1>;
-
-struct throwing_impl {
-    explicit throwing_impl(int) {
-        throw std::runtime_error{"throwing_impl"};
-    }
-
-    auto value() const -> int {
-        return throwing_value;
-    }
-};
+using first_impl    = stable_value_impl;
+using second_impl   = value_impl<1>;
+using throwing_impl = throwing_value_impl;
 
 using variant_t           = trp::trait_variant<value_trait, first_impl, second_impl>;
-using valueless_variant_t = trp::trait_variant<value_trait, first_impl, throwing_impl>;
+using valueless_variant_t = ::valueless_variant_t;
 
 static_assert(std::variant_size_v<variant_t> == alternative_count);
 static_assert(std::variant_size_v<variant_t const> == alternative_count);
@@ -124,11 +113,15 @@ inline void run() {
         case_name, "get const", get<second_index>(std::as_const(var)).stored, second_assign_value);
     test::expect_eq(case_name, "get rvalue", get<second_impl>(std::move(var)).value(), second_assign_value);
 
+    throwing_impl::reset();
+    throwing_impl::fail_construction = true;
     auto valueless = valueless_variant_t(std::in_place_type<first_impl>, valueless_initial_value);
     try {
         (void)emplace<throwing_impl>(valueless, throwing_ctor_arg);
         test::fail(case_name, "emplace should throw");
-    } catch (std::runtime_error const&) {}
+    } catch (valuetest::construction_error const&) {
+        throwing_impl::fail_construction = false;
+    }
 
     test::expect_eq(case_name, "valueless after failed emplace", valueless_by_exception(valueless), true);
     test::expect_eq(case_name, "get_if valueless", get_if<first_impl>(&valueless) == nullptr, true);

@@ -1,14 +1,14 @@
 #pragma once
 
+#include "support/value_support.hpp"
+
 // Shared ownership fixtures for this test executable.
 struct counts {
     int alive     = 0;
     int destroyed = 0;
 };
 
-struct read_trait {
-    auto value() const -> int;
-};
+using read_trait = valuetest::trait;
 
 struct write_trait : read_trait {
     auto set(int value) -> void;

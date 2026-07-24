@@ -87,12 +87,6 @@ struct exact_score_impl {
     }
 };
 
-struct exact_callable {
-    auto operator()(short) -> int {
-        return exact_result;
-    }
-};
-
 struct callable_impl {
     exact_callable score;
 };

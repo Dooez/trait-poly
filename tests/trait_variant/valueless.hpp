@@ -8,67 +8,19 @@
 
 namespace valueless {
 
-inline constexpr auto case_name        = std::string_view("trait_variant.valueless");
-inline constexpr auto initial_value    = 1;
-inline constexpr auto copy_value       = 2;
-inline constexpr auto move_value       = 3;
-inline constexpr auto emplace_value    = 4;
-inline constexpr auto throwing_value   = 5;
-inline constexpr auto moved_from_value = -1;
+inline constexpr auto case_name      = std::string_view("trait_variant.valueless");
+inline constexpr auto initial_value  = 1;
+inline constexpr auto copy_value     = 2;
+inline constexpr auto move_value     = 3;
+inline constexpr auto emplace_value  = 4;
+inline constexpr auto throwing_value = 5;
 
-struct construction_error {};
-struct copy_error {};
-struct move_error {};
-
-struct stable_impl {
-    int stored;
-
-    explicit stable_impl(int value)
-    : stored(value) {}
-
-    auto value() const -> int {
-        return stored;
-    }
-};
-
-struct throwing_impl {
-    inline static bool fail_construction = false;
-    inline static bool fail_copy         = false;
-    inline static bool fail_move         = false;
-
-    int stored;
-
-    explicit throwing_impl(int value)
-    : stored(value) {
-        if (fail_construction)
-            throw construction_error{};
-    }
-
-    throwing_impl(throwing_impl const& other)
-    : stored(other.stored) {
-        if (fail_copy)
-            throw copy_error{};
-    }
-
-    throwing_impl(throwing_impl&& other)
-    : stored(other.stored) {
-        if (fail_move)
-            throw move_error{};
-        other.stored = moved_from_value;
-    }
-
-    auto value() const -> int {
-        return stored;
-    }
-
-    static void reset() {
-        fail_construction = false;
-        fail_copy         = false;
-        fail_move         = false;
-    }
-};
-
-using variant_t = trp::trait_variant<value_trait, stable_impl, throwing_impl>;
+using construction_error = valuetest::construction_error;
+using copy_error         = valuetest::copy_error;
+using move_error         = valuetest::move_error;
+using stable_impl        = stable_value_impl;
+using throwing_impl      = throwing_value_impl;
+using variant_t          = ::valueless_variant_t;
 
 void make_valueless(variant_t& value) {
     throwing_impl::fail_construction = true;

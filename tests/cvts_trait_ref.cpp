@@ -1,14 +1,13 @@
 #include "trp/detail/cvts_trait_ref.hpp"
 
 #include "support/test_support.hpp"
+#include "support/value_support.hpp"
 
 #include <utility>
 
 inline constexpr auto case_name = std::string_view("cvts_trait_ref");
 
-struct value_trait {
-    auto value() const -> int;
-};
+using value_trait = valuetest::trait;
 
 struct move_impl {
     int stored = 5;

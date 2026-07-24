@@ -1,5 +1,6 @@
 #pragma once
 
+#include "overloads/support.hpp"
 #include "support/test_support.hpp"
 #include "trp/dyn_trait_ref.hpp"
 #include "trp/trait_variant.hpp"
@@ -10,9 +11,9 @@ inline constexpr auto case_name  = std::string_view("overloads.arguments");
 inline constexpr auto short_arg  = short{1};
 inline constexpr auto double_arg = double{1};
 
-inline constexpr auto long_pick_result   = 10;
-inline constexpr auto short_pick_result  = 20;
-inline constexpr auto double_pick_result = 30;
+using overloadtest::double_pick_result;
+using overloadtest::long_pick_result;
+using overloadtest::short_pick_result;
 
 struct trait {
     auto pick(short) -> int;
@@ -23,19 +24,7 @@ using ref = trp::dyn_trait_ref<trait>;
 template<typename Impl>
 using variant = trp::trait_variant<trait, Impl>;
 
-struct pick_impl {
-    auto pick(long) -> int {
-        return long_pick_result;
-    }
-
-    auto pick(int) -> int {
-        return short_pick_result;
-    }
-
-    auto pick(double) -> int {
-        return double_pick_result;
-    }
-};
+using pick_impl = overloadtest::ordinary_impl;
 
 struct defaulted_impl {
     auto pick(long, int = 0) -> int {
@@ -79,23 +68,7 @@ struct static_impl {
     }
 };
 
-struct callable_impl {
-    struct callable {
-        auto operator()(long) -> int {
-            return long_pick_result;
-        }
-
-        auto operator()(int) -> int {
-            return short_pick_result;
-        }
-
-        auto operator()(double) -> int {
-            return double_pick_result;
-        }
-    };
-
-    callable pick;
-};
+using callable_impl = overloadtest::callable_impl;
 
 static_assert(trp::implements_trait<pick_impl, trait>);
 static_assert(trp::implements_trait<defaulted_impl, trait>);

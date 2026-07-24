@@ -1,20 +1,16 @@
 #pragma once
 
-struct value_trait {
-    auto value() const -> int;
-};
+#include "support/value_support.hpp"
+#include "trp/trait_variant.hpp"
 
-template<int>
-struct value_impl {
-    int stored;
+using value_trait = valuetest::trait;
 
-    explicit value_impl(int value)
-    : stored(value) {}
+template<int Tag>
+using value_impl = valuetest::value_impl<Tag>;
 
-    auto value() const -> int {
-        return stored;
-    }
-};
+template<int Tag>
+using marker = valuetest::marker<Tag>;
 
-template<int>
-struct marker {};
+using stable_value_impl   = valuetest::value_impl<0>;
+using throwing_value_impl = valuetest::throwing_impl;
+using valueless_variant_t = trp::trait_variant<value_trait, stable_value_impl, throwing_value_impl>;

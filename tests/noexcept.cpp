@@ -1,13 +1,12 @@
 #include "support/test_support.hpp"
+#include "support/value_support.hpp"
 #include "trp/dyn_trait_ref.hpp"
 #include "trp/trait_variant.hpp"
 
-template<int>
-struct empty_type {};
+template<int Tag>
+using empty_type = valuetest::marker<Tag>;
 
-struct value_trait {
-    auto value() -> int;
-};
+using value_trait = valuetest::mutable_trait;
 
 struct noexcept_trait {
     auto value() noexcept -> int;

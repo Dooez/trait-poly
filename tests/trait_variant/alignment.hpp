@@ -13,19 +13,9 @@ inline constexpr auto case_name      = std::string_view("trait_variant.alignment
 inline constexpr auto initial_value  = 1;
 inline constexpr auto replaced_value = 2;
 
-struct alignas(128) aligned_impl {
-    int stored;
-
-    explicit aligned_impl(int value)
-    : stored(value) {}
-
-    auto value() const -> int {
-        return stored;
-    }
-};
-
-using other_impl = value_impl<3>;
-using variant_t  = trp::trait_variant<value_trait, other_impl, aligned_impl>;
+using aligned_impl = valuetest::aligned_impl;
+using other_impl   = value_impl<3>;
+using variant_t    = trp::trait_variant<value_trait, other_impl, aligned_impl>;
 
 static_assert(alignof(aligned_impl) > alignof(std::max_align_t));
 static_assert(alignof(variant_t) >= alignof(aligned_impl));

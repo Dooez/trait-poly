@@ -85,7 +85,7 @@ struct value_impl {
     }
 };
 
-struct construction_error {};
+using construction_error = valuetest::construction_error;
 
 struct throwing_impl {
     explicit throwing_impl(int) {
@@ -97,16 +97,7 @@ struct throwing_impl {
     }
 };
 
-struct alignas(128) aligned_impl {
-    int stored;
-
-    explicit aligned_impl(int value)
-    : stored(value) {}
-
-    auto value() const -> int {
-        return stored;
-    }
-};
+using aligned_impl = valuetest::aligned_impl;
 
 static_assert(alignof(aligned_impl) > alignof(std::max_align_t));
 
