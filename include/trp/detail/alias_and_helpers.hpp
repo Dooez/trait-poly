@@ -11,9 +11,13 @@
 
 #if defined(__clang__)
 namespace std::meta {
-consteval bool is_vararg_function(meta::info r) {
+consteval bool is_vararg_function(info r) {
     return is_function(r) and has_ellipsis_parameter(r);
 }
+consteval auto annotations_of_with_type(info item, info type) {
+    return annotations_of(item, type);
+}
+
 }    // namespace std::meta
 #endif
 
@@ -91,32 +95,24 @@ consteval auto make_aggregate(Ts&&... vs) {
     return aggregate{std::forward<Ts>(vs)...};
 };
 
-template<uZ End>
-consteval auto make_cw_idxs() {
-    constexpr auto value_to_cw_member = [](auto v) {
-        return substitute(^^constant_wrapper, {meta::reflect_constant(v)});
-    };
-    using cw_index_sequence = [:substitute(^^anon_aggregate,
-                                           stdv::iota(0UZ, End) | stdv::transform(value_to_cw_member)):];
-    return cw_index_sequence{};
+consteval auto make_cw_idxs_fn(uZ end) {
+    auto args = std::vector<meta::info>{};
+    for (auto i: stdv::iota(0UZ, end))
+        args.push_back(substitute(^^constant_wrapper, {meta::reflect_constant(i)}));
+    return substitute(^^anon_aggregate, args);
 };
-template<meta::info RefInfo>
-inline constexpr auto extract_size = stdr::size([:RefInfo:]);
-template<meta::info RefInfo>
-inline constexpr auto extract_ptr = stdr::data([:RefInfo:]);
+
+template<uZ End>
+using make_cw_idxs = [:make_cw_idxs_fn(End):];
 
 template<typename T, meta::reflection_range R = std::initializer_list<meta::info>>
 consteval auto subextract_span(meta::info r, R const& targs) -> std::span<T const> {
-    auto const src_span = meta::reflect_constant(meta::substitute(r, targs));
-    return std::span<T const>{extract<T const*>(substitute(^^extract_ptr, {src_span})),
-                              extract<uZ>(substitute(^^extract_size, {src_span}))};
+    return extract<std::span<T const> const&>(meta::substitute(r, targs));
 }
 
 template<meta::reflection_range R = std::initializer_list<meta::info>>
 consteval auto subextract_info_span(meta::info r, R const& targs) -> std::span<meta::info const> {
-    auto const src_span = meta::reflect_constant(meta::substitute(r, targs));
-    return std::span<meta::info const>{extract<meta::info const*>(substitute(^^extract_ptr, {src_span})),
-                                       extract<uZ>(substitute(^^extract_size, {src_span}))};
+    return extract<std::span<meta::info const> const&>(meta::substitute(r, targs));
 }
 
 struct method_qualifiers_t {
@@ -519,10 +515,7 @@ struct method_signature_requirements_t {
     }
 };
 consteval auto extract_signature_req(meta::info r) -> std::optional<method_signature_requirements_t> {
-    auto const annotations =
-        annotations_of(r)                                                                                 /**/
-        | stdv::filter([](auto r) { return remove_cv(type_of(r)) == ^^method_signature_requirements_t; }) /**/
-        | stdr::to<std::vector>();
+    auto const annotations = annotations_of_with_type(r, ^^method_signature_requirements_t);
     if (annotations.size() > 1)
         throw "More than one method requirements annotation.";
     if (annotations.empty())
@@ -546,17 +539,18 @@ struct methods_and_requirements {
     std::span<meta::info const>                      identities;
     std::span<method_signature_requirements_t const> requirements;
 
-    static consteval auto to_o_requirements(meta::info trait_member) -> method_signature_requirements_t {
-        auto const verify = [](auto const& req) {
-            if (req.exact_cv and not req.exact_args)
-                throw "Exact cv signature requirement must include exact arguments requirement";
-            if (req.exact_ref and not req.exact_args)
-                throw "Exact reference signature requirement must include exact arguments requirement";
-            return req;
-        };
-        if (auto o_req = extract_signature_req(trait_member))
+    static consteval auto verify(method_signature_requirements_t const& req)
+        -> method_signature_requirements_t const& {
+        if (req.exact_cv and not req.exact_args)
+            throw "Exact cv signature requirement must include exact arguments requirement";
+        if (req.exact_ref and not req.exact_args)
+            throw "Exact reference signature requirement must include exact arguments requirement";
+        return req;
+    }
+    static consteval auto to_o_requirements(meta::info idt) -> method_signature_requirements_t {
+        if (auto o_req = extract_signature_req(idt))
             return verify(*o_req);
-        auto const trait = parent_of(trait_member);
+        auto const trait = parent_of(idt);
         if (auto o_req = extract_signature_req(trait))
             return verify(*o_req);
         return {};
@@ -564,22 +558,41 @@ struct methods_and_requirements {
 };
 
 consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
-    auto is_relevant_method = [=](meta::info method) {
-        return is_function(method)                              //
-               and not is_special_member_function(method)       //
-               and (is_const(method) or not is_const(trait))    //
-               and (is_volatile(method) or not is_volatile(trait));
-    };
+    auto methods      = std::vector<meta::info>();
+    auto requirements = std::vector<method_signature_requirements_t>();
+    for (auto method: subextract_info_span(^^nonspecial_members, {remove_cv(trait)})) {
+        auto relevant = is_function(method)    //
+                        // and not is_special_member_function(method)       //
+                        and (is_const(method) or not is_const(trait))    //
+                        and (is_volatile(method) or not is_volatile(trait));
+        if (relevant) {
+            methods.push_back(method_identity(method));
+            requirements.push_back(methods_and_requirements::to_o_requirements(method));
+        }
+    }
 
-    auto const relevant_methods = members_of(trait, unprivileged)       //
-                                  | stdv::filter(is_relevant_method)    //
-                                  | stdr::to<std::vector>();
     return methods_and_requirements{
-        .identities   = define_static_array(relevant_methods | stdv::transform(method_identity)),
-        .requirements = define_static_array(relevant_methods    //
-                                            | stdv::transform(methods_and_requirements::to_o_requirements)),
+        .identities   = define_static_array(methods),
+        .requirements = define_static_array(requirements),
     };
 };
+// consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
+//     auto is_relevant_method = [=](meta::info method) {
+//         return is_function(method)                              //
+//                and not is_special_member_function(method)       //
+//                and (is_const(method) or not is_const(trait))    //
+//                and (is_volatile(method) or not is_volatile(trait));
+//     };
+//
+//     auto const relevant_methods = members_of(trait, unprivileged)       //
+//                                   | stdv::filter(is_relevant_method)    //
+//                                   | stdr::to<std::vector>();
+//     return methods_and_requirements{
+//         .identities   = define_static_array(relevant_methods | stdv::transform(method_identity)),
+//         .requirements = define_static_array(relevant_methods    //
+//                                             | stdv::transform(methods_and_requirements::to_o_requirements)),
+//     };
+// };
 
 template<typename T>
 inline constexpr auto direct_trait_methods_and_requirements = direct_trait_methods_and_requirements_fn(^^T);
@@ -720,16 +733,12 @@ consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
     auto const id_r = std::string_view(extract_method_identifier(idt_r));
     if (id_l != id_r)
         return id_l < id_r;
-    auto const quals_l  = extract_method_qualifiers(idt_l);
-    auto const quals_r  = extract_method_qualifiers(idt_r);
-    auto const ref_rank = [](method_qualifiers_t quals) {
-        if (quals.is_lvalue)
-            return 0;
-        if (quals.is_rvalue)
-            return 2;
-        return 1;
-    };
-    return ref_rank(quals_l) < ref_rank(quals_r);
+    auto const quals_l = extract_method_qualifiers(idt_l);
+    auto const quals_r = extract_method_qualifiers(idt_r);
+
+    auto const ref_rank_l = quals_l.is_lvalue ? 0 : quals_l.is_rvalue ? 1 : 2;
+    auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 1 : 2;
+    return ref_rank_l < ref_rank_r;
 }
 }    // namespace atmar
 
@@ -772,16 +781,17 @@ struct method_reference {
     uZ          end_idx;    // one past the index in the `all_trait_methods<T>` of the last method in a group
 };
 
-template<typename T>
-inline constexpr auto trait_method_groups = [] -> std::span<method_reference const> {
-    if (stdr::empty(all_trait_methods<T>))
+consteval auto trait_method_groups_fn(meta::info trait) -> std::span<method_reference const> {
+    auto const atm = subextract_info_span(^^all_trait_methods, {trait});
+    if (stdr::empty(atm))
         return {};
     auto groups = std::vector<method_reference>{};
     groups.push_back({
-        .name      = extract_method_identifier(all_trait_methods<T>[0]),
+        .name      = extract_method_identifier(atm[0]),
         .begin_idx = 0,
     });
-    for (auto [i, idt]: stdv::zip(stdv::iota(0U), all_trait_methods<T>) | stdv::drop(1)) {
+    for (auto i: stdv::iota(1U, atm.size())) {
+        auto const idt = atm[i];
         if (std::string_view name = extract_method_identifier(idt); name != groups.back().name) {
             groups.back().end_idx = i;
             groups.push_back({
@@ -791,9 +801,12 @@ inline constexpr auto trait_method_groups = [] -> std::span<method_reference con
             });
         }
     }
-    groups.back().end_idx = all_trait_methods<T>.size();
+    groups.back().end_idx = atm.size();
     return std::define_static_array(groups);
-}();
+}
+
+template<typename T>
+inline constexpr auto trait_method_groups = trait_method_groups_fn(^^T);
 
 template<non_ref T>
 struct unique_id_struct {
