@@ -4,6 +4,7 @@
 #include "trait_variant/support.hpp"
 #include "trp/trait_variant.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace assignment {
@@ -71,6 +72,26 @@ struct tracked_impl {
 using other_impl = value_impl<2>;
 using variant_t  = trp::trait_variant<value_trait, tracked_impl, other_impl>;
 
+using empty_trait = marker<0>;
+
+struct nonassignable {
+    inline static bool copied_from_self = false;
+
+    int value;
+
+    explicit nonassignable(int initial)
+    : value(initial) {}
+
+    nonassignable(nonassignable const& other) {
+        copied_from_self = this == std::addressof(other);
+        value            = copied_from_self ? -1 : other.value;
+    }
+
+    nonassignable(nonassignable&&)                 = delete;
+    nonassignable& operator=(nonassignable const&) = delete;
+    nonassignable& operator=(nonassignable&&)      = delete;
+};
+
 void check_same_alternative() {
     tracked_impl::reset();
     {
@@ -121,9 +142,21 @@ void check_replacement_destruction() {
     test::expect_eq(case_name, "final tracked object destroyed once", tracked_impl::destroyed, 2);
 }
 
+void check_self_aliasing() {
+    auto value = trp::trait_variant<empty_trait, nonassignable>(std::in_place_type<nonassignable>, 42);
+
+    // Replacement must preserve an argument that aliases the currently active object.
+    auto& alias = trp::get<nonassignable>(value);
+    value       = alias;
+
+    test::expect_eq(case_name, "self-alias source remains alive", nonassignable::copied_from_self, false);
+    test::expect_eq(case_name, "self-alias value preserved", trp::get<nonassignable>(value).value, 42);
+}
+
 inline void run() {
     check_same_alternative();
     check_replacement_destruction();
+    check_self_aliasing();
 }
 
 }    // namespace assignment

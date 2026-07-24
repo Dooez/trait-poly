@@ -1,5 +1,4 @@
 #include "trait_variant/adapters.hpp"
-#include "trait_variant/aliasing.hpp"
 #include "trait_variant/alignment.hpp"
 #include "trait_variant/assignment.hpp"
 #include "trait_variant/basic.hpp"
@@ -13,7 +12,6 @@ int main() {
     basic::run();
     constraints::run();
     lifecycle::run();
-    aliasing::run();
     adapters::run();
     reference_qualification::run();
     forwarding::run();
