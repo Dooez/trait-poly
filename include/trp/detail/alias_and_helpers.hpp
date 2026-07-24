@@ -82,8 +82,7 @@ template<non_cvref... Ts>
 struct aggregate_definer {
     struct aggregate;
     consteval {
-        define_aggregate(^^aggregate,
-                         std::array<meta::info, sizeof...(Ts)>{^^Ts...} | stdv::transform(anon_member_spec));
+        define_aggregate(^^aggregate, {anon_member_spec(^^Ts)...});
     }
 };
 template<non_cvref... Ts>
@@ -279,7 +278,9 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
         auto arguments = std::vector{identifier,    //
                                      meta::reflect_constant(quals),
                                      ret};
-        arguments.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
+        for (auto i: stdv::iota(1U, params.size()))
+            arguments.push_back(type_of(params[i]));
+
         return substitute(^^method_identity_t, arguments);
     }
     quals.is_const    = is_const(method_info);
@@ -290,7 +291,8 @@ consteval auto method_identity(meta::info method_info) -> meta::info {
     auto arguments    = std::vector{identifier,    //
                                  meta::reflect_constant(quals),
                                  ret};
-    arguments.append_range(params | stdv::transform(meta::type_of));
+    for (auto p: params)
+        arguments.push_back(type_of(p));
     return substitute(^^method_identity_t, arguments);
 }
 
@@ -324,7 +326,8 @@ consteval auto extract_method_qualifiers(meta::info idt) -> method_qualifiers_t 
 consteval auto extract_method_param_types(meta::info idt) -> std::span<meta::info const> {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
         throw "Expected method_identity_t specialization";
-    return std::define_static_array(template_arguments_of(idt) | stdv::drop(3));
+    auto const targs = std::meta::template_arguments_of(idt);
+    return std::define_static_array(std::span{targs.begin() + 3, targs.end()});
 }
 consteval auto extract_method_return_type(meta::info idt) -> meta::info {
     if (not has_template_arguments(idt) or template_of(idt) != ^^method_identity_t)
@@ -576,23 +579,6 @@ consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
         .requirements = define_static_array(requirements),
     };
 };
-// consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
-//     auto is_relevant_method = [=](meta::info method) {
-//         return is_function(method)                              //
-//                and not is_special_member_function(method)       //
-//                and (is_const(method) or not is_const(trait))    //
-//                and (is_volatile(method) or not is_volatile(trait));
-//     };
-//
-//     auto const relevant_methods = members_of(trait, unprivileged)       //
-//                                   | stdv::filter(is_relevant_method)    //
-//                                   | stdr::to<std::vector>();
-//     return methods_and_requirements{
-//         .identities   = define_static_array(relevant_methods | stdv::transform(method_identity)),
-//         .requirements = define_static_array(relevant_methods    //
-//                                             | stdv::transform(methods_and_requirements::to_o_requirements)),
-//     };
-// };
 
 template<typename T>
 inline constexpr auto direct_trait_methods_and_requirements = direct_trait_methods_and_requirements_fn(^^T);
@@ -744,10 +730,10 @@ consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
 
 consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements {
     using namespace atmar;
-    auto res_idts = subextract_info_span(^^direct_trait_methods, {trait})    //
-                    | stdr::to<std::vector>();
-    auto res_reqs = subextract_span<sign_req_t>(^^direct_trait_requirements, {trait})    //
-                    | stdr::to<std::vector>();
+    auto const res_idts_span = subextract_info_span(^^direct_trait_methods, {trait});
+    auto const res_reqs_span = subextract_span<sign_req_t>(^^direct_trait_requirements, {trait});
+    auto       res_idts      = std::vector(std::from_range, res_idts_span);
+    auto       res_reqs      = std::vector(std::from_range, res_reqs_span);
 
     for (auto base: subextract_base_types(remove_cv(trait))) {
         auto const cv_base = copy_cv_to(trait, base);
@@ -783,7 +769,7 @@ struct method_reference {
 
 consteval auto trait_method_groups_fn(meta::info trait) -> std::span<method_reference const> {
     auto const atm = subextract_info_span(^^all_trait_methods, {trait});
-    if (stdr::empty(atm))
+    if (atm.empty())
         return {};
     auto groups = std::vector<method_reference>{};
     groups.push_back({

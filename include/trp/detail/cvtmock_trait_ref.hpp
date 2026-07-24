@@ -61,9 +61,8 @@ consteval auto get_holder(method_reference method_group, std::span<meta::info co
     return substitute(^^cvtmock_holder,
                       {meta::reflect_constant(method_group.name),
                        substitute(^^cvtmock_cvm_invoker,
-                                  methods                          //
-                                      | stdv::take(method_group.end_idx)    //
-                                      | stdv::drop(method_group.begin_idx))});
+                                  std::span(methods.begin() + method_group.begin_idx,
+                                            methods.begin() + method_group.end_idx))});
 }
 
 consteval auto get_cvtmock_ref(meta::info trait) -> meta::info {

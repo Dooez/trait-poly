@@ -412,16 +412,13 @@ consteval auto check_parameter_match(meta::info impl, meta::info impl_method, me
     if (is_function(impl_method)) {
         auto const impl_params_raw = parameters_of(impl_method);
         auto const is_eop = not impl_params_raw.empty() and is_explicit_object_parameter(impl_params_raw[0]);
-        auto const impl_params = [&] {
-            if (is_eop) {
-                return impl_params_raw | stdv::drop(1) | stdv::take(trait_params.size()) |
-                       stdv::transform(meta::type_of) | stdr::to<std::vector>();
-            };
-            return impl_params_raw | stdv::take(trait_params.size()) | stdv::transform(meta::type_of) |
-                   stdr::to<std::vector>();
-        }();
-        if (not stdr::equal(trait_params, impl_params))
+        if (is_eop and impl_params_raw.size() - 1 < trait_params.size())
             return {};
+        auto const impl_params = std::span(impl_params_raw.begin() + (is_eop ? 1 : 0), impl_params_raw.end());
+        for (auto i: stdv::iota(0U, trait_params.size()))
+            if (type_of(impl_params[i]) != trait_params[i])
+                return {};
+
         if (is_static_member(impl_method))
             return match{
                 .args = true,
