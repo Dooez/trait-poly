@@ -124,7 +124,6 @@ consteval auto get_first_member_check_type(meta::info holder, meta::info type) {
                                                                                                          \
             TRP_ASSERT_STANDARD_LAYOUT                                                                   \
             TRP_ASSERT_INTERCONVERTIBLE                                                                  \
-            static_assert(std::is_standard_layout_v<MethodHolder>);                                      \
             auto const mh_ptr = reinterpret_cast<[:TRP_ADD_CVP(^^MethodHolder):]>(mi_ptr);               \
                                                                                                          \
             TRP_ASSERT_DERIVED_TREF                                                                      \

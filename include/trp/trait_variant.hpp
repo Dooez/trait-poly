@@ -100,7 +100,7 @@ inline constexpr auto union_member_info = find_annotated_member(^^Var,    //
 template<typename Union, uZ I>
 inline constexpr auto member_type_info = Union::type_infos[I];
 
-constexpr auto extract_union_member(auto&& variant) -> auto&&
+constexpr auto extract_union_member(auto&& variant) -> decltype(auto)
     requires(union_member_info<std::remove_cvref_t<decltype(variant)>> != meta::info{})
 {
     return std::forward_like<decltype(variant)>(
@@ -119,79 +119,85 @@ struct cvo_spec {
 template<non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref OvSpec>
 struct cvo_invoker;
 
+#define TRP_DEV
+#ifdef TRP_DEV
+
+#define TRP_ASSERT_DERIVED_INVOKER static_assert(std::derived_from<MethodInvoker, cvo_invoker>);
+#define TRP_ASSERT_STANDARD_LAYOUT static_assert(std::is_standard_layout_v<MethodHolder>);
 #ifdef __cpp_lib_is_pointer_interconvertible
-#define TRP_ASSERT_INTERCONVERTIBLE \
-    static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
+#define TRP_ASSERT_INTERCONVERTIBLE                                                                       \
+    static_assert(                                                                                        \
+        std::is_pointer_interconvertible_with_class<MethodHolder>(extract<MethodInvoker MethodHolder::*>( \
+            get_first_member_check_type(^^MethodHolder, ^^MethodInvoker))));
 #else
 #define TRP_ASSERT_INTERCONVERTIBLE
 #endif
+#define TRP_ASSERT_DERIVED_VARIANT static_assert(std::derived_from<Variant, MethodHolder>);
+#else
 
-#define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                              \
-    template<non_cvref           MethodHolder,                                                       \
-             non_cvref           MethodInvoker,                                                      \
-             non_cvref           Variant,                                                            \
-             non_cv_trait        Trait,                                                              \
-             char const*         Id,                                                                 \
-             method_qualifiers_t Quals,                                                              \
-             typename Ret,                                                                           \
-             typename... Args>                                                                       \
-        requires(Req)                                                                                \
-    struct cvo_invoker<MethodHolder,                                                                 \
-                       MethodInvoker,                                                                \
-                       cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>> {       \
-        auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                   \
-            using impl_holder          = std::remove_cvref_t<decltype(get_union_ref())>;             \
-            auto const            tag  = get_union_ref().tag;                                        \
-            static constexpr auto idxs = make_cw_idxs<impl_holder::count>();                         \
-            template for (constexpr auto i: idxs) {                                                  \
-                if (tag == i) {                                                                      \
-                    using this_t = std::remove_reference_t<decltype(*this)>;                         \
-                    /* Use cv-qualified active type because cvts_ref constructs from reference */    \
-                    using active_t = [:copy_cv_to(^^this_t, extract_var_type_info(^^Variant, i)):];  \
-                    /* Use cv-qualified trait type because cv-qualified active type */               \
-                    /* may not implement unqualified trait */                                        \
-                    using trait_t  = [:copy_cv_to(^^this_t, ^^Trait):];                              \
-                    using cvts_ref = [:copy_cv_to(^^this_t, ^^cvts_trait_ref<trait_t, active_t>):];  \
-                                                                                                     \
-                    auto ref = cvts_ref(get_union_ref().get(i));                                     \
-                    if constexpr (Quals.is_rvalue)                                                   \
-                        return cvts_trait::call_method_via_id<Id>(std::move(ref),                    \
-                                                                  std::forward<Args>(args)...);      \
-                    else                                                                             \
-                        return cvts_trait::call_method_via_id<Id>(ref, std::forward<Args>(args)...); \
-                }                                                                                    \
-            }                                                                                        \
-            if constexpr (Quals.is_noexcept)                                                         \
-                std::terminate();                                                                    \
-            else                                                                                     \
-                throw std::bad_variant_access{};                                                     \
-        }                                                                                            \
-                                                                                                     \
-    private:                                                                                         \
-        auto get_union_ref(this auto&& self) -> auto&& {                                             \
-            constexpr auto add_cvp = [](meta::info type) {                                           \
-                using this_t = std::remove_reference_t<decltype(self)>;                              \
-                return add_pointer(copy_cv_to(^^this_t, type));                                      \
-            };                                                                                       \
-            static_assert(std::derived_from<MethodInvoker, cvo_invoker>);                            \
-            auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                    \
-                                                                                                     \
-            constexpr auto invoker_ptr = [] {                                                        \
-                auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);                 \
-                if (stdr::size(mems) != 1)                                                           \
-                    throw "Method holder is expected to have only a single method.";                 \
-                if (type_of(mems[0]) != ^^MethodInvoker)                                             \
-                    throw "Method invoker type does not match method holders first member type.";    \
-                return extract<MethodInvoker MethodHolder::*>(mems[0]);                              \
-            }();                                                                                     \
-                                                                                                     \
-            static_assert(std::is_standard_layout_v<MethodHolder>);                                  \
-            TRP_ASSERT_INTERCONVERTIBLE                                                              \
-            auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);               \
-                                                                                                     \
-            static_assert(std::derived_from<Variant, MethodHolder>);                                 \
-            return extract_union_member(*static_cast<[:add_cvp(^^Variant):]>(mh_ptr));               \
-        }                                                                                            \
+#define TRP_ASSERT_DERIVED_INVOKER
+#define TRP_ASSERT_STANDARD_LAYOUT
+#define TRP_ASSERT_INTERCONVERTIBLE
+#define TRP_ASSERT_DERIVED_VARIANT
+
+#endif
+#define TRP_ADD_CVP(type) add_pointer(copy_cv_to(^^std::remove_pointer_t<decltype(this)>, type))
+
+#define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                                      \
+    template<non_cvref           MethodHolder,                                                               \
+             non_cvref           MethodInvoker,                                                              \
+             non_cvref           Variant,                                                                    \
+             non_cv_trait        Trait,                                                                      \
+             char const*         Id,                                                                         \
+             method_qualifiers_t Quals,                                                                      \
+             typename Ret,                                                                                   \
+             typename... Args>                                                                               \
+        requires(Req)                                                                                        \
+    struct cvo_invoker<MethodHolder,                                                                         \
+                       MethodInvoker,                                                                        \
+                       cvo_spec<Variant, Trait, method_identity_t<Id, Quals, Ret, Args...>>> {               \
+        auto operator()(Args... args) C V Ref noexcept(Quals.is_noexcept) -> Ret {                           \
+            using this_ref_t           = [:Quals.is_rvalue ? (^^cvo_invoker C V&&) : (^^cvo_invoker C V&):]; \
+            decltype(auto) union_ref   = static_cast<this_ref_t>(*this).get_union_ref();                     \
+            using impl_holder          = std::remove_cvref_t<decltype(union_ref)>;                           \
+            auto const            tag  = union_ref.tag;                                                      \
+            static constexpr auto idxs = make_cw_idxs<impl_holder::count>();                                 \
+            template for (constexpr auto i: idxs) {                                                          \
+                if (tag == i) {                                                                              \
+                    /* Use cv-qualified active type because cvts_ref constructs from reference */            \
+                    using active_t = [:extract_var_type_info(^^Variant, i):];                                \
+                    /* Use cv-qualified trait type because cv-qualified active type */                       \
+                    /* may not implement unqualified trait */                                                \
+                    using cvts_ref = cvts_trait_ref<Trait C V, active_t C V>;                                \
+                                                                                                             \
+                    auto ref = cvts_ref(union_ref.get(i));                                                   \
+                    if constexpr (Quals.is_rvalue)                                                           \
+                        return cvts_trait::call_method_via_id<Id>(std::move(ref),                            \
+                                                                  std::forward<Args>(args)...);              \
+                    else                                                                                     \
+                        return cvts_trait::call_method_via_id<Id>(ref, std::forward<Args>(args)...);         \
+                }                                                                                            \
+            }                                                                                                \
+            if constexpr (Quals.is_noexcept)                                                                 \
+                std::terminate();                                                                            \
+            else                                                                                             \
+                throw std::bad_variant_access{};                                                             \
+        }                                                                                                    \
+                                                                                                             \
+    private:                                                                                                 \
+        auto get_union_ref() C V Ref -> decltype(auto) {                                                     \
+            TRP_ASSERT_DERIVED_INVOKER                                                                       \
+            auto const mi_ptr = static_cast<[:TRP_ADD_CVP(^^MethodInvoker):]>(this);                         \
+                                                                                                             \
+            TRP_ASSERT_STANDARD_LAYOUT                                                                       \
+            TRP_ASSERT_INTERCONVERTIBLE                                                                      \
+            auto const mh_ptr = reinterpret_cast<[:TRP_ADD_CVP(^^MethodHolder):]>(mi_ptr);                   \
+                                                                                                             \
+            TRP_ASSERT_DERIVED_VARIANT                                                                       \
+            using out_ref_t = [:Quals.is_rvalue ? (^^Variant C V&&) : (^^Variant C V&):];                    \
+            return extract_union_member(                                                                     \
+                static_cast<out_ref_t>(*static_cast<[:TRP_ADD_CVP(^^Variant):]>(mh_ptr)));                   \
+        }                                                                                                    \
     };
 
 // clang-format off
@@ -213,7 +219,12 @@ TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_rv
 
 // clang-format on
 
+#undef TRP_ASSERT_DERIVED_TREF
+#undef TRP_ASSERT_INTERCONVERTIBLE
+#undef TRP_ASSERT_STANDARD_LAYOUT
+#undef TRP_ASSERT_DERIVED_INVOKER
 
+#undef TRP_ADD_CVP
 #undef TRP_CV_OVERLOAD
 #undef TRP_ASSERT_INTERCONVERTIBLE
 
