@@ -281,11 +281,11 @@ template<non_cvref Trait, non_ref Impl>
 inline constexpr auto ref_impls = get_ref_impls(^^Trait, ^^Impl);
 
 template<any_trait Trait, implements_trait<Trait> Impl>
-using cvts_trait_ref = [:is_const(^^Trait) and is_volatile(^^Trait)
-                             ? ref_impls<std::remove_cv_t<Trait>, Impl>[3]
-                         : is_volatile(^^Trait) ? ref_impls<std::remove_cv_t<Trait>, Impl>[2]
-                         : is_const(^^Trait)    ? ref_impls<std::remove_cv_t<Trait>, Impl>[1]
-                                                : ref_impls<std::remove_cv_t<Trait>, Impl>[0]:];
+using cvts_trait_ref =    //
+[:is_const(^^Trait) and is_volatile(^^Trait) ? ref_impls<std::remove_cv_t<Trait>, Impl>[3]
+  : is_volatile(^^Trait)                     ? ref_impls<std::remove_cv_t<Trait>, Impl>[2]
+  : is_const(^^Trait)                        ? ref_impls<std::remove_cv_t<Trait>, Impl>[1]
+                                             : ref_impls<std::remove_cv_t<Trait>, Impl>[0]:];
 
 struct name_info_pair {
     char const* name;
