@@ -726,6 +726,22 @@ consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
     auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 1 : 2;
     return ref_rank_l < ref_rank_r;
 }
+
+using zip_ref = std::pair<meta::info&, sign_req_t&>;
+consteval auto method_idt_less_zip(zip_ref zip_l, zip_ref zip_r) -> bool {
+    auto& [idt_l, _] = zip_l;
+    auto& [idt_r, _] = zip_r;
+    auto const id_l  = std::string_view(extract_method_identifier(idt_l));
+    auto const id_r  = std::string_view(extract_method_identifier(idt_r));
+    if (id_l != id_r)
+        return id_l < id_r;
+    auto const quals_l = extract_method_qualifiers(idt_l);
+    auto const quals_r = extract_method_qualifiers(idt_r);
+
+    auto const ref_rank_l = quals_l.is_lvalue ? 0 : quals_l.is_rvalue ? 1 : 2;
+    auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 1 : 2;
+    return ref_rank_l < ref_rank_r;
+}
 }    // namespace atmar
 
 consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements {
@@ -741,6 +757,8 @@ consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> method
         auto const reqs    = subextract_span<sign_req_t>(^^all_trait_requirements, {cv_base});
         append_unique(idts, reqs, res_idts, res_reqs);
     }
+    // stdr::sort(stdv::zip(res_idts, res_reqs), method_idt_less_zip);
+
     uZ const end = res_idts.size();
     for (auto unsorted_end = end; unsorted_end > 1; --unsorted_end) {
         auto swapped = false;

@@ -81,12 +81,39 @@ struct cvts_overload_spec {
 template<non_cvref TRef, non_cvref MethodHolder, non_cvref MethodInvoker, non_cvref OvSpec>
 struct cvts_cvo_invoker;
 
+
+consteval auto get_first_member_check_type(meta::info holder, meta::info type) {
+    auto const mems = nonstatic_data_members_of(holder, unprivileged);
+    if (mems.size() != 1)
+        throw "Method holder is expected to have only a single method.";
+    if (type_of(mems[0]) != type)
+        throw "Method invoker type does not match method holders first member type.";
+    return mems[0];
+}
+
+#define TRP_DEV
+#ifdef TRP_DEV
+
+#define TRP_ASSERT_DERIVED_INVOKER static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);
+#define TRP_ASSERT_STANDARD_LAYOUT static_assert(std::is_standard_layout_v<MethodHolder>);
 #ifdef __cpp_lib_is_pointer_interconvertible
-#define TRP_ASSERT_INTERCONVERTIBLE \
-    static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
+#define TRP_ASSERT_INTERCONVERTIBLE                                                                       \
+    static_assert(                                                                                        \
+        std::is_pointer_interconvertible_with_class<MethodHolder>(extract<MethodInvoker MethodHolder::*>( \
+            get_first_member_check_type(^^MethodHolder, ^^MethodInvoker))));
 #else
 #define TRP_ASSERT_INTERCONVERTIBLE
 #endif
+#define TRP_ASSERT_DERIVED_TREF static_assert(std::derived_from<TRef, MethodHolder>);
+#else
+
+#define TRP_ASSERT_DERIVED_INVOKER
+#define TRP_ASSERT_STANDARD_LAYOUT
+#define TRP_ASSERT_INTERCONVERTIBLE
+#define TRP_ASSERT_DERIVED_TREF
+
+#endif
+#define TRP_ADD_CVP(type) add_pointer(copy_cv_to(^^std::remove_pointer_t<decltype(this)>, type))
 
 #define TRP_CV_OVERLOAD(Req, C, V, Ref)                                                                  \
     template<non_cvref           TRef,                                                                   \
@@ -126,31 +153,19 @@ struct cvts_cvo_invoker;
         }                                                                                                \
                                                                                                          \
     private:                                                                                             \
-        auto get_trait_ref(this auto&& self) -> decltype(auto) {                                         \
-            constexpr auto add_cvp = [](meta::info type) {                                               \
-                using this_t = std::remove_reference_t<decltype(self)>;                                  \
-                return add_pointer(copy_cv_to(^^this_t, type));                                          \
-            };                                                                                           \
+        auto get_trait_ref() C V Ref -> decltype(auto) {                                                 \
+            TRP_ASSERT_DERIVED_INVOKER                                                                   \
+            auto const mi_ptr = static_cast<[:TRP_ADD_CVP(^^MethodInvoker):]>(this);                     \
                                                                                                          \
-            static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);                           \
-            auto const mi_ptr = static_cast<[:add_cvp(^^MethodInvoker):]>(&self);                        \
-                                                                                                         \
-            constexpr auto invoker_ptr = [] {                                                            \
-                auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);                     \
-                if (mems.size() != 1)                                                                    \
-                    throw "Method holder is expected to have only a single method.";                     \
-                if (type_of(mems[0]) != ^^MethodInvoker)                                                 \
-                    throw "Method invoker type does not match method holders first member type.";        \
-                return extract<MethodInvoker MethodHolder::*>(mems[0]);                                  \
-            }();                                                                                         \
+            TRP_ASSERT_STANDARD_LAYOUT                                                                   \
             TRP_ASSERT_INTERCONVERTIBLE                                                                  \
             static_assert(std::is_standard_layout_v<MethodHolder>);                                      \
-            auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(mi_ptr);                   \
+            auto const mh_ptr = reinterpret_cast<[:TRP_ADD_CVP(^^MethodHolder):]>(mi_ptr);               \
                                                                                                          \
-            static_assert(std::derived_from<TRef, MethodHolder>);                                        \
+            TRP_ASSERT_DERIVED_TREF                                                                      \
                                                                                                          \
-            using out_ref_t = [:copy_cvref_to(^^decltype(self), ^^TRef):];                               \
-            return static_cast<out_ref_t&&>(*static_cast<[:add_cvp(^^TRef):]>(mh_ptr));                  \
+            using out_ref_t = [:Quals.is_rvalue ? (^^TRef C V&&) : (^^TRef C V&):];                      \
+            return static_cast<out_ref_t>(*static_cast<[:TRP_ADD_CVP(^^TRef):]>(mh_ptr));                \
         }                                                                                                \
     };
 
@@ -172,6 +187,13 @@ TRP_CV_OVERLOAD(not Quals.is_const and     Quals.is_volatile and     Quals.is_rv
 TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_rvalue, const, volatile, &&);
 
 // clang-format on
+
+#undef TRP_ASSERT_DERIVED_TREF
+#undef TRP_ASSERT_INTERCONVERTIBLE
+#undef TRP_ASSERT_STANDARD_LAYOUT
+#undef TRP_ASSERT_DERIVED_INVOKER
+
+#undef TRP_ADD_CVP
 #undef TRP_CV_OVERLOAD
 #undef TRP_ASSERT_INTERCONVERTIBLE
 
