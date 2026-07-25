@@ -119,6 +119,14 @@ struct cvo_invoker;
 #define TRP_ASSERT_DERIVED_INVOKER static_assert(std::derived_from<MethodInvoker, cvo_invoker>);
 #define TRP_ASSERT_STANDARD_LAYOUT static_assert(std::is_standard_layout_v<MethodHolder>);
 #ifdef __cpp_lib_is_pointer_interconvertible
+consteval auto get_first_member_check_type(meta::info holder, meta::info type) {
+    auto const mems = nonstatic_data_members_of(holder, unprivileged);
+    if (mems.size() != 1)
+        throw "Method holder is expected to have only a single method.";
+    if (type_of(mems[0]) != type)
+        throw "Method invoker type does not match method holders first member type.";
+    return mems[0];
+}
 #define TRP_ASSERT_INTERCONVERTIBLE                                                                       \
     static_assert(                                                                                        \
         std::is_pointer_interconvertible_with_class<MethodHolder>(extract<MethodInvoker MethodHolder::*>( \
