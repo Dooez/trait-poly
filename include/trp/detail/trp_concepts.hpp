@@ -72,7 +72,9 @@ consteval auto explicit_impl_to_method_identity(meta::info fn, meta::info trait_
     };
 
     auto idt_targs = std::vector{identifier, meta::reflect_constant(quals), return_type_of(fn)};
-    idt_targs.append_range(params | stdv::drop(1) | stdv::transform(meta::type_of));
+    for (auto const i: stdv::iota(1U, params.size()))
+        idt_targs.push_back(type_of(params[i]));
+
     return substitute(^^method_identity_t, idt_targs);
 }
 consteval auto matching_explicit_impl(meta::info impl, meta::info method_idt) -> bool {

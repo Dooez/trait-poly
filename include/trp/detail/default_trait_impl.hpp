@@ -91,9 +91,9 @@ inline constexpr auto overload_idx = std::invoke_result_t<Overloaded, Args...>::
 
 consteval auto resolve_method_overload_set(meta::info                  method_idt,
                                            std::span<meta::info const> callable_methods) -> meta::info {
-    if (stdr::empty(callable_methods))
+    if (callable_methods.empty())
         return meta::info{};
-    if (stdr::size(callable_methods) == 1)
+    if (callable_methods.size() == 1)
         return callable_methods[0];
 
     auto const params = extract_method_param_types(method_idt);
@@ -119,10 +119,9 @@ consteval auto resolve_method_overload_set(meta::info                  method_id
                                                          : is_rvalue_reference_qualified(m));
         auto const static_arg = meta::reflect_constant(is_static_member(m));
         auto proxy_targs = std::vector{meta::reflect_constant(i), c_arg, v_arg, l_arg, r_arg, static_arg};
-        proxy_targs.append_range(raw_params                      //
-                                 | stdv::drop(is_eop ? 1 : 0)    //
-                                 | stdv::take(params.size())     //
-                                 | stdv::transform(meta::type_of));
+        auto const max_param_idx = std::max(params.size(), raw_params.size() - (is_eop ? 1 : 0));
+        for (auto i: stdv::iota(0U, max_param_idx))
+            proxy_targs.push_back(type_of(raw_params[i + (is_eop ? 1 : 0)]));
         proxies.push_back(substitute(^^overload_proxy, proxy_targs));
         ++i;
     }
@@ -186,10 +185,10 @@ consteval auto find_trait_method_impl(meta::info                      impl,
     if (id_mems.empty())
         return std::nullopt;
 
-    auto const callable_mems =
-        id_mems |
-        stdv::filter([&](auto m) { return invocable_as_method(impl, m, method_idt, reqs.exact_return); }) |
-        stdr::to<std::vector>();
+    auto callable_mems = std::vector<meta::info>();
+    for (auto m: id_mems)
+        if (invocable_as_method(impl, m, method_idt, reqs.exact_return))
+            callable_mems.push_back(m);
 
     // always try to find exactly matching arguments because templates cannot be resolved otherwise
     auto matching_mems     = std::vector<meta::info>();
