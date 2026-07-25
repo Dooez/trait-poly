@@ -10,25 +10,18 @@ inline constexpr struct {
 inline constexpr struct {
 } obj_ptr_anno;
 
-template<non_cvref TRef>
-inline constexpr auto vtable_member_info = [] {
-    auto m = find_annotated_member(^^TRef,    //
-                                   vtable_ptr_anno,
-                                   meta::access_context::unchecked());
-    if (m == meta::info{})
-        throw "No vtable annotated member found";
-    return m;
-}();
 
 template<non_cvref TRef>
-inline constexpr auto obj_member_info = [] {
-    auto m = find_annotated_member(^^TRef,    //
-                                   obj_ptr_anno,
-                                   meta::access_context::unchecked());
-    if (m == meta::info{})
-        throw "No object annotated member found";
-    return m;
-}();
+inline constexpr auto vtable_member_info = find_annotated_member(^^TRef,    //
+                                                                 vtable_ptr_anno,
+                                                                 "No vtable annotated member found",
+                                                                 meta::access_context::unchecked());
+
+template<non_cvref TRef>
+inline constexpr auto obj_member_info = find_annotated_member(^^TRef,    //
+                                                              obj_ptr_anno,
+                                                              "No object annotated member found",
+                                                              meta::access_context::unchecked());
 
 auto extract_vtable_ptr(auto&& ref) -> auto&&
     requires(vtable_member_info<std::remove_cvref_t<decltype(ref)>> != meta::info{})
@@ -42,34 +35,6 @@ auto extract_obj_ptr(auto&& ref) -> auto&&
 }
 
 namespace cvts_trait {
-
-template<typename Trait, typename Impl, typename... MethodHolders>
-class cvts_trait_ref_impl : public MethodHolders... {
-    [[= obj_ptr_anno]] Impl* _;
-
-    template<non_cvref, non_cvref, non_cvref, non_cvref>
-    friend struct cvts_cvo_invoker;
-
-public:
-    explicit cvts_trait_ref_impl(Impl& optr) noexcept {
-        extract_obj_ptr(*this) = &optr;
-    };
-    cvts_trait_ref_impl(cvts_trait_ref_impl const&) = delete;
-    cvts_trait_ref_impl(cvts_trait_ref_impl&&)      = delete;
-
-    template<typename T, typename S>
-        requires std::constructible_from<T&, typename[:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):]>
-    explicit operator T&(this S&& self) noexcept {
-        using source_t = [:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):];
-        return static_cast<source_t>(*extract_obj_ptr(std::forward<S>(self)));
-    }
-    template<typename T, typename S>
-        requires std::constructible_from<T&&, typename[:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):]>
-    explicit operator T&&(this S&& self) noexcept {
-        using source_t = [:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):];
-        return static_cast<source_t>(*extract_obj_ptr(std::forward<S>(self)));
-    }
-};
 
 
 template<non_ref Impl, meta::info Method, bool ExplicitMethod, trait_method_idt MethodIdt>
@@ -222,22 +187,54 @@ struct cvts_holder_definer {
 template<typename Ref, typename... OvSpecs>
 using cvts_holder = typename cvts_holder_definer<Ref, OvSpecs...>::cvts_method_holder;
 
+consteval auto get_holder_definer(meta::info ref, meta::info ov_specs_reflection) -> meta::info {
+    auto       targs = std::vector{ref};
+    auto const ov_specs =
+        std::span(extract<meta::info const*>(ov_specs_reflection), extent(type_of(ov_specs_reflection)));
+    targs.append_range(ov_specs);
+    return substitute(^^cvts_holder_definer, targs);
+}
 
-consteval auto get_ref_impls(meta::info trait,
-                             meta::info impl,
-                             meta::info ref,
-                             meta::info ref_c,
-                             meta::info ref_v,
-                             meta::info ref_cv) {
+template<typename Trait, typename Impl, meta::info... OvSpecsRefl>
+class cvts_trait_ref_impl
+: public[:get_holder_definer(^^cvts_trait_ref_impl<Trait, Impl, OvSpecsRefl...>,
+                             OvSpecsRefl):] ::cvts_method_holder... {
+    [[= obj_ptr_anno]] Impl* _;
+
+    template<non_cvref, non_cvref, non_cvref, non_cvref>
+    friend struct cvts_cvo_invoker;
+
+public:
+    explicit cvts_trait_ref_impl(Impl & optr) noexcept {
+        extract_obj_ptr(*this) = &optr;
+    };
+    cvts_trait_ref_impl(cvts_trait_ref_impl const&) = delete;
+    cvts_trait_ref_impl(cvts_trait_ref_impl&&)      = delete;
+
+    template<typename T, typename S>
+        requires std::constructible_from<T&, typename[:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):]>
+    explicit operator T&(this S && self) noexcept {
+        using source_t = [:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):];
+        return static_cast<source_t>(*extract_obj_ptr(std::forward<S>(self)));
+    }
+    template<typename T, typename S>
+        requires std::constructible_from<T&&, typename[:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):]>
+    explicit operator T&&(this S && self) noexcept {
+        using source_t = [:copy_cvref_to(^^S&&, copy_cv_to(^^Trait, ^^Impl)):];
+        return static_cast<source_t>(*extract_obj_ptr(std::forward<S>(self)));
+    }
+};
+
+consteval auto get_ref_impls(meta::info trait, meta::info impl) {
     auto ref_targs    = std::vector{trait, impl};
     auto ref_targs_c  = std::vector{add_const(trait), impl};
     auto ref_targs_v  = std::vector{add_volatile(trait), impl};
     auto ref_targs_cv = std::vector{add_cv(trait), impl};
 
-    auto methods    = std::vector<meta::info>{ref};
-    auto methods_c  = std::vector<meta::info>{ref_c};
-    auto methods_v  = std::vector<meta::info>{ref_v};
-    auto methods_cv = std::vector<meta::info>{ref_cv};
+    auto methods    = std::vector<meta::info>{};
+    auto methods_c  = std::vector<meta::info>{};
+    auto methods_v  = std::vector<meta::info>{};
+    auto methods_cv = std::vector<meta::info>{};
 
     auto const all_methods = subextract_span<meta::info>(^^all_trait_methods, {trait});
     auto const all_impls   = subextract_span<impl_method_bind>(^^full_impls_for, {impl, trait});
@@ -259,21 +256,21 @@ consteval auto get_ref_impls(meta::info trait,
                 methods_cv.push_back(spec);
         };
 
-        if (methods.size() > 1) {
-            ref_targs.push_back(substitute(^^cvts_holder, methods));
-            methods.resize(1);
+        if (not methods.empty()) {
+            ref_targs.push_back(reflect_constant(meta::reflect_constant_array(methods)));
+            methods.clear();
         }
-        if (methods_c.size() > 1) {
-            ref_targs_c.push_back(substitute(^^cvts_holder, methods_c));
-            methods_c.resize(1);
+        if (not methods_c.empty()) {
+            ref_targs_c.push_back(reflect_constant(meta::reflect_constant_array(methods_c)));
+            methods_c.clear();
         }
-        if (methods_v.size() > 1) {
-            ref_targs_v.push_back(substitute(^^cvts_holder, methods_v));
-            methods_v.resize(1);
+        if (not methods_v.empty()) {
+            ref_targs_v.push_back(reflect_constant(meta::reflect_constant_array(methods_v)));
+            methods_v.clear();
         }
-        if (methods_cv.size() > 1) {
-            ref_targs_cv.push_back(substitute(^^cvts_holder, methods_cv));
-            methods_cv.resize(1);
+        if (not methods_cv.empty()) {
+            ref_targs_cv.push_back(reflect_constant(meta::reflect_constant_array(methods_cv)));
+            methods_cv.clear();
         }
     }
     return std::array{
@@ -285,147 +282,57 @@ consteval auto get_ref_impls(meta::info trait,
 }
 
 template<non_cvref Trait, non_ref Impl>
-struct cvts_ref_definer {
-    struct ref;
-    struct ref_c;
-    struct ref_v;
-    struct ref_cv;
-
-    static constexpr auto ref_impls = get_ref_impls(^^Trait, ^^Impl, ^^ref, ^^ref_c, ^^ref_v, ^^ref_cv);
-    // [] {
-    //     auto ref_targs    = std::vector{^^Trait, ^^Impl};
-    //     auto ref_targs_c  = std::vector{add_const(^^Trait), ^^Impl};
-    //     auto ref_targs_v  = std::vector{add_volatile(^^Trait), ^^Impl};
-    //     auto ref_targs_cv = std::vector{add_cv(^^Trait), ^^Impl};
-    //
-    //     auto methods    = std::vector<meta::info>{^^ref};
-    //     auto methods_c  = std::vector<meta::info>{^^ref_c};
-    //     auto methods_v  = std::vector<meta::info>{^^ref_v};
-    //     auto methods_cv = std::vector<meta::info>{^^ref_cv};
-    //
-    //     auto const all_methods = all_trait_methods<Trait>;
-    //     auto const all_impls   = full_impls_for<Impl, Trait>;
-    //     for (auto const grp: trait_method_groups<Trait>) {
-    //         for (auto i: stdv::iota(grp.begin_idx, grp.end_idx)) {
-    //             auto const mem    = all_methods[i];
-    //             auto const impl_m = all_impls[i];
-    //             auto const quals  = extract_method_qualifiers(mem);
-    //             auto const spec   = substitute(^^cvts_overload_spec,
-    //                                            {^^Impl,
-    //                                             meta::reflect_constant(impl_m.fn),
-    //                                             meta::reflect_constant(impl_m.is_explicit),
-    //                                             mem});
-    //             methods.push_back(spec);
-    //             if (quals.is_const)
-    //                 methods_c.push_back(spec);
-    //             if (quals.is_volatile)
-    //                 methods_v.push_back(spec);
-    //             if (quals.is_const and quals.is_volatile)
-    //                 methods_cv.push_back(spec);
-    //         };
-    //
-    //         if (methods.size() > 1) {
-    //             ref_targs.push_back(substitute(^^cvts_holder, methods));
-    //             methods.resize(1);
-    //         }
-    //         if (methods_c.size() > 1) {
-    //             ref_targs_c.push_back(substitute(^^cvts_holder, methods_c));
-    //             methods_c.resize(1);
-    //         }
-    //         if (methods_v.size() > 1) {
-    //             ref_targs_v.push_back(substitute(^^cvts_holder, methods_v));
-    //             methods_v.resize(1);
-    //         }
-    //         if (methods_cv.size() > 1) {
-    //             ref_targs_cv.push_back(substitute(^^cvts_holder, methods_cv));
-    //             methods_cv.resize(1);
-    //         }
-    //     }
-    //     return std::array{
-    //         substitute(^^cvts_trait_ref_impl, ref_targs),
-    //         substitute(^^cvts_trait_ref_impl, ref_targs_c),
-    //         substitute(^^cvts_trait_ref_impl, ref_targs_v),
-    //         substitute(^^cvts_trait_ref_impl, ref_targs_cv),
-    //     };
-    // }();
-
-    using ref_impl_t    = [:ref_impls[0]:];
-    using ref_c_impl_t  = [:ref_impls[1]:];
-    using ref_v_impl_t  = [:ref_impls[2]:];
-    using ref_cv_impl_t = [:ref_impls[3]:];
-
-    struct ref : public ref_impl_t {
-        using ref_impl_t::ref_impl_t;
-    };
-    struct ref_c : public ref_c_impl_t {
-        using ref_c_impl_t::ref_c_impl_t;
-    };
-    struct ref_v : public ref_v_impl_t {
-        using ref_v_impl_t::ref_v_impl_t;
-    };
-    struct ref_cv : public ref_cv_impl_t {
-        using ref_cv_impl_t::ref_cv_impl_t;
-    };
-};
+inline constexpr auto ref_impls = get_ref_impls(^^Trait, ^^Impl);
 
 template<any_trait Trait, implements_trait<Trait> Impl>
-using cvts_trait_ref = [:[] {
-    using definer = cvts_ref_definer<std::remove_cvref_t<Trait>, Impl>;
-    if constexpr (std::is_const_v<Trait> and std::is_volatile_v<Trait>) {
-        return ^^typename definer::ref_cv;
-    } else if constexpr (std::is_volatile_v<Trait>) {
-        return ^^typename definer::ref_v;
-    } else if constexpr (std::is_const_v<Trait>) {
-        return ^^typename definer::ref_c;
-    } else {
-        return ^^typename definer::ref;
-    }
-}():];
+using cvts_trait_ref = [:is_const(^^Trait) and is_volatile(^^Trait)
+                             ? ref_impls<std::remove_cv_t<Trait>, Impl>[3]
+                         : is_volatile(^^Trait) ? ref_impls<std::remove_cv_t<Trait>, Impl>[2]
+                         : is_const(^^Trait)    ? ref_impls<std::remove_cv_t<Trait>, Impl>[1]
+                                                : ref_impls<std::remove_cv_t<Trait>, Impl>[0]:];
 
 struct name_info_pair {
     char const* name;
     meta::info  member;
 };
 
-template<non_cvref CvtsRef>
-inline constexpr auto all_cvref_methods = [] {
-    auto mems       = std::vector<name_info_pair>{};
-    auto types      = std::vector<meta::info>{^^CvtsRef};
+consteval auto get_all_cvref_methods(meta::info cvts_ref) -> std::span<meta::info const> {
+    auto mems       = std::vector<meta::info>{};
+    auto types      = std::vector<meta::info>{cvts_ref};
     auto next_types = std::vector<meta::info>{};
-    while (not stdr::empty(types)) {
+    while (not types.empty()) {
         for (auto t: types) {
-            mems.append_range(nonstatic_data_members_of(t, unprivileged) | stdv::transform([](meta::info m) {
-                                  return name_info_pair{std::define_static_string(identifier_of(m)), m};
-                              }));
+            for (auto m: nonstatic_data_members_of(t, unprivileged))
+                mems.push_back(m);
             next_types.append_range(subextract_base_types(t));
         }
+        if (not mems.empty())
+            break;    // all members appear on one level of inheritance
         swap(types, next_types);
         next_types.clear();
     }
     return std::define_static_array(mems);
-}();
+}
 
-template<char const* MethodId, non_cvref CvtsRef>
-inline constexpr auto ref_method = [] -> meta::info {
-    return stdr::find(all_cvref_methods<CvtsRef>,
-                      std::string_view(MethodId),
-                      [](auto p) { return std::string_view(p.name); })
-        ->member;
-}();
+template<non_cvref CvtsRef>
+inline constexpr auto all_cvref_methods = get_all_cvref_methods(^^CvtsRef);
+
+consteval auto get_ref_method(std::string_view id, meta::info cvts_ref) {
+    auto const mems = subextract_info_span(^^all_cvref_methods, {cvts_ref});
+    for (auto m: mems) {
+        if (identifier_of(m) == id)
+            return m;
+    }
+    std::unreachable();
+};
 
 template<char const* MethodId, typename Ref, typename... Args>
 auto call_method_via_id(Ref&& ref, Args&&... args) -> decltype(auto) {
-    using ref_t = std::remove_cvref_t<decltype(ref)>;
-    using fn_t  = [:[] {
-        auto const raw_fn = type_of(ref_method<MethodId, ref_t>);
-        if (is_rvalue_reference_type(^^Ref&&)) {
-            return add_rvalue_reference(raw_fn);
-        } else {
-            return add_lvalue_reference(raw_fn);
-        }
-    }():];
+    constexpr auto ref_method = get_ref_method(MethodId, remove_cvref(^^Ref));
+    using fn_t = [:is_rvalue_reference_type(^^Ref&&) ? add_rvalue_reference(type_of(ref_method))
+                                                     : add_lvalue_reference(type_of(ref_method)):];
 
-    return static_cast<fn_t>(ref.[:ref_method<MethodId, ref_t>:])(std::forward<Args>(args)...);
+    return static_cast<fn_t>(ref.[:ref_method:])(std::forward<Args>(args)...);
 }
 }    // namespace cvts_trait
 

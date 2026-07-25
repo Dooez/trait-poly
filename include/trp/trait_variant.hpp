@@ -93,12 +93,10 @@ struct impl_holder {
 inline constexpr struct {
 } obj_union_anno;
 template<non_cvref Var>
-inline constexpr auto union_member_info = [] {
-    auto m = find_annotated_member(^^Var, obj_union_anno, meta::access_context::unchecked());
-    if (m == meta::info{})
-        throw "No variant union annotated member found";
-    return m;
-}();
+inline constexpr auto union_member_info = find_annotated_member(^^Var,    //
+                                                                obj_union_anno,
+                                                                "No variant union annotated member found",
+                                                                meta::access_context::unchecked());
 template<typename Union, uZ I>
 inline constexpr auto member_type_info = Union::type_infos[I];
 

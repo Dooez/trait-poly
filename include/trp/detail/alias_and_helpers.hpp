@@ -820,6 +820,7 @@ struct unique_id_struct {
 template<typename T>
 consteval auto find_annotated_member(meta::info           type,
                                      T                    annotation,
+                                     char const*          on_error,
                                      meta::access_context ctx = meta::access_context::current())
     -> meta::info {
     auto const target_ann = meta::reflect_constant(annotation);
@@ -831,12 +832,12 @@ consteval auto find_annotated_member(meta::info           type,
             if (ann == target_ann)
                 return m;
     }
-    for (auto base: subextract_base_types(type)) {
-        auto m = find_annotated_member(base, annotation, ctx);
-        if (m != meta::info{})
-            return m;
-    }
-    return meta::info{};
+    for (auto base: subextract_base_types(type))
+        try {
+            return find_annotated_member(base, annotation, on_error, ctx);
+        } catch (...) {}
+
+    throw on_error;
 }
 
 template<typename T>
