@@ -222,6 +222,68 @@ struct cvts_holder_definer {
 template<typename Ref, typename... OvSpecs>
 using cvts_holder = typename cvts_holder_definer<Ref, OvSpecs...>::cvts_method_holder;
 
+
+consteval auto get_ref_impls(meta::info trait,
+                             meta::info impl,
+                             meta::info ref,
+                             meta::info ref_c,
+                             meta::info ref_v,
+                             meta::info ref_cv) {
+    auto ref_targs    = std::vector{trait, impl};
+    auto ref_targs_c  = std::vector{add_const(trait), impl};
+    auto ref_targs_v  = std::vector{add_volatile(trait), impl};
+    auto ref_targs_cv = std::vector{add_cv(trait), impl};
+
+    auto methods    = std::vector<meta::info>{ref};
+    auto methods_c  = std::vector<meta::info>{ref_c};
+    auto methods_v  = std::vector<meta::info>{ref_v};
+    auto methods_cv = std::vector<meta::info>{ref_cv};
+
+    auto const all_methods = subextract_span<meta::info>(^^all_trait_methods, {trait});
+    auto const all_impls   = subextract_span<impl_method_bind>(^^full_impls_for, {impl, trait});
+    auto const groups      = subextract_span<method_reference>(^^trait_method_groups, {trait});
+    for (auto const grp: groups) {
+        for (auto i: stdv::iota(grp.begin_idx, grp.end_idx)) {
+            auto const mem    = all_methods[i];
+            auto const impl_m = all_impls[i];
+            auto const quals  = extract_method_qualifiers(mem);
+            auto const spec   = substitute(
+                ^^cvts_overload_spec,
+                {impl, meta::reflect_constant(impl_m.fn), meta::reflect_constant(impl_m.is_explicit), mem});
+            methods.push_back(spec);
+            if (quals.is_const)
+                methods_c.push_back(spec);
+            if (quals.is_volatile)
+                methods_v.push_back(spec);
+            if (quals.is_const and quals.is_volatile)
+                methods_cv.push_back(spec);
+        };
+
+        if (methods.size() > 1) {
+            ref_targs.push_back(substitute(^^cvts_holder, methods));
+            methods.resize(1);
+        }
+        if (methods_c.size() > 1) {
+            ref_targs_c.push_back(substitute(^^cvts_holder, methods_c));
+            methods_c.resize(1);
+        }
+        if (methods_v.size() > 1) {
+            ref_targs_v.push_back(substitute(^^cvts_holder, methods_v));
+            methods_v.resize(1);
+        }
+        if (methods_cv.size() > 1) {
+            ref_targs_cv.push_back(substitute(^^cvts_holder, methods_cv));
+            methods_cv.resize(1);
+        }
+    }
+    return std::array{
+        substitute(^^cvts_trait_ref_impl, ref_targs),
+        substitute(^^cvts_trait_ref_impl, ref_targs_c),
+        substitute(^^cvts_trait_ref_impl, ref_targs_v),
+        substitute(^^cvts_trait_ref_impl, ref_targs_cv),
+    };
+}
+
 template<non_cvref Trait, non_ref Impl>
 struct cvts_ref_definer {
     struct ref;
@@ -229,57 +291,63 @@ struct cvts_ref_definer {
     struct ref_v;
     struct ref_cv;
 
-    static constexpr auto ref_impls = [] {
-        auto ref_targs    = std::vector{^^Trait, ^^Impl};
-        auto ref_targs_c  = std::vector{add_const(^^Trait), ^^Impl};
-        auto ref_targs_v  = std::vector{add_volatile(^^Trait), ^^Impl};
-        auto ref_targs_cv = std::vector{add_cv(^^Trait), ^^Impl};
-
-        auto methods    = std::vector<meta::info>{^^ref};
-        auto methods_c  = std::vector<meta::info>{^^ref_c};
-        auto methods_v  = std::vector<meta::info>{^^ref_v};
-        auto methods_cv = std::vector<meta::info>{^^ref_cv};
-        for (auto const grp: trait_method_groups<Trait>) {
-            auto const raw_methods = all_trait_methods<Trait>     //
-                                     | stdv::take(grp.end_idx)    //
-                                     | stdv::drop(grp.begin_idx);
-            auto const raw_impls = full_impls_for<Impl, Trait>    //
-                                   | stdv::take(grp.end_idx)      //
-                                   | stdv::drop(grp.begin_idx);
-            for (auto [i, mem, impl_m]: stdv::zip(stdv::iota(grp.begin_idx), raw_methods, raw_impls)) {
-                auto const quals = extract_method_qualifiers(mem);
-                auto const spec  = substitute(^^cvts_overload_spec,
-                                              {^^Impl,
-                                               meta::reflect_constant(impl_m.fn),
-                                               meta::reflect_constant(impl_m.is_explicit),
-                                               mem});
-                methods.push_back(spec);
-                if (quals.is_const)
-                    methods_c.push_back(spec);
-                if (quals.is_volatile)
-                    methods_v.push_back(spec);
-                if (quals.is_const and quals.is_volatile)
-                    methods_cv.push_back(spec);
-            };
-
-            auto const add_nonempty = [=](auto& targs, auto& holder_targs) {
-                if (holder_targs.size() == 1)
-                    return;
-                targs.push_back(substitute(^^cvts_holder, holder_targs));
-                holder_targs.resize(1);
-            };
-            add_nonempty(ref_targs, methods);
-            add_nonempty(ref_targs_c, methods_c);
-            add_nonempty(ref_targs_v, methods_v);
-            add_nonempty(ref_targs_cv, methods_cv);
-        }
-        return std::array{
-            substitute(^^cvts_trait_ref_impl, ref_targs),
-            substitute(^^cvts_trait_ref_impl, ref_targs_c),
-            substitute(^^cvts_trait_ref_impl, ref_targs_v),
-            substitute(^^cvts_trait_ref_impl, ref_targs_cv),
-        };
-    }();
+    static constexpr auto ref_impls = get_ref_impls(^^Trait, ^^Impl, ^^ref, ^^ref_c, ^^ref_v, ^^ref_cv);
+    // [] {
+    //     auto ref_targs    = std::vector{^^Trait, ^^Impl};
+    //     auto ref_targs_c  = std::vector{add_const(^^Trait), ^^Impl};
+    //     auto ref_targs_v  = std::vector{add_volatile(^^Trait), ^^Impl};
+    //     auto ref_targs_cv = std::vector{add_cv(^^Trait), ^^Impl};
+    //
+    //     auto methods    = std::vector<meta::info>{^^ref};
+    //     auto methods_c  = std::vector<meta::info>{^^ref_c};
+    //     auto methods_v  = std::vector<meta::info>{^^ref_v};
+    //     auto methods_cv = std::vector<meta::info>{^^ref_cv};
+    //
+    //     auto const all_methods = all_trait_methods<Trait>;
+    //     auto const all_impls   = full_impls_for<Impl, Trait>;
+    //     for (auto const grp: trait_method_groups<Trait>) {
+    //         for (auto i: stdv::iota(grp.begin_idx, grp.end_idx)) {
+    //             auto const mem    = all_methods[i];
+    //             auto const impl_m = all_impls[i];
+    //             auto const quals  = extract_method_qualifiers(mem);
+    //             auto const spec   = substitute(^^cvts_overload_spec,
+    //                                            {^^Impl,
+    //                                             meta::reflect_constant(impl_m.fn),
+    //                                             meta::reflect_constant(impl_m.is_explicit),
+    //                                             mem});
+    //             methods.push_back(spec);
+    //             if (quals.is_const)
+    //                 methods_c.push_back(spec);
+    //             if (quals.is_volatile)
+    //                 methods_v.push_back(spec);
+    //             if (quals.is_const and quals.is_volatile)
+    //                 methods_cv.push_back(spec);
+    //         };
+    //
+    //         if (methods.size() > 1) {
+    //             ref_targs.push_back(substitute(^^cvts_holder, methods));
+    //             methods.resize(1);
+    //         }
+    //         if (methods_c.size() > 1) {
+    //             ref_targs_c.push_back(substitute(^^cvts_holder, methods_c));
+    //             methods_c.resize(1);
+    //         }
+    //         if (methods_v.size() > 1) {
+    //             ref_targs_v.push_back(substitute(^^cvts_holder, methods_v));
+    //             methods_v.resize(1);
+    //         }
+    //         if (methods_cv.size() > 1) {
+    //             ref_targs_cv.push_back(substitute(^^cvts_holder, methods_cv));
+    //             methods_cv.resize(1);
+    //         }
+    //     }
+    //     return std::array{
+    //         substitute(^^cvts_trait_ref_impl, ref_targs),
+    //         substitute(^^cvts_trait_ref_impl, ref_targs_c),
+    //         substitute(^^cvts_trait_ref_impl, ref_targs_v),
+    //         substitute(^^cvts_trait_ref_impl, ref_targs_cv),
+    //     };
+    // }();
 
     using ref_impl_t    = [:ref_impls[0]:];
     using ref_c_impl_t  = [:ref_impls[1]:];
