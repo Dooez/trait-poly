@@ -224,8 +224,6 @@ TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_rv
 #undef TRP_CV_OVERLOAD
 #undef TRP_ASSERT_INTERCONVERTIBLE
 
-// template<non_cvref Variantn, non_cvref MethodHolder, non_cvref MethodInvoker, non_cv_trait Trait, trait_method_idt MethodIdt>
-// struct cvo_invoker;
 template<non_cvref Variant, non_cvref MethodHolder, non_cvref Trait, non_cvref... MethodIdts>
 struct cvm_invoker
 : public cvo_invoker<Variant,
@@ -477,9 +475,9 @@ public:
         return *this;
     }
 };
+
 template<non_cvref ImplHolder, any_trait Trait, meta::info... MethodIdtsRefls>
 auto get_var_impl_holder(trait_variant_impl<ImplHolder, Trait, MethodIdtsRefls...> const&) -> ImplHolder;
-
 
 consteval auto get_var_impls(meta::info trait, meta::info impl_holder) {
     auto var_targs    = std::vector{impl_holder, trait};
@@ -553,7 +551,7 @@ template<typename T, any_trait_variant Var>
 inline constexpr auto
     variant_alternative_index = [:alternative_union_of<Var>::value:] ::template type_index<T>;
 }    // namespace detail::var
-//
+
 template<detail::var::any_trait_variant Var>
 inline constexpr auto variant_size = [:detail::var::alternative_union_of<Var>::value:] ::count;
 template<uZ I, detail::var::any_trait_variant Var>
