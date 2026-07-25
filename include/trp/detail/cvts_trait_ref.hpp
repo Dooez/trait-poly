@@ -184,9 +184,6 @@ struct cvts_holder_definer {
     }
 };
 
-template<typename Ref, typename... OvSpecs>
-using cvts_holder = typename cvts_holder_definer<Ref, OvSpecs...>::cvts_method_holder;
-
 consteval auto get_holder_definer(meta::info ref, meta::info ov_specs_reflection) -> meta::info {
     auto       targs = std::vector{ref};
     auto const ov_specs =
@@ -195,10 +192,10 @@ consteval auto get_holder_definer(meta::info ref, meta::info ov_specs_reflection
     return substitute(^^cvts_holder_definer, targs);
 }
 
-template<typename Trait, typename Impl, meta::info... OvSpecsRefl>
+template<typename Trait, typename Impl, meta::info... OvSpecsRefls>
 class cvts_trait_ref_impl
-: public[:get_holder_definer(^^cvts_trait_ref_impl<Trait, Impl, OvSpecsRefl...>,
-                             OvSpecsRefl):] ::cvts_method_holder... {
+: public[:get_holder_definer(^^cvts_trait_ref_impl<Trait, Impl, OvSpecsRefls...>,
+                             OvSpecsRefls):] ::cvts_method_holder... {
     [[= obj_ptr_anno]] Impl* _;
 
     template<non_cvref, non_cvref, non_cvref, non_cvref>
