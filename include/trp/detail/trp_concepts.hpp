@@ -324,8 +324,14 @@ consteval auto invocable_as_method(meta::info impl, /**/
                                    meta::info method_idt,
                                    bool       exact_ret) -> bool {
     auto const params = extract_method_param_types(method_idt);
-    auto const ret    = extract_method_return_type(method_idt);
-    auto const quals  = extract_method_qualifiers(method_idt);
+    // variadic can be invoked, but it should not be allowed
+    if (is_function(impl_method) and parameters_of(impl_method).size() < params.size())
+        return false;
+    // TODO: inspect operator()s of data members to verify that they are have enough arguments
+
+
+    auto const ret   = extract_method_return_type(method_idt);
+    auto const quals = extract_method_qualifiers(method_idt);
 
     auto invk_impl = impl;
     if (quals.is_const)
@@ -414,7 +420,7 @@ consteval auto check_parameter_match(meta::info impl, meta::info impl_method, me
     if (is_function(impl_method)) {
         auto const impl_params_raw = parameters_of(impl_method);
         auto const is_eop = not impl_params_raw.empty() and is_explicit_object_parameter(impl_params_raw[0]);
-        if (is_eop and impl_params_raw.size() - 1 < trait_params.size())
+        if (impl_params_raw.size() - (is_eop ? 1 : 0) < trait_params.size())
             return {};
         auto const impl_params = std::span(impl_params_raw.begin() + (is_eop ? 1 : 0), impl_params_raw.end());
         for (auto i: stdv::iota(0U, trait_params.size()))

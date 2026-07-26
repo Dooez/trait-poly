@@ -119,7 +119,7 @@ consteval auto resolve_method_overload_set(meta::info                  method_id
                                                          : is_rvalue_reference_qualified(m));
         auto const static_arg = meta::reflect_constant(is_static_member(m));
         auto proxy_targs = std::vector{meta::reflect_constant(i), c_arg, v_arg, l_arg, r_arg, static_arg};
-        auto const max_param_idx = std::max(params.size(), raw_params.size() - (is_eop ? 1 : 0));
+        auto const max_param_idx = std::min(params.size(), raw_params.size() - (is_eop ? 1 : 0));
         for (auto i: stdv::iota(0U, max_param_idx))
             proxy_targs.push_back(type_of(raw_params[i + (is_eop ? 1 : 0)]));
         proxies.push_back(substitute(^^overload_proxy, proxy_targs));

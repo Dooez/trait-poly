@@ -722,8 +722,8 @@ consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
     auto const quals_l = extract_method_qualifiers(idt_l);
     auto const quals_r = extract_method_qualifiers(idt_r);
 
-    auto const ref_rank_l = quals_l.is_lvalue ? 0 : quals_l.is_rvalue ? 1 : 2;
-    auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 1 : 2;
+    auto const ref_rank_l = quals_l.is_lvalue ? 0 : quals_l.is_rvalue ? 2 : 1;
+    auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 2 : 1;
     return ref_rank_l < ref_rank_r;
 }
 
@@ -738,8 +738,8 @@ consteval auto method_idt_less_zip(zip_ref zip_l, zip_ref zip_r) -> bool {
     auto const quals_l = extract_method_qualifiers(idt_l);
     auto const quals_r = extract_method_qualifiers(idt_r);
 
-    auto const ref_rank_l = quals_l.is_lvalue ? 0 : quals_l.is_rvalue ? 1 : 2;
-    auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 1 : 2;
+    auto const ref_rank_l = quals_l.is_lvalue ? 0 : quals_l.is_rvalue ? 2 : 1;
+    auto const ref_rank_r = quals_r.is_lvalue ? 0 : quals_r.is_rvalue ? 2 : 1;
     return ref_rank_l < ref_rank_r;
 }
 }    // namespace atmar
