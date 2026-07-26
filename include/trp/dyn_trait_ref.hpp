@@ -49,6 +49,7 @@ concept any_dyn_trait_ref = has_template_arguments(^^T) and template_of(^^T) == 
 template<uZ Index, trait_method_idt MethodId>
 struct cvo_invoker;
 
+
 #define TRP_CV_OVERLOAD(Req, C, V)                                                                           \
     template<uZ Index, auto Identifier, method_qualifiers_t Quals, typename Ret, typename... Args>           \
         requires(Req)                                                                                        \
@@ -90,6 +91,34 @@ template<typename CVMInvoker, typename VTable, typename... Args>
 inline constexpr auto noexcept_cvm_invoker =
     std::is_nothrow_invocable_v<CVMInvoker, VTable const*, void*, Args...>;
 
+#define TRP_DEV
+#ifdef TRP_DEV
+#define TRP_ASSERT_STANDARD_LAYOUT static_assert(std::is_standard_layout_v<MethodHolder>);
+#ifdef __cpp_lib_is_pointer_interconvertible
+consteval auto get_first_member_check_type(meta::info holder, meta::info type) {
+    auto const mems = nonstatic_data_members_of(holder, unprivileged);
+    if (mems.size() != 1)
+        throw "Method holder is expected to have only a single method.";
+    if (type_of(mems[0]) != type)
+        throw "Method invoker type does not match method holders first member type.";
+    return mems[0];
+}
+#define TRP_ASSERT_INTERCONVERTIBLE                                                                        \
+    static_assert(                                                                                         \
+        std::is_pointer_interconvertible_with_class<MethodHolder>(extract<method_invoker MethodHolder::*>( \
+            get_first_member_check_type(^^MethodHolder, ^^method_invoker))));
+#else
+#define TRP_ASSERT_INTERCONVERTIBLE
+#endif
+#define TRP_ASSERT_DERIVED_REF static_assert(std::derived_from<TRef, MethodHolder>);
+#else
+
+#define TRP_ASSERT_STANDARD_LAYOUT
+#define TRP_ASSERT_INTERCONVERTIBLE
+#define TRP_ASSERT_DERIVED_REF
+
+#endif
+#define TRP_ADD_CVP(type) add_pointer(copy_cv_to(^^std::remove_reference_t<decltype(self)>, type))
 
 template<typename TRef, typename Trait, typename MethodHolder, typename CVMInvoker>
 struct method_invoker {
@@ -112,29 +141,17 @@ public:
 
 private:
     auto get_trait_ref(this auto&& self) -> decltype(auto) {
-        constexpr auto add_cvp = [](meta::info type) {
-            using this_t = std::remove_reference_t<decltype(self)>;
-            return add_pointer(copy_cv_to(^^this_t, type));
-        };
+        TRP_ASSERT_STANDARD_LAYOUT
+        TRP_ASSERT_INTERCONVERTIBLE
+        auto const mh_ptr = reinterpret_cast<[:TRP_ADD_CVP(^^MethodHolder):]>(&self);
 
-        constexpr auto invoker_ptr = [] {
-            auto mems = nonstatic_data_members_of(^^MethodHolder, unprivileged);
-            if (mems.size() != 1)
-                throw "Method holder is expected to have only a single method.";
-            if (type_of(mems[0]) != ^^method_invoker)
-                throw "Method invoker type does not match method holders first member type.";
-            return extract<method_invoker MethodHolder::*>(mems[0]);
-        }();
-#ifdef __cpp_lib_is_pointer_interconvertible
-        static_assert(std::is_pointer_interconvertible_with_class<MethodHolder>(invoker_ptr));
-#endif
-        static_assert(std::is_standard_layout_v<MethodHolder>);
-        auto const mh_ptr = reinterpret_cast<[:add_cvp(^^MethodHolder):]>(&self);
-
-        static_assert(std::derived_from<TRef, MethodHolder>);
-        return *static_cast<[:add_cvp(^^TRef):]>(mh_ptr);
+        TRP_ASSERT_DERIVED_REF
+        return *static_cast<[:TRP_ADD_CVP(^^TRef):]>(mh_ptr);
     }
 };
+#undef TRP_ASSERT_DERIVED_REF
+#undef TRP_ASSERT_INTERCONVERTIBLE
+#undef TRP_ASSERT_STANDARD_LAYOUT
 
 template<typename Ref, typename Trait, typename CVMInvoker>
 struct method_holder_definer {
