@@ -149,6 +149,9 @@ private:
         return *static_cast<[:TRP_ADD_CVP(^^TRef):]>(mh_ptr);
     }
 };
+
+#undef TRP_ADD_CVP
+
 #undef TRP_ASSERT_DERIVED_REF
 #undef TRP_ASSERT_INTERCONVERTIBLE
 #undef TRP_ASSERT_STANDARD_LAYOUT

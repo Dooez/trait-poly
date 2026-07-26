@@ -223,14 +223,13 @@ TRP_CV_OVERLOAD(    Quals.is_const and     Quals.is_volatile and     Quals.is_rv
 
 // clang-format on
 
+#undef TRP_CV_OVERLOAD
+#undef TRP_ADD_CVP
+
 #undef TRP_ASSERT_DERIVED_VARIANT
 #undef TRP_ASSERT_INTERCONVERTIBLE
 #undef TRP_ASSERT_STANDARD_LAYOUT
 #undef TRP_ASSERT_DERIVED_INVOKER
-
-#undef TRP_ADD_CVP
-#undef TRP_CV_OVERLOAD
-#undef TRP_ASSERT_INTERCONVERTIBLE
 
 template<non_cvref Variant, non_cvref MethodHolder, non_cvref Trait, non_cvref... MethodIdts>
 struct cvm_invoker
