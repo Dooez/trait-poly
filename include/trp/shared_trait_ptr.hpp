@@ -85,19 +85,21 @@ public:
     shared_trait_ptr& operator=(shared_trait_ptr const& other) noexcept {
         if (this == &other)
             return *this;
+        auto tmp = other;
         decrement();
-        other.increment();
-        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
-        ctrl_ptr_ = other.ctrl_ptr_;
+        detail::ref_rebind(dyn_trait_ref_, tmp.dyn_trait_ref_);
+        ctrl_ptr_ = tmp.ctrl_ptr_;
+        tmp.release();
         return *this;
     }
     shared_trait_ptr& operator=(shared_trait_ptr&& other) noexcept {
         if (this == &other)
             return *this;
+        auto tmp = std::move(other);
         decrement();
-        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
-        ctrl_ptr_ = other.ctrl_ptr_;
-        other.release();
+        detail::ref_rebind(dyn_trait_ref_, tmp.dyn_trait_ref_);
+        ctrl_ptr_ = tmp.ctrl_ptr_;
+        tmp.release();
         return *this;
     }
 

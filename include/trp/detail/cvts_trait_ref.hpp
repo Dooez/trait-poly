@@ -56,7 +56,6 @@ consteval auto get_first_member_check_type(meta::info holder, meta::info type) {
     return mems[0];
 }
 
-#define TRP_DEV
 #ifdef TRP_DEV
 
 #define TRP_ASSERT_DERIVED_INVOKER static_assert(std::derived_from<MethodInvoker, cvts_cvo_invoker>);

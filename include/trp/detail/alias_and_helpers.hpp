@@ -9,19 +9,9 @@
 #include <type_traits>
 
 
-#if defined(__clang__)
-namespace std::meta {
-consteval bool is_vararg_function(info r) {
-    return is_function(r) and has_ellipsis_parameter(r);
-}
-consteval auto annotations_of_with_type(info item, info type) {
-    return annotations_of(item, type);
-}
-
-}    // namespace std::meta
-#endif
-
 namespace trp {
+
+
 using i8  = int8_t;
 using i16 = int16_t;
 using i32 = int32_t;
@@ -39,6 +29,18 @@ using f64      = double;
 namespace stdr = std::ranges;
 namespace stdv = std::views;
 namespace meta = std::meta;
+
+#if defined(__clang__) && __clang_major__ < 24
+consteval auto is_vararg_function(meta::info r) -> bool {
+    return is_function(r) and has_ellipsis_parameter(r);
+}
+consteval auto annotations_of_with_type(meta::info item, meta::info type) {
+    return annotations_of(item, type);
+}
+consteval auto reference_constructs_from_temporary(meta::info type_dst, meta::info type_src) {
+    return extract<bool>(substitute(^^std::reference_constructs_from_temporary_v, {type_dst, type_src}));
+}
+#endif
 
 template<auto V>
 struct constant_wrapper {
@@ -408,8 +410,8 @@ consteval bool are_similar_idts(meta::info a, meta::info b) {
     auto const reta = extract_method_return_type(a);
     auto const retb = extract_method_return_type(b);
     if (reta != retb)
-        throw "methods differ by return type only";
-    return true;
+        throw "Method identitites cannot differ by return type only";
+    return reta == retb;
 }
 
 /**
@@ -541,6 +543,7 @@ consteval auto subextract_base_types(meta::info type) {
 struct methods_and_requirements {
     std::span<meta::info const>                      identities;
     std::span<method_signature_requirements_t const> requirements;
+    bool                                             sound;
 
     static consteval auto verify(method_signature_requirements_t const& req)
         -> method_signature_requirements_t const& {
@@ -577,6 +580,7 @@ consteval auto direct_trait_methods_and_requirements_fn(meta::info trait) {
     return methods_and_requirements{
         .identities   = define_static_array(methods),
         .requirements = define_static_array(requirements),
+        .sound        = true,
     };
 };
 
@@ -625,10 +629,10 @@ consteval void append_as_ref(meta::info               method,
     res_idts.push_back(replace_method_qualifiers(method, quals));
     res_reqs.push_back(reqs);
 }
-consteval void append_unique(std::span<meta::info const> idts,
-                             std::span<sign_req_t const> reqs,
-                             std::vector<meta::info>&    res_idts,
-                             std::vector<sign_req_t>&    res_reqs) {
+consteval auto sound_append_unique(std::span<meta::info const> idts,
+                                   std::span<sign_req_t const> reqs,
+                                   std::vector<meta::info>&    res_idts,
+                                   std::vector<sign_req_t>&    res_reqs) -> bool {
     for (auto i: stdv::iota(0U, idts.size())) {
         auto const method       = idts[i];
         auto const requirements = reqs[i];
@@ -638,8 +642,12 @@ consteval void append_unique(std::span<meta::info const> idts,
         auto lvalue_idx = size;
         auto rvalue_idx = size;
         for (auto i: stdv::iota(0UZ, size)) {
-            if (not are_similar_idts(res_idts[i], method))
-                continue;
+            try {
+                if (not are_similar_idts(res_idts[i], method))
+                    continue;
+            } catch (...) {
+                return false;
+            }
             auto const quals = extract_method_qualifiers(res_idts[i]);
             if (quals.is_lvalue) {
                 lvalue_idx = i;
@@ -712,6 +720,7 @@ consteval void append_unique(std::span<meta::info const> idts,
                 update_at(rvalue_idx, method_quals, requirements, res_idts, res_reqs);
         }
     }
+    return true;
 }
 
 consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
@@ -746,6 +755,7 @@ consteval auto method_idt_less_zip(zip_ref zip_l, zip_ref zip_r) -> bool {
 
 consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> methods_and_requirements {
     using namespace atmar;
+    bool       sound         = true;
     auto const res_idts_span = subextract_info_span(^^direct_trait_methods, {trait});
     auto const res_reqs_span = subextract_span<sign_req_t>(^^direct_trait_requirements, {trait});
     auto       res_idts      = std::vector(std::from_range, res_idts_span);
@@ -755,7 +765,7 @@ consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> method
         auto const cv_base = copy_cv_to(trait, base);
         auto const idts    = subextract_info_span(^^all_trait_methods, {cv_base});
         auto const reqs    = subextract_span<sign_req_t>(^^all_trait_requirements, {cv_base});
-        append_unique(idts, reqs, res_idts, res_reqs);
+        sound &= sound_append_unique(idts, reqs, res_idts, res_reqs);
     }
     // stdr::sort(stdv::zip(res_idts, res_reqs), method_idt_less_zip);
 
@@ -775,6 +785,7 @@ consteval auto all_trait_methods_and_requirements_fn(meta::info trait) -> method
     return methods_and_requirements{
         .identities   = std::define_static_array(res_idts),
         .requirements = std::define_static_array(res_reqs),
+        .sound        = sound,
     };
 };
 

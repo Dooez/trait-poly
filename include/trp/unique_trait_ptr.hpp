@@ -56,10 +56,11 @@ public:
     alloc_unique_trait_ptr& operator=(alloc_unique_trait_ptr&& other) noexcept {
         if (this == &other)
             return *this;
+        auto tmp = std::move(other);
         delete_();
-        detail::ref_rebind(this->dyn_trait_ref_, other.dyn_trait_ref_);
-        this->ctrl_ptr_ = other.ctrl_ptr_;
-        other.release();
+        detail::ref_rebind(this->dyn_trait_ref_, tmp.dyn_trait_ref_);
+        this->ctrl_ptr_ = tmp.ctrl_ptr_;
+        tmp.release();
         return *this;
     };
 
@@ -181,10 +182,11 @@ public:
     unique_trait_ptr& operator=(unique_trait_ptr&& other) noexcept {
         if (this == &other)
             return *this;
+        auto tmp = std::move(other);
         if (holds_value())
             detail::ref_default_delete(dyn_trait_ref_);
-        detail::ref_rebind(dyn_trait_ref_, other.dyn_trait_ref_);
-        (void)other.release();
+        detail::ref_rebind(dyn_trait_ref_, tmp.dyn_trait_ref_);
+        (void)tmp.release();
         return *this;
     };
 

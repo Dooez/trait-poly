@@ -38,14 +38,13 @@ must satisfy these restrictions:
 
 - all members and base classes are public;
 - no virtual functions or virtual bases;
-- no non-static data members;
-- no non-default special member functions;
+- no static or non-static data members;
+- no user-declared special member functions, including explicitly defaulted or
+  deleted declarations;
 - no operators;
 - no non-static template methods;
 - no default arguments or C-style variadic methods;
 - no explicit-object-by-value methods;
-- static data members are accepted only when recognized as `constexpr`. The
-  current check is GCC-specific. Clang effectively rejects static data members;
 - static functions are allowed only when they are templates used as default
   implementations for trait methods.
 
@@ -112,6 +111,9 @@ Global level signature requirements can be controlled via macros:
 #define TRP_DEFAULT_MATCH_METHOD_REF
 ```
 
+These macros alter inline type computations. A program must use the same
+configuration in every translation unit to avoid an ODR violation.
+
 The library provides these annotations:
 
 - `trp::relaxed_signature`: callable arguments and a convertible return type;
@@ -139,6 +141,10 @@ Overload resolution limitations:
   This means that if there are multiple bases providing `foo` member,
   and the derived class uses *using-declaration* to disambiguate,
   the implementation overload resolution cannot be done.
+- C-style variadic implementations should not use variadic arguments as a part of 
+  parameters required by trait method. The diagnostic however is not full 
+  (and cannot be for templates) and some variadic implementations can be 
+  unintentionally accepted. Don't use them in C++ `¯\(ツ)/¯`;
 
 ## Trait Handles
 
@@ -214,6 +220,8 @@ Specific owning-handle APIs:
   `trp::allocate_shared_trait<Trait, Impl>(alloc, ...)`;
 - `trp::make_unique_trait<Trait, Impl>(...)` and
   `trp::allocate_unique_trait<Trait, Impl>(alloc, ...)`;
+- `trp::unique_trait_ptr<Trait>(Impl*)` adopts an object allocated by scalar
+  `new`, and `release()` relinquishes ownership as `void*`;
 - `trp::unique_trait_ptr<Trait>` can be moved into
   `trp::alloc_unique_trait_ptr<Trait>`.
 
@@ -286,8 +294,8 @@ Because access happens through a proxy, the cv-qualifiers of
 cv-qualifiers for each overload. A cv-qualified `cvm_invoker<...>` with
 qualifiers equal to the `Trait` qualifiers is constructed and invoked.
 
-This uses native C++ overload resolution for both argument types and cv
-resolution.
+For arguments whose types can be deduced independently, this uses native C++
+overload resolution for both argument types and cv resolution.
 
 Variant uses a similar technique, except it is cv-transient and does not use
 type erasure or a vtable.
@@ -318,6 +326,9 @@ Not implemented, but potentially feasible and interesting:
 At this moment, the repository is for experimenting and sharing.
 
 ## Build Examples
+
+The current CMake files require CMake 3.30 or newer because the interface target
+requests the `cxx_std_26` compile feature.
 
 - Configure with the p2996 preset:
   `TRP_P2996_INSTALL_PATH=/path/to/clang-p2996/install cmake --preset clang-p2996`

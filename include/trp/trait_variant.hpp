@@ -73,8 +73,8 @@ struct impl_holder {
     template<uZ I>
         requires(I < count)
     void destroy(constant_wrapper<I>) {
-        std::destroy_at(storage.[:member_infos[I]:].ptr());
         tag = invalid_tag;
+        std::destroy_at(storage.[:member_infos[I]:].ptr());
     }
 
     template<uZ I>
@@ -113,7 +113,6 @@ template<non_cvref        Variant,
          trait_method_idt MethodIdt>
 struct cvo_invoker;
 
-#define TRP_DEV
 #ifdef TRP_DEV
 
 #define TRP_ASSERT_DERIVED_INVOKER static_assert(std::derived_from<MethodInvoker, cvo_invoker>);

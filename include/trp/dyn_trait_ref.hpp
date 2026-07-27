@@ -91,7 +91,6 @@ template<typename CVMInvoker, typename VTable, typename... Args>
 inline constexpr auto noexcept_cvm_invoker =
     std::is_nothrow_invocable_v<CVMInvoker, VTable const*, void*, Args...>;
 
-#define TRP_DEV
 #ifdef TRP_DEV
 #define TRP_ASSERT_STANDARD_LAYOUT static_assert(std::is_standard_layout_v<MethodHolder>);
 #ifdef __cpp_lib_is_pointer_interconvertible

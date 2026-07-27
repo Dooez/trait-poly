@@ -135,9 +135,15 @@ concept nonstatic_methods_are_not_templates =
         return is_function_template(r) and not is_static_member(r);
     });
 
+consteval auto no_vararg_methods_fn(meta::info trait) {
+    for (auto m: subextract_info_span(^^nonspecial_members, {trait}))
+        if (is_vararg_function(m))
+            return false;
+    return true;
+}
+
 template<typename Trait>
-concept no_vararg_methods =
-    non_cvref<Trait> and stdr::none_of(nonspecial_members<Trait>, meta::is_vararg_function);
+concept no_vararg_methods = non_cvref<Trait> and no_vararg_methods_fn(^^Trait);
 
 consteval auto methods_have_no_default_args(std::span<meta::info const> methods) {
     for (auto m: methods) {
@@ -165,10 +171,9 @@ concept static_methods_are_templates =
     non_cvref<Trait> and static_methods_are_templates_fn(nonspecial_members<Trait>);
 
 consteval auto valid_methods_fn(meta::info trait, std::span<meta::info const> methods) {
-    for (auto m: methods) {
+    for (auto m: methods)
         if (not extract<bool>(substitute(^^trait_method_idt, {m})))
             return false;
-    }
     return true;
 }
 
@@ -183,12 +188,11 @@ consteval auto static_methods_are_default_impl_for_fn(std::span<meta::info const
             continue;
         auto const impl_idt = explicit_impl_to_method_identity(member, trait);
         auto       matching = false;
-        for (auto m: all_methods) {
+        for (auto m: all_methods)
             if (matching_explicit_impl(impl_idt, m)) {
                 matching = true;
                 break;
             }
-        }
         if (not matching)
             return false;
     }
@@ -235,7 +239,8 @@ concept any_traits =
                                args.append_range(direct_base_types<std::remove_cv_t<Traits>>);
                                return args;
                            }()):])    //
-    );
+     ) and
+    (all_trait_methods_and_requirements<std::remove_cvref_t<Traits>>.sound and ...);
 
 
 consteval auto supertrait_of_fn(std::span<meta::info const> supertrat_methods,
@@ -356,6 +361,10 @@ consteval auto invocable_as_method(meta::info impl, /**/
     auto const same_return = extract<bool>(substitute(^^std::same_as, {invk_ret, ret}));
     if (same_return)
         return true;
+    if (is_reference_type(ret)                  //
+        and (not is_reference_type(invk_ret)    //
+             or reference_constructs_from_temporary(ret, invk_ret)))
+        return false;
     if (exact_ret)
         return false;
     if (quals.is_noexcept)
@@ -370,10 +379,9 @@ consteval auto call_operators_of_fn(meta::info type) -> std::vector<meta::info> 
         if ((is_operator_function(m) or is_operator_function_template(m)) and
             operator_of(m) == meta::operators::op_parentheses)
             v.push_back(m);
-    if (v.empty()) {
+    if (v.empty())
         for (auto base: subextract_base_types(type))
             v.append_range(call_operators_of_fn(base));
-    }
     return v;
 };
 template<typename T>

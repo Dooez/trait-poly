@@ -11,11 +11,13 @@ function(add_trp_test name source)
 	set(target "test_${name}")
 	add_executable(${target} "${source}")
 	target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+	target_compile_definitions(${target} PRIVATE TRP_DEV)
 	target_link_libraries(${target} PRIVATE trp::trp)
 	add_test(NAME ${target} COMMAND ${target})
 endfunction()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileFailureTest.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/RuntimeFailureTest.cmake")
 
 add_trp_test(traits "traits/traits.cpp")
 add_trp_test(dyn_trait_ref "dyn_trait_ref/dyn_trait_ref.cpp")
