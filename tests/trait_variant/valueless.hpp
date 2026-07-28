@@ -22,6 +22,23 @@ using stable_impl        = stable_value_impl;
 using throwing_impl      = throwing_value_impl;
 using variant_t          = ::valueless_variant_t;
 
+struct destruction_error {};
+
+struct throwing_destructor {
+    inline static bool fail = false;
+
+    auto value() const -> int {
+        return initial_value;
+    }
+
+    ~throwing_destructor() noexcept(false) {
+        if (fail)
+            throw destruction_error{};
+    }
+};
+
+using destruction_variant = trp::trait_variant<value_trait, throwing_destructor, stable_impl>;
+
 void make_valueless(variant_t& value) {
     throwing_impl::fail_construction = true;
     try {
@@ -137,11 +154,32 @@ void check_throwing_replacement() {
     test::expect_eq(case_name, "throwing move source remains valued", move_source.value(), throwing_value);
 }
 
+void check_throwing_destruction() {
+    throwing_destructor::fail = false;
+    auto value                = destruction_variant(std::in_place_type<throwing_destructor>);
+    throwing_destructor::fail = true;
+
+    try {
+        (void)trp::emplace<stable_impl>(value, emplace_value);
+    } catch (destruction_error const&) {
+        throwing_destructor::fail = false;
+        test::expect_eq(case_name,
+                        "throwing destruction creates valueless state",
+                        trp::valueless_by_exception(value),
+                        true);
+        return;
+    }
+
+    throwing_destructor::fail = false;
+    test::fail(case_name, "throwing destructor should propagate");
+}
+
 inline void run() {
     check_construction();
     check_assignment_from_valueless();
     check_recovery();
     check_throwing_replacement();
+    check_throwing_destruction();
 }
 
 }    // namespace valueless

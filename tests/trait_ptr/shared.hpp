@@ -19,7 +19,20 @@ inline constexpr auto move_source_value       = 16;
 inline constexpr auto move_target_value       = 17;
 inline constexpr auto self_move_value         = 18;
 inline constexpr auto shared_owner_value      = 19;
+inline constexpr auto failed_move_cast_value  = 20;
+inline constexpr auto alias_assignment_value  = 21;
 inline constexpr auto case_name               = std::string_view("shared_trait_ptr_ownership");
+
+struct assignment_owner {
+    trp::shared_trait_ptr<read_trait> replacement;
+
+    explicit assignment_owner(trp::shared_trait_ptr<read_trait> value)
+    : replacement(std::move(value)) {}
+
+    auto value() const -> int {
+        return -1;
+    }
+};
 
 void check_shared_copies() {
     auto state = counts{};
@@ -89,6 +102,34 @@ void check_shared_wrong_cast() {
     test::expect_eq(case_name, "wrong cast destroyed after scope", state.destroyed, 1);
 }
 
+void check_shared_wrong_rvalue_cast() {
+    auto state = counts{};
+    {
+        auto source = trp::make_shared_trait<read_trait, read_node>(state, failed_move_cast_value);
+        auto failed = trp::trait_cast<write_trait, node>(std::move(source));
+
+        test::expect_eq(case_name, "failed rvalue cast empty", static_cast<bool>(failed), false);
+        test::expect_eq(case_name, "failed rvalue cast preserves source", static_cast<bool>(source), true);
+        test::expect_eq(
+            case_name, "failed rvalue cast source value", source->value(), failed_move_cast_value);
+        test::expect_eq(case_name, "failed rvalue cast does not destroy", state.destroyed, 0);
+    }
+    test::expect_eq(case_name, "failed rvalue cast destroys after scope", state.destroyed, 1);
+}
+
+void check_shared_assignment_alias() {
+    using replacement_type = valuetest::value_impl<0>;
+
+    auto replacement = trp::make_shared_trait<read_trait, replacement_type>(alias_assignment_value);
+    auto target      = trp::make_shared_trait<read_trait, assignment_owner>(std::move(replacement));
+
+    target = target.get<assignment_owner>()->replacement;
+
+    test::expect_eq(case_name, "aliased assignment keeps owner", static_cast<bool>(target), true);
+    test::expect_eq(
+        case_name, "aliased assignment preserves source value", target->value(), alias_assignment_value);
+}
+
 void check_shared_move_assignment() {
     auto state = counts{};
     {
@@ -137,6 +178,8 @@ inline void run() {
     check_shared_assignment();
     check_shared_casts();
     check_shared_wrong_cast();
+    check_shared_wrong_rvalue_cast();
+    check_shared_assignment_alias();
     check_shared_move_assignment();
     check_shared_self_move();
     check_shared_move_between_coowners();

@@ -17,7 +17,6 @@ function(add_trp_test name source)
 endfunction()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileFailureTest.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/RuntimeFailureTest.cmake")
 
 add_trp_test(traits "traits/traits.cpp")
 add_trp_test(dyn_trait_ref "dyn_trait_ref/dyn_trait_ref.cpp")

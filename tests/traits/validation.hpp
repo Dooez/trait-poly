@@ -33,6 +33,16 @@ struct special_member_trait {
     special_member_trait();
 };
 
+struct explicitly_defaulted_trait {
+    explicitly_defaulted_trait() = default;
+
+    auto value() -> int;
+};
+
+struct constexpr_static_data_trait {
+    inline static constexpr int data = 0;
+};
+
 struct static_method_trait {
     static auto value() -> int;
 };
@@ -78,6 +88,18 @@ struct unmatched_default_trait {
 
 struct inherited_invalid_trait : data_trait {};
 
+struct left_return_trait {
+    auto value() const -> int;
+};
+
+struct right_return_trait {
+    auto value() const -> long;
+};
+
+struct conflicting_return_trait
+: left_return_trait
+, right_return_trait {};
+
 static_assert(trp::any_trait<ordinary_trait>);
 static_assert(trp::any_trait<ordinary_trait const volatile>);
 
@@ -89,11 +111,14 @@ static_assert(!trp::any_trait<virtual_method_trait>);
 static_assert(!trp::any_trait<virtual_base_trait>);
 static_assert(trp::detail::concepts::any_immediate_trait<inherited_invalid_trait>);
 static_assert(!trp::any_trait<inherited_invalid_trait>);
+static_assert(!trp::any_trait<conflicting_return_trait>);
 
 // State and member-kind restrictions.
 static_assert(!trp::any_trait<data_trait>);
 static_assert(!trp::any_trait<static_data_trait>);
 static_assert(!trp::any_trait<special_member_trait>);
+static_assert(!trp::any_trait<explicitly_defaulted_trait>);
+static_assert(!trp::any_trait<constexpr_static_data_trait>);
 static_assert(!trp::any_trait<static_method_trait>);
 static_assert(!trp::any_trait<operator_trait>);
 static_assert(!trp::any_trait<method_template_trait>);

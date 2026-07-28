@@ -23,7 +23,30 @@ inline constexpr auto released_value  = 10;
 inline constexpr auto assigned_value  = 11;
 inline constexpr auto replaced_alloc  = 12;
 inline constexpr auto alloc_cast      = 13;
+inline constexpr auto alias_value     = 14;
 inline constexpr auto case_name       = std::string_view("unique_trait_ptr_ownership");
+
+struct unique_assignment_owner {
+    trp::unique_trait_ptr<read_trait> replacement;
+
+    explicit unique_assignment_owner(trp::unique_trait_ptr<read_trait> value)
+    : replacement(std::move(value)) {}
+
+    auto value() const -> int {
+        return -1;
+    }
+};
+
+struct alloc_assignment_owner {
+    trp::alloc_unique_trait_ptr<read_trait> replacement;
+
+    explicit alloc_assignment_owner(trp::alloc_unique_trait_ptr<read_trait> value)
+    : replacement(std::move(value)) {}
+
+    auto value() const -> int {
+        return -1;
+    }
+};
 
 void check_unique_destroys_once() {
     auto state = counts{};
@@ -162,6 +185,29 @@ void check_alloc_unique_move_assignment() {
     test::expect_eq(case_name, "allocated move destroys both objects", state.destroyed, 2);
 }
 
+void check_assignment_aliases() {
+    using replacement_type = valuetest::value_impl<0>;
+
+    auto replacement = trp::make_unique_trait<read_trait, replacement_type>(alias_value);
+    auto target      = trp::make_unique_trait<read_trait, unique_assignment_owner>(std::move(replacement));
+
+    target = std::move(target.get<unique_assignment_owner>()->replacement);
+
+    test::expect_eq(case_name, "aliased unique assignment keeps owner", static_cast<bool>(target), true);
+    test::expect_eq(case_name, "aliased unique assignment value", target->value(), alias_value);
+
+    auto allocator         = std::allocator<std::byte>{};
+    auto alloc_replacement = trp::allocate_unique_trait<read_trait, replacement_type>(allocator, alias_value);
+    auto alloc_target      = trp::allocate_unique_trait<read_trait, alloc_assignment_owner>(
+        allocator, std::move(alloc_replacement));
+
+    alloc_target = std::move(alloc_target.get<alloc_assignment_owner>()->replacement);
+
+    test::expect_eq(
+        case_name, "aliased allocated assignment keeps owner", static_cast<bool>(alloc_target), true);
+    test::expect_eq(case_name, "aliased allocated assignment value", alloc_target->value(), alias_value);
+}
+
 void check_alloc_unique_casts() {
     auto state = counts{};
     {
@@ -187,6 +233,7 @@ inline void run() {
     check_failed_downcasts_preserve_source();
     check_release();
     check_alloc_unique_move_assignment();
+    check_assignment_aliases();
     check_alloc_unique_casts();
 }
 
