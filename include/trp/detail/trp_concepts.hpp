@@ -363,7 +363,7 @@ consteval auto invocable_as_method(meta::info impl, /**/
         return true;
     if (is_reference_type(ret)                  //
         and (not is_reference_type(invk_ret)    //
-             or reference_constructs_from_temporary(ret, invk_ret)))
+             or reference_converts_from_temporary(ret, invk_ret)))
         return false;
     if (exact_ret)
         return false;
