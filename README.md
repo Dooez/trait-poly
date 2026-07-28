@@ -79,8 +79,7 @@ Implementation lookup uses this order:
    never match. Additional trailing implementation parameters
    may be defaulted: exact argument matching compares the trait parameters with
    the same leading implementation parameters and does not treat those trailing
-   defaults as a mismatch. C-style variadic implementation methods are not
-   supported.
+   defaults as a mismatch. 
 
 4. If there are no direct public members with matching identifier,
    steps 1-3 are repeated for public bases of `Impl`, breadth-first.

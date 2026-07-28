@@ -37,8 +37,8 @@ consteval auto is_vararg_function(meta::info r) -> bool {
 consteval auto annotations_of_with_type(meta::info item, meta::info type) {
     return annotations_of(item, type);
 }
-consteval auto reference_constructs_from_temporary(meta::info type_dst, meta::info type_src) {
-    return extract<bool>(substitute(^^std::reference_constructs_from_temporary_v, {type_dst, type_src}));
+consteval auto reference_converts_from_temporary(meta::info type_dst, meta::info type_src) {
+    return extract<bool>(substitute(^^std::reference_converts_from_temporary_v, {type_dst, type_src}));
 }
 #endif
 
@@ -393,7 +393,7 @@ consteval bool is_cv_idt(meta::info idt) {
     return extract_method_qualifiers(idt).is_const and extract_method_qualifiers(idt).is_volatile;
 }
 
-consteval bool are_similar_idts(meta::info a, meta::info b) {
+consteval bool are_similar_idts(meta::info a, meta::info b, bool& sound) {
     if (std::string_view(extract_method_identifier(a)) != extract_method_identifier(b))
         return false;
 
@@ -409,9 +409,8 @@ consteval bool are_similar_idts(meta::info a, meta::info b) {
 
     auto const reta = extract_method_return_type(a);
     auto const retb = extract_method_return_type(b);
-    if (reta != retb)
-        throw "Method identitites cannot differ by return type only";
-    return reta == retb;
+    sound           = reta == retb;
+    return sound;
 }
 
 /**
@@ -423,10 +422,11 @@ consteval bool contains_submethod_of(std::span<meta::info const> idt_range, meta
 
     auto has_lvalue = false;
     auto has_rvalue = false;
+    bool sound      = true;
     for (auto const candidate: idt_range) {
         if (extract_method_return_type(candidate) != ret)
             continue;
-        if (not are_similar_idts(candidate, method_idt))
+        if (not are_similar_idts(candidate, method_idt, sound))
             continue;
         auto const candidate_quals = extract_method_qualifiers(candidate);
         if (quals.is_noexcept and not candidate_quals.is_noexcept)
@@ -633,6 +633,7 @@ consteval auto sound_append_unique(std::span<meta::info const> idts,
                                    std::span<sign_req_t const> reqs,
                                    std::vector<meta::info>&    res_idts,
                                    std::vector<sign_req_t>&    res_reqs) -> bool {
+    bool sound = true;
     for (auto i: stdv::iota(0U, idts.size())) {
         auto const method       = idts[i];
         auto const requirements = reqs[i];
@@ -642,12 +643,8 @@ consteval auto sound_append_unique(std::span<meta::info const> idts,
         auto lvalue_idx = size;
         auto rvalue_idx = size;
         for (auto i: stdv::iota(0UZ, size)) {
-            try {
-                if (not are_similar_idts(res_idts[i], method))
-                    continue;
-            } catch (...) {
-                return false;
-            }
+            if (not are_similar_idts(res_idts[i], method, sound))
+                continue;
             auto const quals = extract_method_qualifiers(res_idts[i]);
             if (quals.is_lvalue) {
                 lvalue_idx = i;
@@ -720,7 +717,7 @@ consteval auto sound_append_unique(std::span<meta::info const> idts,
                 update_at(rvalue_idx, method_quals, requirements, res_idts, res_reqs);
         }
     }
-    return true;
+    return sound;
 }
 
 consteval auto method_idt_less(meta::info idt_l, meta::info idt_r) -> bool {
